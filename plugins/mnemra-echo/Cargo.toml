@@ -1,0 +1,13 @@
+[package]
+name = "mnemra-echo"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+path = "mnemra_echo.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { workspace = true }

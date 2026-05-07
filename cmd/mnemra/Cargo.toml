@@ -1,0 +1,16 @@
+[package]
+name = "mnemra"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mnemra"
+path = "main.rs"
+
+[dependencies]
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }

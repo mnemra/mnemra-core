@@ -1,0 +1,18 @@
+package mnemra:host@0.0.1;
+
+interface echo {
+    /// Round-trip: returns "echo: <s>". Validates host-fn parameters and return values.
+    echo: func(s: string) -> string;
+
+    /// Stateful: returns a host-side counter that increments on every call.
+    /// Validates state persistence across invocations on the same component instance.
+    increment-counter: func() -> u32;
+}
+
+world plugin {
+    import echo;
+
+    /// Plugin entry point. Host invokes this; plugin uses `echo.echo` and
+    /// `echo.increment-counter` to demonstrate the round-trip and state.
+    export run: func(input: string) -> string;
+}
