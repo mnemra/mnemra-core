@@ -46,7 +46,7 @@ jobs:
           d2 --version
 
       - name: Install mdBook
-        uses: peaceiris/actions-mdbook@c55832435624ab1e08e67c99dbd044c768855937
+        uses: peaceiris/actions-mdbook@ee69d230fe19748b7abf22df32acaa93833fad08 # v2.0.0
         with:
           mdbook-version: "0.5.2"
 
@@ -57,7 +57,7 @@ jobs:
         run: mdbook build docs/
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@4b09552702d0b65573696410d4707c765da2630b
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/book
