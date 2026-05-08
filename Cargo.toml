@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "cmd/mnemra",
     "plugins/mnemra-echo",
+    "tools/mdbook-d2",
 ]
 default-members = [
     "cmd/mnemra",
@@ -20,6 +21,9 @@ wasmtime-wasi = "44"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
 wit-bindgen = "0.57"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

@@ -23,3 +23,9 @@ target
 # Squash-merge message used by the dispatch workflow
 MERGE_MESSAGE
 
+# mdBook build output
+docs/book/
+
+# Working scratch (dispatch reports etc. live in workspace brain/, not the repo)
+scratch/
+

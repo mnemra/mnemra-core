@@ -1,0 +1,14 @@
+[book]
+title = "mnemra-core"
+authors = []
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/mnemra/mnemra-core"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.d2]
+command = "mdbook-d2"
