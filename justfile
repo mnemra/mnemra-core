@@ -3,7 +3,7 @@ check:
     cargo fmt --check
     cargo clippy --workspace --exclude mnemra-echo -- -D warnings
     cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings
-    cargo test
+    cargo test --workspace
 
 # Format code
 fmt:
@@ -12,6 +12,16 @@ fmt:
 # Run tests (host)
 test:
     cargo test
+
+# Build the docs site (builds mdbook-d2 preprocessor first)
+docs:
+    cargo build --release -p mdbook-d2
+    env PATH="{{justfile_directory()}}/target/release:${PATH}" mdbook build docs/
+
+# Serve the docs site locally with live reload (builds mdbook-d2 preprocessor first)
+docs-serve:
+    cargo build --release -p mdbook-d2
+    env PATH="{{justfile_directory()}}/target/release:${PATH}" mdbook serve docs/
 
 # Build host (debug)
 build:
