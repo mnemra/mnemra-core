@@ -13,15 +13,16 @@ fmt:
 test:
     cargo test
 
-# Build the docs site (builds mdbook-d2 preprocessor first)
+# Build the docs site.
+# Requires: mdbook, mdbook-mermaid, mdbook-d2, and the d2 CLI on PATH.
+# Install via: cargo install --locked mdbook mdbook-mermaid mdbook-d2
+# d2 CLI: https://d2lang.com/tour/install
 docs:
-    cargo build --release -p mdbook-d2
-    env PATH="{{justfile_directory()}}/target/release:${PATH}" mdbook build docs/
+    mdbook build docs/
 
-# Serve the docs site locally with live reload (builds mdbook-d2 preprocessor first)
+# Serve the docs site locally with live reload.
 docs-serve:
-    cargo build --release -p mdbook-d2
-    env PATH="{{justfile_directory()}}/target/release:${PATH}" mdbook serve docs/
+    mdbook serve docs/
 
 # Build host (debug)
 build:
