@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - "docs/**"
-      - "tools/mdbook-d2/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -32,10 +31,8 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Build mdbook-d2 preprocessor
-        run: |
-          cargo build --release -p mdbook-d2
-          echo "${{ github.workspace }}/target/release" >> "$GITHUB_PATH"
+      - name: Install mdbook-d2
+        run: cargo install --locked mdbook-d2
 
       - name: Install d2 CLI (v0.7.1)
         run: |
