@@ -1,4 +1,10 @@
 ---
+title: "P-NNNN: Title"
+summary: 
+primary-audience: agent
+---
+
+---
 status: "proposed"
 date: "YYYY-MM-DD"
 decision-makers: []
@@ -8,7 +14,7 @@ supersedes: null
 superseded_by: null
 ---
 
-# ADR-NNNN: Title
+# P-NNNN: Title
 
 ## Status
 
