@@ -130,7 +130,7 @@ After this step:
 
 11. **Orphan cleanup.** When `docs/src/X.md` is deleted, the next `--plan` (or `--check`) run:
    - Removes `_published/human/X.md` and `_published/agent/X.md` if they exist (`--plan` only; `--check` reports).
-   - Removes the corresponding manifest entry (`--plan` only).
+   - Records the orphan in the pending sidecar (`--plan` only); the corresponding manifest entry is removed by `--finalize` per the single-writer invariant (AC #5).
    - Prints a one-line stderr notice (`removed orphan: <path>`).
 
     `--check` reports orphans as drift (exits 1 with stderr listing each orphan).
@@ -355,3 +355,15 @@ Bolt is skipped (no UX surface). Warden + Glitch is the gate. If Forge's PR reve
 3. **`--check` in CI.** `just check` runs `docs-translate.py --check`. With only `docs/`-path triggers on `docs.yml`, this runs on every docs push. Confirm that's the intent (catches "Peter forgot to run /docs-translate before pushing"). **Puck's lean:** yes — that's the whole point of the drift gate.
 
 4. ✅ **Slash command location: repo-local for v1** (confirmed 2026-05-20). Lives at `repos/mnemra/mnemra-core/.claude/commands/docs-translate.md`. Translation workflow runs Claude from inside the mnemra-core repo. Pulled out to workspace `.claude/commands/` when a second adopter materializes (step 8).
+
+## Changelog
+
+### Amendment — 2026-05-20: AC #11 errata (orphan-cleanup ↔ single-writer alignment)
+
+**Surfaced by:** Glitch red-phase, dispatch #618.
+
+**Defect:** AC #11 said `--plan` "Removes the corresponding manifest entry (`--plan` only)." This contradicted AC #5 ("ONLY `--finalize` writes the manifest"), Test plan §7 (single-writer invariant), and Test plan §9 (orphan-cleanup test).
+
+**Fix:** AC #11 second bullet rewritten to: "Records the orphan in the pending sidecar (`--plan` only); the corresponding manifest entry is removed by `--finalize` per the single-writer invariant (AC #5)."
+
+**Effect on Glitch's tests:** none — Glitch wrote tests against the single-writer interpretation (Test plan §9), which the errata confirms as the binding behavior.
