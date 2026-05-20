@@ -53,6 +53,9 @@ jobs:
       - name: Build docs
         run: mdbook build docs/
 
+      - name: Stage llms.txt + llms-full.txt
+        run: cp docs/_published/llms.txt docs/_published/llms-full.txt docs/book/
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4.0.0
         with:
