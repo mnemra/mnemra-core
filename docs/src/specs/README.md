@@ -1,6 +1,6 @@
 ---
 title: Specifications
-summary: 
+summary: "How canonical architecture specs differ from implementation-history specs in this repo."
 primary-audience: human
 ---
 
