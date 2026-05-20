@@ -1,3 +1,9 @@
+---
+title: "Product Brief: Mnemra Core"
+summary: 
+primary-audience: agent
+---
+
 # Product Brief: Mnemra Core
 
 **Date:** 2026-05-20 · **Status:** locked (intake-exit gate confirmed) · **Altitude:** product
