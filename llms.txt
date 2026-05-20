@@ -1,0 +1,25 @@
+# mnemra-core
+
+> Plugin-extensible context layer for AI coding workflows. This site documents the project's intent, architecture decisions, and specifications.
+
+## Introduction
+
+- [Introduction](intro.md): Entry point for the mnemra-core documentation site.
+
+## Intent
+
+- [mnemra-core](intent/mnemra-core.md): Product brief locking mnemra-core's intent and feature register.
+
+## Specifications
+
+- [About this section](specs/README.md): How canonical architecture specs differ from implementation-history specs in this repo.
+
+## Architecture Decision Records
+
+- [ADR Overview](adrs/README.md): How architecture decisions are structured here (G-* / P-* prefixes, MADR format).
+- [Project Defaults](adrs/DEFAULTS.md): Project defaults projected from workspace G-* canon — baseline for mnemra-core.
+- [ADR Template](adrs/template.md): MADR template for authoring new P-NNNN ADRs.
+
+## Glossary
+
+- [Glossary](glossary.md): Terms and conventions used across mnemra-core's intent, ADRs, and specs.
