@@ -174,8 +174,8 @@ def main() -> None:
     parser.add_argument(
         "--src",
         type=Path,
-        default=Path("docs/src"),
-        help="Path to docs/src directory (default: docs/src)",
+        default=Path("docs/_published/agent"),
+        help="Path to source directory (default: docs/_published/agent)",
     )
     parser.add_argument(
         "--out",

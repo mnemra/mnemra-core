@@ -4,7 +4,9 @@ check:
     cargo clippy --workspace --exclude mnemra-echo -- -D warnings
     cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings
     cargo test --workspace
+    uv run scripts/docs-translate.py --check --src docs/src --out docs/_published --prompts docs/prompts
     uv run scripts/docs-llms.py --check
+    uv run --with pytest pytest tests/test_docs_translate.py
     uv run --with pytest pytest tests/test_docs_llms.py
 
 # Format code
@@ -14,6 +16,14 @@ fmt:
 # Run tests (host)
 test:
     cargo test
+
+# Translation runs from a Claude session via /docs-translate.
+# See .claude/commands/docs-translate.md.
+
+# Run both docs drift gates (translate + llms).
+docs-check:
+    uv run scripts/docs-translate.py --check
+    uv run scripts/docs-llms.py --check
 
 # Generate docs/_published/llms.txt + docs/_published/llms-full.txt from docs/src/.
 # Requires: uv on PATH.

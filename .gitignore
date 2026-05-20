@@ -34,3 +34,6 @@ scratch/
 __pycache__/
 *.pyc
 
+# Translation pipeline: pending sidecar is ephemeral (removed by --finalize on success)
+docs/_published/.translation-pending.json
+
