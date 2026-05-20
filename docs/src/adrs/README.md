@@ -1,6 +1,6 @@
 ---
 title: Architecture Decision Records
-summary: 
+summary: "How architecture decisions are structured here (G-* / P-* prefixes, MADR format)."
 primary-audience: human
 ---
 

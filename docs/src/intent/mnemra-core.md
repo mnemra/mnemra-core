@@ -1,6 +1,6 @@
 ---
 title: "Product Brief: Mnemra Core"
-summary: 
+summary: "Product brief locking mnemra-core's intent and feature register."
 primary-audience: agent
 ---
 

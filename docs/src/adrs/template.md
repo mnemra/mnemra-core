@@ -1,6 +1,6 @@
 ---
 title: "P-NNNN: Title"
-summary: 
+summary: "MADR template for authoring new P-NNNN ADRs."
 primary-audience: agent
 ---
 
