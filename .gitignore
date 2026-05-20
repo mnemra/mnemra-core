@@ -30,3 +30,7 @@ docs/_build/
 # Working scratch (dispatch reports etc. live in workspace brain/, not the repo)
 scratch/
 
+# Python bytecode cache
+__pycache__/
+*.pyc
+
