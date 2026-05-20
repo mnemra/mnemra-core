@@ -1,3 +1,9 @@
+---
+title: Glossary
+summary: 
+primary-audience: human
+---
+
 # Glossary
 
 Mnemra's documentation uses a consistent vocabulary drawn from its architecture decision records,
