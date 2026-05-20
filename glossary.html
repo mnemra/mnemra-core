@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>ADR Overview - mnemra-core</title>
+        <title>Glossary - mnemra-core</title>
 
 
         <!-- Custom HTML head -->
@@ -12,33 +12,33 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../favicon-de23e50b.svg">
-        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
-        <link rel="stylesheet" href="../css/variables-8adf115d.css">
-        <link rel="stylesheet" href="../css/general-2459343d.css">
-        <link rel="stylesheet" href="../css/chrome-ae938929.css">
-        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../";
+            const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-06eb3bb0.js";
+            window.path_to_searchindex_js = "searchindex-06eb3bb0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-50d79c7c.js"></script>
+        <script src="toc-50d79c7c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -105,7 +105,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -140,7 +140,7 @@
                     <h1 class="menu-title">mnemra-core</h1>
 
                     <div class="right-buttons">
-                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
                         <a href="https://github.com/mnemra/mnemra-core" title="Git repository" aria-label="Git repository">
@@ -178,57 +178,152 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <hr>
-<h2 id="title-architecture-decision-records-summary-primary-audience-human"><a class="header" href="#title-architecture-decision-records-summary-primary-audience-human">title: Architecture Decision Records
+<h2 id="title-glossary-summary-primary-audience-human"><a class="header" href="#title-glossary-summary-primary-audience-human">title: Glossary
 summary:
 primary-audience: human</a></h2>
-<h1 id="architecture-decision-records"><a class="header" href="#architecture-decision-records">Architecture Decision Records</a></h1>
-<p>This section tracks the architectural decisions made in mnemra-core using the <a href="https://adr.github.io/madr/">MADR</a> (Markdown Architectural Decision Records) format.</p>
-<h2 id="what-is-an-adr"><a class="header" href="#what-is-an-adr">What is an ADR?</a></h2>
-<p>An Architecture Decision Record (ADR) captures a single architectural decision along with its context and rationale. ADRs are immutable once accepted — they are not edited to reflect changing opinions, but superseded by newer ADRs when decisions evolve.</p>
-<h2 id="adr-lifecycle"><a class="header" href="#adr-lifecycle">ADR Lifecycle</a></h2>
-<p>Each ADR moves through the following statuses:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Status</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>proposed</code></td><td>Under discussion; not yet accepted</td></tr>
-<tr><td><code>rejected</code></td><td>Discussed and explicitly declined</td></tr>
-<tr><td><code>accepted</code></td><td>The current decision in effect</td></tr>
-<tr><td><code>deprecated</code></td><td>Was accepted; no longer applies (context changed)</td></tr>
-<tr><td><code>superseded</code></td><td>Replaced by a newer ADR; see <code>superseded_by</code> field</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="gp-prefix-projection-pattern"><a class="header" href="#gp-prefix-projection-pattern">G/P Prefix Projection Pattern</a></h2>
-<p>ADRs in this project use a two-tier identifier convention that reflects where a decision originates and how it propagates.</p>
-<ul>
-<li><strong>G-NNNN (general)</strong> — workspace-wide architecture decisions. These do not live as individual files in this directory. Instead, they are projected once into <a href="DEFAULTS.html"><code>DEFAULTS.md</code></a> — a one-time snapshot recording each general standard as a concise entry, without the full rationale chain. DEFAULTS.md is frozen at projection time; upstream changes to a G-* decision do not auto-sync into this file.</li>
-<li><strong>P-NNNN (project)</strong> — project-specific architecture decisions, stored as individual <code>P-NNNN-*.md</code> files in this directory. Two sub-categories:
-<ul>
-<li><em>Project-specific:</em> a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.</li>
-<li><em>Override:</em> a deviation from a <code>DEFAULTS.md</code> baseline entry. An override P-ADR names the default it overrides explicitly in its Status field (e.g., <code>Status: accepted, Overrides G-0017</code>).</li>
-</ul>
-</li>
-</ul>
+<h1 id="glossary"><a class="header" href="#glossary">Glossary</a></h1>
+<p>Mnemra’s documentation uses a consistent vocabulary drawn from its architecture decision records,
+operating principles, and work-shaping pipeline. This glossary anchors that vocabulary for readers
+who are not already familiar with these terms. Each entry is a terse reference; where a fuller
+treatment exists in the architecture documentation, the entry points there.</p>
+<p>Terms are grouped by category, then alphabetical within each group.</p>
+<hr>
+<h2 id="architecture-decision-records"><a class="header" href="#architecture-decision-records">Architecture Decision Records</a></h2>
+<h3 id="adr"><a class="header" href="#adr">ADR</a></h3>
+<p>An Architecture Decision Record captures a significant technical or process decision — the context
+that prompted it, the decision itself, rejected alternatives, and expected consequences. ADRs are
+not changelogs; they preserve the option space a decision was made against, so future readers can
+understand why the selected path was taken and what was ruled out.</p>
+<p>Mnemra-core uses the MADR format (Markdown Architectural Decision Records): each ADR is a separate
+<code>.md</code> file with structured sections. See the <a href="adrs/README.html">ADRs section</a> of this documentation.</p>
+<h3 id="defaultsmd"><a class="header" href="#defaultsmd">DEFAULTS.md</a></h3>
+<p>The project’s architectural baseline. DEFAULTS.md is a one-time snapshot of the workspace’s
+general architecture decisions, projected at the time the project was created (or last
+re-projected). Each entry carries an ID (e.g., <code>G-0026</code>) and a concise description — 1–3 sentences
+summarizing the decision — without the full rationale chain.</p>
+<p>DEFAULTS.md is frozen at projection: updates to upstream workspace decisions do not auto-sync into
+it. Any deviation from a DEFAULTS.md entry becomes a <a href="#p--adr">P-* ADR</a>, not an edit to DEFAULTS.md.</p>
 <p><em>The default is the starting point; any deviation is a new P-ADR.</em></p>
-<h2 id="using-the-template"><a class="header" href="#using-the-template">Using the Template</a></h2>
-<p>To record a new project ADR, copy <a href="template.html"><code>template.md</code></a> to a numbered file (e.g., <code>adrs/P-0001-topic.md</code>), fill in all frontmatter fields, and write the body sections. If the decision overrides a <code>DEFAULTS.md</code> entry, state that explicitly in the Status section.</p>
-<h2 id="current-adrs"><a class="header" href="#current-adrs">Current ADRs</a></h2>
-<p>None yet. P-ADRs will be added as project-specific architectural decisions are made and ratified. See <a href="DEFAULTS.html"><code>DEFAULTS.md</code></a> for the projected general standards in force.</p>
+<p>See also <a href="#g--adr">G-* ADR</a> and <a href="#p--adr">P-* ADR</a>.</p>
+<h3 id="g--adr"><a class="header" href="#g--adr">G-* ADR</a></h3>
+<p>A G-* ADR (the G stands for global) is a workspace-wide architecture decision that applies across
+all projects in the workspace. These decisions lock patterns that individual projects inherit: source
+artifact format, workflow shape, docs publication strategy.</p>
+<p>G-* ADRs live in workspace-internal canon and do not appear directly in mnemra-core’s ADRs, guides,
+or other documentation. They surface in mnemra-core docs only in two places: (1) <a href="#defaultsmd">DEFAULTS.md</a>
+entries that cite their origin G-ID, and (2) <a href="#p--adr">P-* ADR</a> Status fields that mark an override
+(<code>Overrides G-NNNN</code>). The codes are stable identifiers, not version numbers.</p>
+<h3 id="p--adr"><a class="header" href="#p--adr">P-* ADR</a></h3>
+<p>A P-* ADR (the P stands for project) is an architecture decision scoped to a single project. Two
+categories:</p>
+<ul>
+<li><strong>Project-specific:</strong> a decision with no workspace-wide analog — a constraint, pattern, or
+tradeoff unique to this project.</li>
+<li><strong>Override:</strong> a deviation from a <a href="#defaultsmd">DEFAULTS.md</a> baseline entry. The Status field of
+an override P-ADR names the default being overridden (<code>Overrides G-NNNN</code>).</li>
+</ul>
+<p>P-* ADRs live in the project’s own repository under <code>docs/src/adrs/</code>. They use the same MADR format
+as other ADRs. See also <a href="#g--adr">G-* ADR</a>.</p>
+<hr>
+<h2 id="architecture-principles"><a class="header" href="#architecture-principles">Architecture Principles</a></h2>
+<p>Architecture principles are named rules that operationalize the workspace’s core values. Each
+principle carries a short label (P-Defer, P-WriteTimeAudience, etc.) that ADRs and design
+documents use to ground their decisions. The full statement of each principle — its rationale, how
+it shows up in practice, and anti-examples — lives in the workspace’s architecture-principles
+document. The entries below are terse pointers intended for readers encountering a principle label
+in a doc.</p>
+<h3 id="p-defer"><a class="header" href="#p-defer">P-Defer</a></h3>
+<p>Defer mechanism choice until evidence forces it. Trip-wire-driven adoption beats anticipated-need
+adoption: the shape of the evidence informs the shape of the mechanism. When a mechanism is named
+before its trip-wire fires, see the open/deferred section of the relevant ADR.</p>
+<h3 id="p-instrumentbefore"><a class="header" href="#p-instrumentbefore">P-InstrumentBefore</a></h3>
+<p>Every production surface ships instrumented before launch. Metrics, structured logs, and traces
+sized to the surface are in place at first use, not added after the first incident.</p>
+<h3 id="p-lockcontract"><a class="header" href="#p-lockcontract">P-LockContract</a></h3>
+<p>Lock the contract; vary the implementation. The contract is what other code depends on; a stable
+contract makes implementations swappable without breaking callers.</p>
+<h3 id="p-minblastradius"><a class="header" href="#p-minblastradius">P-MinBlastRadius</a></h3>
+<p>A change reaches as far as the architecture allows. The goal is that a fix isolates to one module
+and a feature lands behind one seam; when a minimal change would require touching many files in
+lock-step, the architecture is reporting structural debt.</p>
+<h3 id="p-perrepofirst"><a class="header" href="#p-perrepofirst">P-PerRepoFirst</a></h3>
+<p>Per-repo first; extract on rule-of-three. Shared abstractions emerge from observed reuse, not from
+speculation about what the reuse will look like. Extraction that precedes the third occurrence
+creates shared code before it has earned its keep.</p>
+<h3 id="p-preservedecisionspace"><a class="header" href="#p-preservedecisionspace">P-PreserveDecisionSpace</a></h3>
+<p>Preserve the option space. Every ADR carries an Alternatives Considered section listing rejected
+options with reasons. Dropping a rejected alternative because it now feels obviously wrong leaves
+future readers unable to see what was on the table.</p>
+<h3 id="p-trustthenretro"><a class="header" href="#p-trustthenretro">P-TrustThenRetro</a></h3>
+<p>Trust the loop; retro selectively. Direction is set up front; the team executes within it; review
+concentrates on outcomes and patterns. Walking every decision with the reviewer serializes work
+through their attention — the failure mode this principle exists to prevent.</p>
+<h3 id="p-writetimeaudience"><a class="header" href="#p-writetimeaudience">P-WriteTimeAudience</a></h3>
+<p>Generic at write-time for repo artifacts; identity-preserving for workspace artifacts. Repo-
+persisted artifacts (specs, ADRs, READMEs) use generic role labels and omit workspace-internal
+vocabulary, because any commit can become a publish event. Workspace-private artifacts preserve
+agent attribution and internal context because that attribution is the pattern signal worth keeping.</p>
+<hr>
+<h2 id="feature-register-lifecycle-tiers"><a class="header" href="#feature-register-lifecycle-tiers">Feature Register Lifecycle Tiers</a></h2>
+<p>The <a href="intent/mnemra-core.html">feature register</a> tracks each product capability at exactly one
+lifecycle tier. Tiers are validated by pipeline artifacts — the validator for each tier is “does
+this artifact exist?”, which makes the register mechanically checkable rather than prose-assessed.</p>
+<h3 id="idea"><a class="header" href="#idea">idea</a></h3>
+<p>A captured direction — a thought or a decision-locked pointer to a provenance record. No pipeline
+artifact exists yet. The <code>idea</code> tier is the scope-anchor surface: research and discovery read
+<code>idea</code>-and-up to ensure intended directions are never silently dropped to what-exists-live.</p>
+<h3 id="proposed"><a class="header" href="#proposed">proposed</a></h3>
+<p>The feature has a locked intake — it has been through intent capture. Permanent artifact; this
+status does not regress.</p>
+<h3 id="designed"><a class="header" href="#designed">designed</a></h3>
+<p>A locked frame plus a locked spec both exist — the permanent “what to build” is complete. Permanent
+artifact (kept). A feature reaches <code>designed</code> before it reaches <code>committed</code>: release-fit cannot be
+judged until the design is complete.</p>
+<h3 id="committed"><a class="header" href="#committed">committed</a></h3>
+<p><code>designed</code> plus a plan, release-bound. The plan is ephemeral (not kept after the work completes);
+its ephemerality is why it marks commitment — a throwaway task list is generated only when work is
+being actively actioned against a release.</p>
+<h3 id="live"><a class="header" href="#live">live</a></h3>
+<p>Built and verified in current code and canon.</p>
+<hr>
+<h2 id="pipeline-stages"><a class="header" href="#pipeline-stages">Pipeline Stages</a></h2>
+<p>The work-shaping pipeline turns product intent into a verifiable, implementable spec in three
+stages. Each stage has a defined input, output, and owner; agents operate autonomously between the
+two human touchpoints (at intake-exit and at spec-exit).</p>
+<h3 id="intake"><a class="header" href="#intake">Intake</a></h3>
+<p>Stage 1. The decomposer writes; agents review. Structured intent is captured — job-to-be-done,
+non-goals, success criteria, hard constraints — and an agent review pass validates completeness and
+flags conflicts with architecture principles and values. The decomposer iterates until intent is
+locked. Output: validated intent.</p>
+<h3 id="frame"><a class="header" href="#frame">Frame</a></h3>
+<p>Stage 2. Agents synthesize. The constraint graph is walked from the validated intent; operating
+constraints are proposed; a review pass flags conflicts; routine architecture decisions are batched,
+novel ones escalated. Output: frame document (constraint summary and rationale chain).</p>
+<h3 id="spec"><a class="header" href="#spec">Spec</a></h3>
+<p>Stage 3. Agents synthesize. A testable spec is produced from the frame document; a review pass
+validates testability and spec quality. The spec is the contract that verification consumes.
+Output: locked spec.</p>
+<hr>
+<h2 id="requirement-codes"><a class="header" href="#requirement-codes">Requirement Codes</a></h2>
+<h3 id="r-codes"><a class="header" href="#r-codes">R-codes</a></h3>
+<p>R-codes are stable identifiers for numbered requirements in a canonical requirements or
+specification document. An R-code (e.g., <code>R7</code>, <code>R12</code>) refers to a specific requirement entry whose
+text, constraints, and rationale are defined in that document.</p>
+<p>When an R-code appears in mnemra-core documentation, it is always accompanied by its definition and
+originating context — either inline at the cite site or in mnemra-core’s requirements document.
+R-codes do not carry stable public meaning on their own; their meaning is authoritative only in
+combination with the requirements document that defines them.</p>
+<p>Mnemra-core’s R-codes will materialize once its requirements document is written. Until then, any
+requirement referenced in a doc is stated in full at the point of citation.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../specs/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="adrs/template.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../adrs/DEFAULTS.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -236,13 +331,10 @@ primary-audience: human</a></h2>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../specs/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="adrs/template.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../adrs/DEFAULTS.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>
@@ -260,13 +352,13 @@ primary-audience: human</a></h2>
         </script>
 
 
-        <script src="../elasticlunr-ef4e11c1.min.js"></script>
-        <script src="../mark-09e88c2c.min.js"></script>
-        <script src="../searcher-c2a407aa.js"></script>
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
 
-        <script src="../clipboard-1626706a.min.js"></script>
-        <script src="../highlight-abc7f01d.js"></script>
-        <script src="../book-a0b12cfe.js"></script>
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
 

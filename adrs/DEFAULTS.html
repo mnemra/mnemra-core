@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>ADR Overview - mnemra-core</title>
+        <title>Project Defaults - mnemra-core</title>
 
 
         <!-- Custom HTML head -->
@@ -178,55 +178,110 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <hr>
-<h2 id="title-architecture-decision-records-summary-primary-audience-human"><a class="header" href="#title-architecture-decision-records-summary-primary-audience-human">title: Architecture Decision Records
+<h2 id="title-project-standards-summary-primary-audience-agent"><a class="header" href="#title-project-standards-summary-primary-audience-agent">title: Project Standards
 summary:
-primary-audience: human</a></h2>
-<h1 id="architecture-decision-records"><a class="header" href="#architecture-decision-records">Architecture Decision Records</a></h1>
-<p>This section tracks the architectural decisions made in mnemra-core using the <a href="https://adr.github.io/madr/">MADR</a> (Markdown Architectural Decision Records) format.</p>
-<h2 id="what-is-an-adr"><a class="header" href="#what-is-an-adr">What is an ADR?</a></h2>
-<p>An Architecture Decision Record (ADR) captures a single architectural decision along with its context and rationale. ADRs are immutable once accepted — they are not edited to reflect changing opinions, but superseded by newer ADRs when decisions evolve.</p>
-<h2 id="adr-lifecycle"><a class="header" href="#adr-lifecycle">ADR Lifecycle</a></h2>
-<p>Each ADR moves through the following statuses:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Status</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>proposed</code></td><td>Under discussion; not yet accepted</td></tr>
-<tr><td><code>rejected</code></td><td>Discussed and explicitly declined</td></tr>
-<tr><td><code>accepted</code></td><td>The current decision in effect</td></tr>
-<tr><td><code>deprecated</code></td><td>Was accepted; no longer applies (context changed)</td></tr>
-<tr><td><code>superseded</code></td><td>Replaced by a newer ADR; see <code>superseded_by</code> field</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="gp-prefix-projection-pattern"><a class="header" href="#gp-prefix-projection-pattern">G/P Prefix Projection Pattern</a></h2>
-<p>ADRs in this project use a two-tier identifier convention that reflects where a decision originates and how it propagates.</p>
-<ul>
-<li><strong>G-NNNN (general)</strong> — workspace-wide architecture decisions. These do not live as individual files in this directory. Instead, they are projected once into <a href="DEFAULTS.html"><code>DEFAULTS.md</code></a> — a one-time snapshot recording each general standard as a concise entry, without the full rationale chain. DEFAULTS.md is frozen at projection time; upstream changes to a G-* decision do not auto-sync into this file.</li>
-<li><strong>P-NNNN (project)</strong> — project-specific architecture decisions, stored as individual <code>P-NNNN-*.md</code> files in this directory. Two sub-categories:
-<ul>
-<li><em>Project-specific:</em> a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.</li>
-<li><em>Override:</em> a deviation from a <code>DEFAULTS.md</code> baseline entry. An override P-ADR names the default it overrides explicitly in its Status field (e.g., <code>Status: accepted, Overrides G-0017</code>).</li>
-</ul>
-</li>
-</ul>
-<p><em>The default is the starting point; any deviation is a new P-ADR.</em></p>
-<h2 id="using-the-template"><a class="header" href="#using-the-template">Using the Template</a></h2>
-<p>To record a new project ADR, copy <a href="template.html"><code>template.md</code></a> to a numbered file (e.g., <code>adrs/P-0001-topic.md</code>), fill in all frontmatter fields, and write the body sections. If the decision overrides a <code>DEFAULTS.md</code> entry, state that explicitly in the Status section.</p>
-<h2 id="current-adrs"><a class="header" href="#current-adrs">Current ADRs</a></h2>
-<p>None yet. P-ADRs will be added as project-specific architectural decisions are made and ratified. See <a href="DEFAULTS.html"><code>DEFAULTS.md</code></a> for the projected general standards in force.</p>
+primary-audience: agent</a></h2>
+<h1 id="project-standards"><a class="header" href="#project-standards">Project Standards</a></h1>
+<p>General architecture and engineering standards applied to this project.
+These were projected on 2026-05-20 and may be overridden by project-specific
+decisions (P-*.md files in this directory).</p>
+<hr>
+<h2 id="g-0001-testing-philosophy--90-coverage-inverted-pyramid"><a class="header" href="#g-0001-testing-philosophy--90-coverage-inverted-pyramid">G-0001: Testing Philosophy — 90% Coverage, Inverted Pyramid</a></h2>
+<p>90% code coverage threshold (lines and functions) as the enforced default. Inverted test pyramid — far more unit tests than integration tests, with integration tests only verifying actual integration seams. Threshold exceptions must be documented with explicit reasoning.</p>
+<hr>
+<h2 id="g-0002-no-compile-time-asset-embedding-in-containerized-projects"><a class="header" href="#g-0002-no-compile-time-asset-embedding-in-containerized-projects">G-0002: No Compile-Time Asset Embedding in Containerized Projects</a></h2>
+<p>Do not use <code>rust_embed</code> or similar compile-time asset embedding in Rust projects deployed via Docker containers. Serve static files at runtime (<code>tower_http::services::ServeDir</code> or equivalent) with startup directory validation. Docker multi-stage builds copy binary and frontend artifacts into the final image.</p>
+<hr>
+<h2 id="g-0003-two-tier-architecture-decision-records"><a class="header" href="#g-0003-two-tier-architecture-decision-records">G-0003: Two-Tier Architecture Decision Records</a></h2>
+<p>General standards live in this DEFAULTS.md file, projected once and owned by the project. Project-specific decisions go in P-NNNN-*.md files in this directory. If a project-specific decision overrides a default, it says so explicitly in its status field.</p>
+<hr>
+<h2 id="g-0004-hybrid-xml-format-for-agent-profiles"><a class="header" href="#g-0004-hybrid-xml-format-for-agent-profiles">G-0004: Hybrid XML Format for Agent Profiles</a></h2>
+<p>Use hybrid XML format for all team agent profiles: XML tags for structural sections (<code>&lt;role&gt;</code>, <code>&lt;persona&gt;</code>, <code>&lt;principles&gt;</code>, etc.), markdown preserved inside tags for prose. Maximum two levels of nesting.</p>
+<hr>
+<h2 id="g-0005-sql-file-based-migrations-for-embedded-sqlite"><a class="header" href="#g-0005-sql-file-based-migrations-for-embedded-sqlite">G-0005: SQL File-Based Migrations for Embedded SQLite</a></h2>
+<p>Use SQL file-based migrations embedded at compile time for all Rust projects with embedded SQLite. Migrations live in <code>migrations/NNNN_&lt;description&gt;.sql</code> and are embedded via <code>include_str!()</code> with a shared migration runner. Forward-only migrations — no down migrations.</p>
+<hr>
+<h2 id="g-0006-justfile-as-ci-contract"><a class="header" href="#g-0006-justfile-as-ci-contract">G-0006: Justfile as CI Contract</a></h2>
+<p>CI YAML invokes <code>just ci</code> and nothing else. Every project uses fixed <code>verify-*</code> recipe names (verify-test, verify-lint, verify-type, verify-coverage, verify-build, verify-smoke, ci). Each <code>verify-*</code> emits a <code>GATE &lt;name&gt; &lt;PASS|FAIL&gt;</code> line and is idempotent from any cwd. No <code>--fix</code> side effects under verify-*; auto-fix recipes live under <code>fix-*</code>.</p>
+<hr>
+<h2 id="g-0007-knowledge-extraction-skill--task-completion-nudge-hook"><a class="header" href="#g-0007-knowledge-extraction-skill--task-completion-nudge-hook">G-0007: Knowledge-Extraction Skill — Task-Completion Nudge Hook</a></h2>
+<p>Two-hook pattern for the knowledge-extraction nudge: a <code>Stop</code> hook at turn boundaries writes pending state to a session-keyed state file; <code>UserPromptSubmit</code> (or <code>SessionStart</code> fallback) reads the pending flag and injects the nudge into Claude’s context. State file path: <code>.claude/hooks/state/knowledge-extraction-nudge</code>. Two-state enum (pending | fired); carrier accept/decline are conversational events on the <code>skill_run_captures</code> row, not the state file.</p>
+<hr>
+<h2 id="g-0008-knowledge-extraction--capture-table-schema-and-partial-state-recovery"><a class="header" href="#g-0008-knowledge-extraction--capture-table-schema-and-partial-state-recovery">G-0008: Knowledge-Extraction — Capture Table Schema and Partial-State Recovery</a></h2>
+<p><code>skill_run_captures</code> table (FK to <code>skill_runs</code> with ON DELETE CASCADE) holds capture state with CHECK-constrained <code>state</code> (partial | complete | abandoned), <code>capture_type</code>, <code>destination_type</code>, plus <code>trigger_context</code>, <code>transcript</code>, <code>event_tallies</code>, <code>round_summary_log</code>. Puck is the only writer. Partial-state resume is carrier-picks and session-independent — partials survive <code>/clear</code>. Cleanup is manual via <code>brain skill-run capture list-partials</code> + <code>abandon &lt;id&gt;</code> in v1.</p>
+<hr>
+<h2 id="g-0009-knowledge-extraction--r17-duplicate-detection-scope"><a class="header" href="#g-0009-knowledge-extraction--r17-duplicate-detection-scope">G-0009: Knowledge-Extraction — R17 Duplicate-Detection Scope</a></h2>
+<p>Title-only flat grep over 5 destination types, 6 corpora (project-scoped ADRs conditional). Scope held as a config array in the skill file, not hardcoded in skill logic. Overlap judgment is LLM-driven; UPDATE diff is field-level (scope / example / counter-case side-by-side), not line-diff.</p>
+<hr>
+<h2 id="g-0010-knowledge-extraction--r10-worked-example-encoding"><a class="header" href="#g-0010-knowledge-extraction--r10-worked-example-encoding">G-0010: Knowledge-Extraction — R10 Worked-Example Encoding</a></h2>
+<p>13 initial worked examples in a <code>Worked Examples</code> appendix at the bottom of the skill file: 5 canonical (one per destination type), 5 contrasting, 3 cross-cutting. Refinement is retro-driven; soft cap of 20 examples. No CLI tooling for v1.</p>
+<hr>
+<h2 id="g-0011-knowledge-extraction--r7-advisory-drift-detection"><a class="header" href="#g-0011-knowledge-extraction--r7-advisory-drift-detection">G-0011: Knowledge-Extraction — R7 Advisory-Drift Detection</a></h2>
+<p>New skill file <code>skills/operational-form.md</code> for operational-form detection. Contains advisory phrase list (~12–15 for v1, growable), positive pattern definition (observable actor + action + outcome), and worked example pairs. On candidate ambiguity, skill emits an R20 redirect probe. Soft cap: 30 phrases.</p>
+<hr>
+<h2 id="g-0012-knowledge-extraction--r16b-safety-ceiling-values"><a class="header" href="#g-0012-knowledge-extraction--r16b-safety-ceiling-values">G-0012: Knowledge-Extraction — R16b Safety Ceiling Values</a></h2>
+<p>Safety ceilings: N=6 rounds per rule, M=20k tokens per rule, M_run=80k tokens per invocation. Transcript char-count approximation (~4 chars/token) for runtime safety check; M_run accumulator on the parent <code>skill_runs</code> row. On trip, capture row written with <code>state=abandoned</code>; abandoned captures are filed but not auto-offered for resume.</p>
+<hr>
+<h2 id="g-0013-stage-6-approval--closed-enum-label-vocabulary"><a class="header" href="#g-0013-stage-6-approval--closed-enum-label-vocabulary">G-0013: Stage 6 Approval — Closed-Enum Label Vocabulary</a></h2>
+<p>Closed-enum PR labels gate Stage 6 approval. Three families: <code>stage6-approved</code> (0 or 1), release mode (<code>release-mode-A</code> | <code>release-mode-B</code> | <code>release-mode-A-exception</code>, exactly 1 when approved), version bump (<code>bump:patch</code> | <code>bump:minor</code> | <code>bump:major</code> | <code>bump:none</code>, exactly 1 when approved). Cardinality failures ABORT loudly, never silently disambiguate. Stage 7 auto-merge reads labels via <code>gh api</code>.</p>
+<hr>
+<h2 id="g-0014-review-finding-identity-and-per-pr-per-round-persistence"><a class="header" href="#g-0014-review-finding-identity-and-per-pr-per-round-persistence">G-0014: Review Finding Identity and Per-PR Per-Round Persistence</a></h2>
+<p>Review finding identity is the <code>(file, content-anchor, severity)</code> triple. Content-anchor is SHA-256 of a normalized 5-line window (cited line + 2 lines of context above and below, trailing whitespace stripped per line). Reviewer output format includes the anchor inline so downstream dedup logic doesn’t need to re-read the file at the cited round’s commit.</p>
+<hr>
+<h2 id="g-0015-devcontainer-architecture--per-repo-upstream-from--ghcr-push"><a class="header" href="#g-0015-devcontainer-architecture--per-repo-upstream-from--ghcr-push">G-0015: Devcontainer Architecture — Per-Repo Upstream FROM + GHCR Push</a></h2>
+<p>Per-repo devcontainer FROM upstream language-native base, built and pushed to GHCR by the repo’s own CI on <code>.devcontainer/**</code> change, SHA-pinned in the repo. Every <code>cargo install</code> line in a devcontainer Dockerfile MUST pass both <code>--locked</code> and <code>--version &lt;X.Y.Z&gt;</code>. Polyglot repos layer additional language bases in their own Dockerfile; no workspace-shared polyglot base.</p>
+<hr>
+<h2 id="g-0016-layered-secret-detection--pre-commit--github-native--stage-5-alerts-query"><a class="header" href="#g-0016-layered-secret-detection--pre-commit--github-native--stage-5-alerts-query">G-0016: Layered Secret Detection — Pre-Commit + GitHub-Native + Stage 5 Alerts Query</a></h2>
+<p>Three layers per in-scope repo: (1) Pre-commit <code>lefthook</code> hooks with a workspace-shared narrow regex; (2) GitHub-native <code>secret_scanning</code> + <code>secret_scanning_push_protection</code> enabled continuously; (3) Stage 5 <code>verify-secrets</code> recipe in <code>just ci</code> queries the secret-scanning alerts API with <code>permissions.security-events: read</code> and fails the build on any open alert.</p>
+<hr>
+<h2 id="g-0017-feature-flags--flagprovider-trait--per-repo-crate"><a class="header" href="#g-0017-feature-flags--flagprovider-trait--per-repo-crate">G-0017: Feature Flags — FlagProvider Trait + Per-Repo Crate</a></h2>
+<p>Each in-scope repo defines its own feature-flag crate implementing a small <code>FlagProvider</code> trait. Default backend is env-var-driven (<code>FLAG_&lt;KEY&gt;</code>); keys are kebab-case in source, env vars are SCREAMING_SNAKE_CASE with <code>FLAG_</code> prefix. Extract to a shared workspace crate only when commonality emerges across three or more repos (rule of three).</p>
+<hr>
+<h2 id="g-0018-workspace-merge-template--auto-merge-recovery-cap"><a class="header" href="#g-0018-workspace-merge-template--auto-merge-recovery-cap">G-0018: Workspace Merge Template + Auto-Merge Recovery Cap</a></h2>
+<p>Workspace template script at <code>bin/pr-create-with-automerge.sh</code> canonicalizes the Stage-6-approved → squash → push → label → auto-merge sequence. Recovery cap = 3 (count-all semantics); per-PR counter lives in PR description footer (<code>&lt;!-- recovery-attempts: N --&gt;</code>). Recovery-increment activity rows mirror counter changes in <code>brain activity log</code> so counter tampering is detectable retroactively.</p>
+<hr>
+<h2 id="g-0019-tag-race-serialization--gha-concurrency-directive--r26b"><a class="header" href="#g-0019-tag-race-serialization--gha-concurrency-directive--r26b">G-0019: Tag-Race Serialization — GHA Concurrency Directive + R26b</a></h2>
+<p>Per-repo release workflow uses GHA <code>concurrency:</code> scoped to the <em>release-pr</em> job (Mode A), NOT the release job, with <code>cancel-in-progress: false</code>. R26b (“at most one PR may merge to main at a time”) is enforced via G-0023’s GitHub Merge Queue for Mode B repos. Combined: two-layer serialization across release-PR-update and merge gates; Mode B rapid-merge release-job race is accepted as a v1 known limitation with fail-loud monitoring.</p>
+<hr>
+<h2 id="g-0020-rust-release-automation--release-plz"><a class="header" href="#g-0020-rust-release-automation--release-plz">G-0020: Rust Release Automation = release-plz</a></h2>
+<p>release-plz is the canonical Rust release-automation tool for both CHANGELOG generation and semver bump computation. Per-repo <code>release-plz.toml</code>; CI invokes via the official GitHub Action gated by main branch, per-G-0019 concurrency, and a fine-grained PAT or GitHub App token (mandatory — <code>GITHUB_TOKEN</code> does not trigger downstream workflows). Release-PR mode (Mode A) or direct-release mode (Mode B) declared per-repo.</p>
+<hr>
+<h2 id="g-0021-monotonic-non-decreasing-version-policy-pattern-a"><a class="header" href="#g-0021-monotonic-non-decreasing-version-policy-pattern-a">G-0021: Monotonic Non-Decreasing Version Policy (Pattern A)</a></h2>
+<p>For Pattern A repos, the version sequence on <code>main</code> MUST be monotonic non-decreasing — every merge produces <code>prev_version &lt;= new_version</code>. Bump labels declare intent: <code>bump:major | bump:minor | bump:patch | bump:none</code>. <code>bump:none</code> is honor-system + Stage 4 reviewer responsibility, not tool-enforced. Revert PR bump labels reflect public-API impact, not numeric distance from the reverted version.</p>
+<hr>
+<h2 id="g-0022-embargo-flow-architecture--β-default--ghsa-private-fork"><a class="header" href="#g-0022-embargo-flow-architecture--β-default--ghsa-private-fork">G-0022: Embargo Flow Architecture — β Default + GHSA Private-Fork</a></h2>
+<p>Default posture: no embargo workflow built. When an embargoed disclosure arrives, use GitHub Security Advisories (GHSA) with temporary private fork pattern. Mode A flag-flip merges are suspended in the affected repo during embargo; an audit-PR opens at T0 to re-engage Stage 4/5 gates before the GitHub release publishes. Trip-wires upgrade this to a built workflow if embargoes become recurring.</p>
+<hr>
+<h2 id="g-0023-github-merge-queue-for-r26b-enforcement-and-intermediate-state-ci"><a class="header" href="#g-0023-github-merge-queue-for-r26b-enforcement-and-intermediate-state-ci">G-0023: GitHub Merge Queue for R26b Enforcement and Intermediate-State CI</a></h2>
+<p>GitHub Merge Queue enabled per in-scope repo enforces R26b at the structural level. Required checks split: tests / build / coverage run against the queue’s intermediate-state branch (need <code>merge_group</code> trigger); lint / type / secrets are PR-only. Per-repo merge-queue merge method MUST be set to <strong>rebase</strong> in branch protection. Admin queue bypass requires a <code>brain activity log</code> audit row.</p>
+<hr>
+<h2 id="g-0024-stage-6-approval--label-set-authorization--required-status-check-enforcement"><a class="header" href="#g-0024-stage-6-approval--label-set-authorization--required-status-check-enforcement">G-0024: Stage 6 Approval — Label-Set Authorization + Required-Status-Check Enforcement</a></h2>
+<p>Two GitHub-native enforcement layers, both required per in-scope repo: (A) repository ruleset (or <code>verify-stage6-labeler</code> workflow) restricts who may apply gating-family labels — single-actor allowlist in v1 (Peter, plus Forge / Bolt during workspace template invocation); (B) <code>verify-stage6-labels</code> required-status-check enforces cardinality at branch-protection level. Both checks are required-status-checks; both block merge on failure. Audit cross-reference at retrieval time joins <code>brain activity log</code> rows to the GitHub event log to detect forged audit rows.</p>
+<hr>
+<h2 id="g-0025-internal-ipc-uses-typed-binary-encoding-json-for-stored-state-and-external-surfaces"><a class="header" href="#g-0025-internal-ipc-uses-typed-binary-encoding-json-for-stored-state-and-external-surfaces">G-0025: Internal IPC Uses Typed Binary Encoding; JSON for Stored State and External Surfaces</a></h2>
+<p>Internal IPC defaults to a typed binary encoding (Protocol Buffers or FlatBuffers); JSON is reserved for stored state and external surfaces. Internal = both endpoints under the same project / team’s control, payload not persisted as the canonical record, no trust-domain boundary. Choice between protobuf and flatbuffers is per-use-case (protobuf for typical request/response with cross-language tooling; flatbuffers for read-heavy zero-copy / mmap-able payloads).</p>
+<hr>
+<h2 id="g-0026-project-dev-docs--mdbook--d2--mermaid"><a class="header" href="#g-0026-project-dev-docs--mdbook--d2--mermaid">G-0026: Project Dev Docs — mdBook + D2 + Mermaid</a></h2>
+<p>mdBook (Apache-2.0 / MIT, rust-lang official) as static-site generator per project repo; CI deploys to GitHub Pages. D2 for architecture-grade diagrams in built docs sites; Mermaid for diagrams in committed <code>.md</code> read in the GitHub web UI. Integration via mdBook custom preprocessors (<code>mdbook-d2</code> + <code>mdbook-mermaid</code>).</p>
+<hr>
+<h2 id="g-0027-agent-primary-source-artifacts-human-views-derivative"><a class="header" href="#g-0027-agent-primary-source-artifacts-human-views-derivative">G-0027: Agent-Primary Source Artifacts; Human Views Derivative</a></h2>
+<p>Source-of-truth artifacts (requirements, specs, architecture, ADRs) are authored, stored, and maintained in agent-primary form: structured and machine-addressable with stable IDs paired to human-readable names, no integrated-narrative requirement, mechanical operations on the format (parse / validate / merge / archive — deterministic, not LLM-driven). Human-readable views are derivative, generated on demand from the agent-primary source; they are never the source of truth.</p>
+<hr>
+<h2 id="g-0028-agent-first-workflow-shape--brief--verify"><a class="header" href="#g-0028-agent-first-workflow-shape--brief--verify">G-0028: Agent-First Workflow Shape — /brief + /verify</a></h2>
+<p>Adopt an agent-first workflow shape with two skills: <code>/brief</code> (unified intake → frame → spec, two human touchpoints, mandatory Stage 0 baseline load of values + principles + ADRs + constraint graph) and <code>/verify</code> (paired, four-signal stack: tests, property-based tests, intent-conformance review, decomposer spot-check). <code>/brief</code> is the single canonical entry for any work that produces a spec — <code>/discover</code>, <code>/spec</code>, <code>/clarify</code> survive only as internal mechanisms reused by stages.</p>
+<hr>
+<h2 id="g-0029-publish-time-human-render-via-bidirectional-translation"><a class="header" href="#g-0029-publish-time-human-render-via-bidirectional-translation">G-0029: Publish-Time Human Render via Bidirectional Translation</a></h2>
+<p>Agent-primary doc repos publish two surfaces from one canonical source tree (<code>docs/src/</code>): mdBook HTML for humans and llms.txt + llms-full.txt for agents. Each page declares <code>primary-audience: agent | human</code>; the opposite-audience render is generated via a local EXPLAIN pass (jargon resolution + narrative + glossary links) or STRIP pass (tighten to facts + cross-refs). Translations + the <code>_published/</code> tree are committed; CI is dumb. Hash-gated regeneration via <code>.translation-manifest.json</code> ensures translation runs only on actual source change.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../specs/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../adrs/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../adrs/DEFAULTS.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../adrs/template.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -236,11 +291,11 @@ primary-audience: human</a></h2>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../specs/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../adrs/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../adrs/DEFAULTS.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../adrs/template.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
