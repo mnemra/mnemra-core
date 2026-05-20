@@ -25,6 +25,7 @@ MERGE_MESSAGE
 
 # mdBook build output
 docs/book/
+docs/_build/
 
 # Working scratch (dispatch reports etc. live in workspace brain/, not the repo)
 scratch/
