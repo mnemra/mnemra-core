@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).parent.parent
 GENERATOR = REPO_ROOT / "scripts" / "docs-llms.py"
 
 
-def run_generator(src_dir: Path, out_dir: Path, extra_args: list[str] = None) -> subprocess.CompletedProcess:
+def run_generator(src_dir: Path, out_dir: Path, extra_args: list[str] | None = None) -> subprocess.CompletedProcess:
     """Run the generator with uv, pointing at a fixture src_dir."""
     args = [
         "uv",
@@ -205,28 +205,41 @@ def test_golden_llms_full_txt(tmp_path):
 
     actual = (out / "llms-full.txt").read_text()
 
-    # Each page separator + content appears in SUMMARY.md order
-    assert "<!-- ===== docs/src/intro.md ===== -->" in actual
-    assert "<!-- ===== docs/src/intent/mnemra-core.md ===== -->" in actual
-    assert "<!-- ===== docs/src/specs/README.md ===== -->" in actual
-    assert "<!-- ===== docs/src/adrs/README.md ===== -->" in actual
-    assert "<!-- ===== docs/src/adrs/DEFAULTS.md ===== -->" in actual
-    assert "<!-- ===== docs/src/adrs/template.md ===== -->" in actual
-    assert "<!-- ===== docs/src/glossary.md ===== -->" in actual
+    def page_content(path: str, title: str, summary: str, body: str, audience: str = "human") -> str:
+        """Return the page text as it appears in llms-full.txt (frontmatter + body, trailing newline stripped)."""
+        fm_summary = f'"{summary}"' if summary else ""
+        raw = f'---\ntitle: "{title}"\nsummary: {fm_summary}\nprimary-audience: {audience}\n---\n\n{body}\n'
+        return f"<!-- ===== docs/src/{path} ===== -->\n\n{raw.rstrip(chr(10))}"
 
-    # Verify order: intro before intent before specs before adrs/README before glossary
-    pos_intro = actual.index("<!-- ===== docs/src/intro.md ===== -->")
-    pos_intent = actual.index("<!-- ===== docs/src/intent/mnemra-core.md ===== -->")
-    pos_specs = actual.index("<!-- ===== docs/src/specs/README.md ===== -->")
-    pos_adrs = actual.index("<!-- ===== docs/src/adrs/README.md ===== -->")
-    pos_glossary = actual.index("<!-- ===== docs/src/glossary.md ===== -->")
+    # SUMMARY.md order: intro, intent/mnemra-core, specs/README, adrs/README, adrs/DEFAULTS, adrs/template, glossary
+    parts = [
+        page_content("intro.md", "mnemra-core",
+                     "Entry point for the mnemra-core documentation site.", intro_body),
+        page_content("intent/mnemra-core.md", "Product Brief: Mnemra Core",
+                     "Product brief locking mnemra-core's intent and feature register.",
+                     intent_body, audience="agent"),
+        page_content("specs/README.md", "Specifications",
+                     "How canonical architecture specs differ from implementation-history specs in this repo.",
+                     specs_body),
+        page_content("adrs/README.md", "Architecture Decision Records",
+                     "How architecture decisions are structured here (G-* / P-* prefixes, MADR format).",
+                     adrs_body),
+        page_content("adrs/DEFAULTS.md", "Project Standards",
+                     "Project defaults projected from workspace G-* canon — baseline for mnemra-core.",
+                     defaults_body, audience="agent"),
+        page_content("adrs/template.md", "P-NNNN: Title",
+                     "MADR template for authoring new P-NNNN ADRs.",
+                     template_body, audience="agent"),
+        page_content("glossary.md", "Glossary",
+                     "Terms and conventions used across mnemra-core's intent, ADRs, and specs.",
+                     glossary_body),
+    ]
+    expected = "\n\n".join(parts) + "\n"
 
-    assert pos_intro < pos_intent < pos_specs < pos_adrs < pos_glossary
-
-    # Content appears after its separator
-    assert intro_body in actual
-    assert intent_body in actual
-    assert glossary_body in actual
+    assert actual == expected, (
+        f"llms-full.txt mismatch.\nExpected length: {len(expected)}, actual length: {len(actual)}\n"
+        f"Expected:\n{expected}\nActual:\n{actual}"
+    )
 
 
 # ---------------------------------------------------------------------------
