@@ -4,6 +4,8 @@ check:
     cargo clippy --workspace --exclude mnemra-echo -- -D warnings
     cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings
     cargo test --workspace
+    uv run scripts/docs-llms.py --check
+    uv run --with pytest pytest tests/test_docs_llms.py
 
 # Format code
 fmt:
@@ -12,6 +14,11 @@ fmt:
 # Run tests (host)
 test:
     cargo test
+
+# Generate docs/_published/llms.txt + docs/_published/llms-full.txt from docs/src/.
+# Requires: uv on PATH.
+docs-llms:
+    uv run scripts/docs-llms.py
 
 # Build the docs site.
 # Requires: mdbook, mdbook-mermaid, mdbook-d2, and the d2 CLI on PATH.
