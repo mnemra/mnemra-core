@@ -1,6 +1,6 @@
 ---
 title: Project Standards
-summary: 
+summary: "Project defaults projected from workspace G-* canon — baseline for mnemra-core."
 primary-audience: agent
 ---
 

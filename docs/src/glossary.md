@@ -1,6 +1,6 @@
 ---
 title: Glossary
-summary: 
+summary: "Terms and conventions used across mnemra-core's intent, ADRs, and specs."
 primary-audience: human
 ---
 
