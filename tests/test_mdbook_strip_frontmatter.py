@@ -28,6 +28,7 @@ Toolchain: uv (skills/python-use.md). pytest is the runner.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -280,21 +281,49 @@ def test_e2e_build_serves_human_translated_tree(built_book):
     )
 
 
+# Mask code-block (`<pre>...</pre>`) then inline-code (`<code>...</code>`)
+# regions before scanning for frontmatter keys. mdBook renders fenced code as
+# `<pre><code>...</code></pre>`, so masking `<pre>` first (non-greedy, DOTALL)
+# removes the block wholesale; the second pass catches any standalone inline
+# `<code>`. A frontmatter key quoted inside backticks/code fences is legitimate
+# documentation prose (AC #7), not a leak. A genuinely-leaked leading frontmatter
+# block renders as raw page text — never wrapped in `<code>`/`<pre>` — so masking
+# code regions still leaves a real leak visible to the scan.
+_PRE_BLOCK = re.compile(r"<pre\b.*?</pre>", re.DOTALL | re.IGNORECASE)
+_CODE_SPAN = re.compile(r"<code\b.*?</code>", re.DOTALL | re.IGNORECASE)
+
+# Keys that appear in page frontmatter; if any renders as body text the strip
+# preprocessor is not active. `summary:` keeps its colon to avoid matching the
+# English word "summary" in prose.
+_FRONTMATTER_KEYS = ("primary-audience", "summary:")
+
+
+def _strip_code_regions(html: str) -> str:
+    """Remove `<pre>`/`<code>` content so only non-code page text remains."""
+    html = _PRE_BLOCK.sub("", html)
+    html = _CODE_SPAN.sub("", html)
+    return html
+
+
 def test_e2e_no_frontmatter_renders_in_any_page(built_book):
     """
     Scenario: YAML frontmatter no longer renders as page text
       Given a clean `mdbook build docs/`
-      When every rendered *.html page is scanned
-      Then none contains the literal frontmatter key text `primary-audience`
-    This proves the strip preprocessor runs at build time.
+      When every rendered *.html page is scanned, excluding `<code>`/`<pre>` regions
+      Then no page displays a frontmatter key (`primary-audience`, `summary:`)
+           outside an inline-code or code-block element
+    A key quoted in backticks/code fences is legitimate documentation prose, not a
+    leak; a real leading-frontmatter leak renders as raw body text, which this scan
+    still catches. This proves the strip preprocessor runs at build time.
     (AC #7 — strip)
     """
-    offenders = [
-        str(p.relative_to(built_book))
-        for p in built_book.rglob("*.html")
-        if "primary-audience" in p.read_text()
-    ]
+    offenders = []
+    for p in built_book.rglob("*.html"):
+        body = _strip_code_regions(p.read_text())
+        leaked = [key for key in _FRONTMATTER_KEYS if key in body]
+        if leaked:
+            offenders.append(f"{p.relative_to(built_book)}: {leaked}")
     assert not offenders, (
-        "frontmatter key `primary-audience` rendered into HTML pages "
+        "frontmatter key(s) rendered as body text outside `<code>`/`<pre>` "
         f"(strip preprocessor not active): {offenders}"
     )
