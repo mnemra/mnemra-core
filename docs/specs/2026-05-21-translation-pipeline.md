@@ -44,7 +44,7 @@ After this step:
    - `docs/prompts/explain-pass.md`
    - `docs/prompts/strip-pass.md`
 
-   Both are plain Markdown prompts (no frontmatter). Each MUST contain the literal tokens `{{GLOSSARY}}` and `{{PAGE}}` exactly once each — these are the substitution points. The script substitutes glossary content and page content into these tokens before emitting a plan entry. Initial prompt content is authored by Puck during spec preparation and committed as part of this step; Peter iterates after first end-to-end run.
+   Both are plain Markdown prompts (no frontmatter). Each MUST contain the literal tokens `{{GLOSSARY}}` and `{{PAGE}}` exactly once each — these are the content substitution points. Both SHALL also use `{{NONCE}}` in wrapper tags (e.g. `<source-page-{{NONCE}}>...</source-page-{{NONCE}}>`, `<glossary-{{NONCE}}>...</glossary-{{NONCE}}>`) as per-run prompt-injection defense per AC #20. The script generates a 16-hex-char nonce per invocation, substitutes `{{NONCE}}` first, then `{{GLOSSARY}}` and `{{PAGE}}`. Initial prompt content is authored by Puck during spec preparation and committed as part of this step; Peter iterates after first end-to-end run.
 
 2. **Generator exists at `scripts/docs-translate.py`.** Python script invoked via `uv run`. Three modes:
    - `--plan`: compute the work needing translation; emit a JSON plan to stdout; perform deterministic filesystem work (verbatim copies of canonical-side pages, orphan file deletions); write a pending sidecar at `docs/_published/.translation-pending.json` describing the work the slash command must complete and the orphan manifest entries to remove. **Does NOT mutate the manifest.** NEVER calls an LLM. NEVER writes translated outputs.
@@ -160,6 +160,8 @@ After this step:
 18. **End-to-end first run produces a complete tree.** After implementation, Peter runs `/docs-translate` in a Claude session at the mnemra-core repo root. All 7 current pages produce both `_published/human/` and `_published/agent/` entries. `just docs-check` exits 0. `just check` exits 0. PR includes the regenerated `_published/{human,agent}/` tree plus the new manifest.
 
 19. **G-0029 amendment.** A separate commit in the workspace repo (NOT in this mnemra-core PR) updates `brain/decisions/G-0029-publish-time-human-render.md`'s "Mechanism details (TBD placeholder)" section with the resolved mechanism: file locations, prompt-substitution shape, manifest schema, slash-command/agent-dispatch contract. Update appended as an Amendment in the existing `## Changelog` section per `feedback_version_prefix.md`. The cross-repo boundary is explicit: mnemra-core PR contains zero G-0029 changes.
+
+20. **Prompt-injection defense — per-run nonce delimiters.** Source pages and glossary content are user-authored Markdown that the script substitutes into prompts dispatched to general-purpose Agents. To prevent a source page containing a literal `</source-page>` (or `</glossary>`) close-tag from escaping the prompt frame and injecting instructions (OWASP LLM01), the wrapper tags SHALL include a per-run 16-hex-char nonce. The script generates the nonce via `secrets.token_hex(8)` per `--plan` invocation, substitutes it into `{{NONCE}}` everywhere in the prompt file before substituting `{{GLOSSARY}}` and `{{PAGE}}`. The nonce changes on every plan run; manifest hashing is unaffected (only the prompt FILE content is hashed via `prompt_sha256`, not the assembled prompt with nonce). Tests SHALL assert that the assembled prompt's open and close tags use the same nonce (matched pair) and that the nonce is 16 lowercase hex characters.
 
 ## Prompt structure (initial drafts authored by Puck pre-Forge)
 
@@ -377,3 +379,13 @@ Bolt is skipped (no UX surface). Warden + Glitch is the gate. If Forge's PR reve
 **Fix:** AC #3 amended to: "For each `docs/src/**/*.md` (excluding `SUMMARY.md` and `glossary.md`)".
 
 **Effect on impl + tests:** none — already implemented this way.
+
+### Amendment — 2026-05-21: AC #1 + new AC #20 (prompt-injection defense via nonce delimiters)
+
+**Surfaced by:** Warden code+security review, dispatch #621 (Medium finding, LLM01).
+
+**Defect:** AC #1's `{{GLOSSARY}}` / `{{PAGE}}` naked `str.replace` substitution allowed a source page containing the literal string `</source-page>` followed by injected `<role>` / `<rules>` blocks to escape the XML prompt frame and inject instructions into the dispatched Agent. Theoretical at single-maintainer authorship; real at step-8 workspace promotion when authorship broadens. Already flagged in Risks (LLM01); now fixed.
+
+**Fix:** AC #1 amended to require both prompts use `{{NONCE}}` in wrapper tags. New AC #20 introduced documenting the per-run nonce mechanism (16 hex chars via `secrets.token_hex(8)`, substituted before content tokens, unaffects manifest hashing since only the prompt FILE is hashed via `prompt_sha256`). Tests SHALL assert nonce shape (16 lowercase hex) and matched open/close pair.
+
+**Effect on impl + tests:** Forge round-2 dispatched against this amendment — script change + prompt edits + new test cases.
