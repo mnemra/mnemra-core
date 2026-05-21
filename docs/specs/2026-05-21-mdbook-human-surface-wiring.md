@@ -64,9 +64,7 @@ preprocessor strips uniformly regardless of source and keeps the `_published/` t
    from `docs/src/intent/mnemra-core.md`, and does **not** contain a phrase unique to the
    agent-source page. (The red-phase author selects the concrete literals from the committed
    trees.) This proves the build reads `_published/human/`, not `docs/src/`.
-7. **End-to-end — strip.** After a clean build, no file under `docs/book/**/*.html` contains
-   the literal frontmatter key text `primary-audience` (nor `summary:` rendered as body text).
-   This proves the frontmatter no longer renders.
+7. **End-to-end — strip.** After a clean build, no rendered page under `docs/book/**/*.html` displays YAML frontmatter as body text — specifically, the keys `primary-audience` and `summary:` must not appear **outside** an inline-code (`<code>`) or code-block (`<pre>`) element. A frontmatter key quoted inside backticks/code fences is legitimate documentation prose, not a leak. This proves the frontmatter block no longer renders.
 8. **No build artifacts committed.** Tests build to a temporary output dir (e.g.
    `mdbook build docs/ -d <tmp>`) or clean up `docs/book/`; the test run leaves no new tracked
    or untracked files in the repo.
@@ -95,3 +93,4 @@ end-to-end test requires them on PATH.
 ## Changelog
 
 - 2026-05-21 — Initial draft.
+- 2026-05-21 — **AC #7 amended** (substring scan → structural scan). **Surfaced by:** end-to-end first run flagged `adrs/DEFAULTS.html` + `print.html`. **Defect:** the original assertion scanned rendered HTML for the bare substring `primary-audience`, which over-matches `adrs/DEFAULTS.md` line 183 — prose that documents the frontmatter convention in backticks (`<code>primary-audience: agent | human</code>`). The strip preprocessor correctly removes the actual leading frontmatter block (verified by stdin capture). **Fix:** AC #7 now requires the keys not appear *outside* `<code>`/`<pre>` elements, so legitimate documentation prose is no longer a false leak. No impl change.
