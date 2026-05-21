@@ -8,22 +8,22 @@ primary-audience: human
 
 # mnemra-core
 
-mnemra-core is the core context layer for Mnemra — an MCP-native system for persistent, structured memory that integrates with AI development workflows.
+mnemra-core is the core context layer for Mnemra: an MCP-native system for persistent, structured memory integrated with AI development workflows.
 
-This documentation covers the internal architecture, design decisions, and developer guides for mnemra-core contributors and integrators.
+Covers internal architecture, design decisions, and developer guides for mnemra-core contributors and integrators.
 
 ## About This Site
 
-This docs site is built with [mdBook](https://rust-lang.github.io/mdBook/) and includes:
+Built with [mdBook](https://rust-lang.github.io/mdBook/). Contents:
 
-- **Architecture Decision Records (ADRs)** — the reasoning behind key design choices
-- **Developer Guides** — how to build, extend, and contribute
+- **Architecture Decision Records (ADRs)** — reasoning behind key design choices; see [ADRs section](adrs/README.md). MADR format per `../adrs/`.
+- **Developer Guides** — build, extend, contribute.
 
 ## Repository
 
-Source code lives at: [https://github.com/mnemra/mnemra-core](https://github.com/mnemra/mnemra-core)
+Source: [https://github.com/mnemra/mnemra-core](https://github.com/mnemra/mnemra-core)
 
-For a project overview and quick-start instructions, see the [README](https://github.com/mnemra/mnemra-core/blob/main/README.md) in the repository root.
+Project overview and quick-start: [README](https://github.com/mnemra/mnemra-core/blob/main/README.md) in the repository root.
 
 <!-- ===== docs/src/intent/mnemra-core.md ===== -->
 
@@ -606,25 +606,16 @@ primary-audience: human
 
 # Specifications
 
-This section contains canonical architecture specifications — locked
-frame + spec deliverables produced by the `/brief` workflow on real
-features. These are the primary architectural reading for outside
-integrators and reviewers.
+Canonical architecture specifications: locked frame + spec deliverables produced by the `/brief` workflow on real features. Primary architectural reading for outside integrators and reviewers.
 
-A "spec" in this section is:
+A spec in this section is:
 
-- A *living, locked* deliverable. Living: updated as architecture
-  evolves. Locked: no changes without explicit re-approval.
-- An agent-primary artifact (per G-0027). Outside-human reading lands
-  on translated views generated at publish time (per G-0029).
+- A *living, locked* deliverable. Living: updated as architecture evolves. Locked: no changes without explicit re-approval.
+- An agent-primary artifact (per `../adrs/G-0027.md`). Outside-human reading lands on translated views generated at publish time (per `../adrs/G-0029.md`).
 
-Implementation-history specs (dated snapshots of completed setup or
-infra work) live elsewhere on disk and are excluded from mdBook
-navigation. They contribute to the agent-readable `llms-full.txt`
-surface only.
+Implementation-history specs (dated snapshots of completed setup or infra work) live elsewhere on disk, are excluded from mdBook navigation, and contribute only to the agent-readable `llms-full.txt` surface.
 
-This section is currently empty — the first canonical spec lands as
-features progress through `/brief` Stage 3.
+This section is empty. The first canonical spec lands as features progress through `/brief` Stage 3 (the Spec stage; output: locked spec).
 
 <!-- ===== docs/src/adrs/README.md ===== -->
 
@@ -636,15 +627,15 @@ primary-audience: human
 
 # Architecture Decision Records
 
-This section tracks the architectural decisions made in mnemra-core using the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
+mnemra-core architectural decisions use the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
 
 ## What is an ADR?
 
-An Architecture Decision Record (ADR) captures a single architectural decision along with its context and rationale. ADRs are immutable once accepted — they are not edited to reflect changing opinions, but superseded by newer ADRs when decisions evolve.
+An ADR captures a single architectural decision with its context and rationale. ADRs are immutable once accepted — superseded by newer ADRs when decisions evolve, never edited in place.
 
 ## ADR Lifecycle
 
-Each ADR moves through the following statuses:
+ADR statuses:
 
 | Status | Meaning |
 |--------|---------|
@@ -656,22 +647,22 @@ Each ADR moves through the following statuses:
 
 ## G/P Prefix Projection Pattern
 
-ADRs in this project use a two-tier identifier convention that reflects where a decision originates and how it propagates.
+Two-tier identifier convention encoding decision origin and propagation.
 
-- **G-NNNN (general)** — workspace-wide architecture decisions. These do not live as individual files in this directory. Instead, they are projected once into [`DEFAULTS.md`](DEFAULTS.md) — a one-time snapshot recording each general standard as a concise entry, without the full rationale chain. DEFAULTS.md is frozen at projection time; upstream changes to a G-* decision do not auto-sync into this file.
-- **P-NNNN (project)** — project-specific architecture decisions, stored as individual `P-NNNN-*.md` files in this directory. Two sub-categories:
+- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files here; projected once into [`DEFAULTS.md`](DEFAULTS.md) as a concise entry without the full rationale chain. DEFAULTS.md is frozen at projection; upstream G-* changes do not auto-sync.
+- **P-NNNN (project)** — project-specific decisions, stored as individual `P-NNNN-*.md` files here. Two sub-categories:
   - *Project-specific:* a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
-  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. An override P-ADR names the default it overrides explicitly in its Status field (e.g., `Status: accepted, Overrides G-0017`).
+  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. The override P-ADR names the overridden default in its Status field (e.g., `Status: accepted, Overrides G-0017`).
 
 *The default is the starting point; any deviation is a new P-ADR.*
 
 ## Using the Template
 
-To record a new project ADR, copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, and write the body sections. If the decision overrides a `DEFAULTS.md` entry, state that explicitly in the Status section.
+To record a project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill all frontmatter fields, write the body sections. If the decision overrides a `DEFAULTS.md` entry, state that in the Status section.
 
 ## Current ADRs
 
-None yet. P-ADRs will be added as project-specific architectural decisions are made and ratified. See [`DEFAULTS.md`](DEFAULTS.md) for the projected general standards in force.
+None yet. P-ADRs are added as project-specific decisions are ratified. See [`DEFAULTS.md`](DEFAULTS.md) for the projected general standards in force.
 
 <!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
 
