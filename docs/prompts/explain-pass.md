@@ -36,10 +36,10 @@ The output is read by skeptical engineers who notice AI-flavored prose immediate
 Emit **only** the translated Markdown. No preamble, no trailing commentary, no "Here is the translation:" framing. The first characters of your response are the source's leading `---` (if frontmatter exists) or its first heading.
 </output-format>
 
-<glossary>
+<glossary-{{NONCE}}>
 {{GLOSSARY}}
-</glossary>
+</glossary-{{NONCE}}>
 
-<source-page>
+<source-page-{{NONCE}}>
 {{PAGE}}
-</source-page>
+</source-page-{{NONCE}}>
