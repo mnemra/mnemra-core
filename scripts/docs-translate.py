@@ -319,6 +319,18 @@ def cmd_plan(args: argparse.Namespace) -> int:
             os.makedirs(dest.parent, exist_ok=True)
             dest.write_bytes(summary_content)
 
+    # -- glossary.md: structural like SUMMARY.md, copy verbatim to both sides --
+    # Never translated/routed (it is the {{GLOSSARY}} injection source), but it
+    # must exist in every published subtree so SUMMARY.md nav links and
+    # docs-llms --check resolve on both sides. Not in plan items or manifest.
+    glossary_pub_path = src_dir / "glossary.md"
+    if glossary_pub_path.exists():
+        glossary_pub_content = glossary_pub_path.read_bytes()
+        for side in ("human", "agent"):
+            dest = out_dir / side / "glossary.md"
+            os.makedirs(dest.parent, exist_ok=True)
+            dest.write_bytes(glossary_pub_content)
+
     # -- Detect orphan manifest entries (source file deleted) --
     orphans: list[str] = []
     for rel_key in list(manifest_entries.keys()):
