@@ -1347,9 +1347,9 @@ def test_plan_removes_orphan_published_files_and_writes_pending_sidecar(tmp_path
             primary_audience="agent",
         ),
         "orphan.md": make_valid_entry(  # source deleted
-            source_sha256="o" * 64,
+            source_sha256="0" * 64,
             prompt_path="explain-pass.md",
-            prompt_sha256="o" * 64,
+            prompt_sha256="0" * 64,
             primary_audience="agent",
         ),
     })
@@ -1410,9 +1410,9 @@ def test_check_reports_orphans_as_drift_without_removing_them(tmp_path):
             primary_audience="agent",
         ),
         "orphan.md": make_valid_entry(
-            source_sha256="o" * 64,
+            source_sha256="0" * 64,
             prompt_path="explain-pass.md",
-            prompt_sha256="o" * 64,
+            prompt_sha256="0" * 64,
             primary_audience="agent",
         ),
     })
