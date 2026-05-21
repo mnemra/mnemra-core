@@ -214,6 +214,8 @@ def validate_prompt(prompt_path: Path) -> list[str]:
         errors.append(f"prompt '{prompt_path.name}' missing {{{{GLOSSARY}}}} token")
     if "{{PAGE}}" not in text:
         errors.append(f"prompt '{prompt_path.name}' missing {{{{PAGE}}}} token")
+    if "{{NONCE}}" not in text:
+        errors.append(f"prompt '{prompt_path.name}' missing {{{{NONCE}}}} token")
     return errors
 
 
