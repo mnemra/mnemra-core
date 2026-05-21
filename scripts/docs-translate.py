@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -115,17 +116,12 @@ def write_manifest(manifest_path: Path, manifest: dict) -> None:
     tmp.replace(manifest_path)
 
 
-def validate_manifest(manifest: dict, existing_keys: set[str] | None = None) -> list[str]:
+def validate_manifest(manifest: dict) -> list[str]:
     """
     Validate manifest schema. Return list of error strings (empty = valid).
 
     Checks for all entries: schema_version, required fields, valid audience,
-    valid prompt_path, audience↔prompt agreement.
-
-    SHA-256 hex format is only validated for entries whose key is in
-    existing_keys (i.e., source page still exists). Orphan entries (source
-    deleted) may have placeholder hashes and are excluded from format checks.
-    If existing_keys is None, sha256 format is validated for all entries.
+    valid prompt_path, audience↔prompt agreement, and SHA-256 hex format.
     """
     errors: list[str] = []
 
@@ -148,21 +144,17 @@ def validate_manifest(manifest: dict, existing_keys: set[str] | None = None) -> 
             errors.append(f"entry '{rel_path}': missing fields: {sorted(missing)}")
             continue
 
-        # Only validate sha256 format for non-orphan entries
-        validate_sha = existing_keys is None or rel_path in existing_keys
+        sha = entry["source_sha256"]
+        if not _SHA256_RE.match(sha):
+            errors.append(
+                f"entry '{rel_path}': source_sha256 not 64 lowercase hex chars: {sha!r}"
+            )
 
-        if validate_sha:
-            sha = entry["source_sha256"]
-            if not _SHA256_RE.match(sha):
-                errors.append(
-                    f"entry '{rel_path}': source_sha256 not 64 lowercase hex chars: {sha!r}"
-                )
-
-            psha = entry["prompt_sha256"]
-            if not _SHA256_RE.match(psha):
-                errors.append(
-                    f"entry '{rel_path}': prompt_sha256 not 64 lowercase hex chars: {psha!r}"
-                )
+        psha = entry["prompt_sha256"]
+        if not _SHA256_RE.match(psha):
+            errors.append(
+                f"entry '{rel_path}': prompt_sha256 not 64 lowercase hex chars: {psha!r}"
+            )
 
         audience = entry["primary_audience"]
         if audience not in VALID_AUDIENCES:
@@ -226,8 +218,14 @@ def validate_prompt(prompt_path: Path) -> list[str]:
 
 
 def make_prompt_text(prompt_path: Path, glossary_body: str, page_text: str) -> str:
-    """Substitute {{GLOSSARY}} and {{PAGE}} into prompt template."""
+    """Substitute {{NONCE}}, {{GLOSSARY}}, and {{PAGE}} into prompt template.
+
+    Nonce is substituted first so that content tokens cannot inject {{NONCE}}
+    literals into wrapper tag positions.
+    """
+    nonce = secrets.token_hex(8)
     text = prompt_path.read_text()
+    text = text.replace("{{NONCE}}", nonce)
     text = text.replace("{{GLOSSARY}}", glossary_body)
     text = text.replace("{{PAGE}}", page_text)
     return text
@@ -303,9 +301,9 @@ def cmd_plan(args: argparse.Namespace) -> int:
     pages, summary_path = collect_source_pages(src_dir)
     src_pages_rel = {rel_to_src(p, src_dir) for p in pages}
 
-    # Validate manifest now that we know which entries are non-orphan
+    # Validate manifest
     if manifest is not None:
-        errs = validate_manifest(manifest, existing_keys=src_pages_rel)
+        errs = validate_manifest(manifest)
         if errs:
             for e in errs:
                 print(f"error: {e}", file=sys.stderr)
@@ -466,10 +464,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     # Add/update entries for translated items
     for item in items:
         source_path = Path(item["source_path"])
-        try:
-            rel = str(source_path.relative_to(src_dir))
-        except ValueError:
-            rel = str(source_path.relative_to(Path(args.src).resolve()))
+        rel = str(source_path.resolve().relative_to(src_dir.resolve()))
 
         # prompt_path in sidecar is absolute; manifest stores filename only
         prompt_name = Path(item["prompt_path"]).name
@@ -517,7 +512,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     pages, _ = collect_source_pages(src_dir)
     src_pages_rel = {rel_to_src(p, src_dir) for p in pages}
 
-    errs = validate_manifest(manifest, existing_keys=src_pages_rel)
+    errs = validate_manifest(manifest)
     if errs:
         for e in errs:
             print(f"error: {e}", file=sys.stderr)
