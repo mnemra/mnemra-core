@@ -20,10 +20,10 @@ Strip the source page below to a terse agent-form while keeping it a faithful Ma
 Emit **only** the translated Markdown. No preamble, no trailing commentary, no "Here is the stripped version:" framing. The first characters of your response are the source's leading `---` (if frontmatter exists) or its first heading.
 </output-format>
 
-<glossary>
+<glossary-{{NONCE}}>
 {{GLOSSARY}}
-</glossary>
+</glossary-{{NONCE}}>
 
-<source-page>
+<source-page-{{NONCE}}>
 {{PAGE}}
-</source-page>
+</source-page-{{NONCE}}>

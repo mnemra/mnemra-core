@@ -18,7 +18,7 @@ Parse the JSON from stdout. If `items` is empty, report "no translation needed" 
 
 ## Step 2 — Dispatch translation agents (parallelism is mandatory)
 
-For each item in `items`, dispatch an Agent with `subagent_type: general-purpose`, `mode: default`, using the item's `assembled_prompt` as the task input. The agent's job is to return the translated Markdown as its final message — no preamble, no commentary, no explanation.
+For each item in `items`, dispatch an Agent with `subagent_type: general-purpose`, `mode: default`, using the item's `assembled_prompt` as the task input. The agent's job is to return the translated Markdown as its final message — no preamble, no commentary, no explanation. The dispatched Agent has no Write, Edit, or Bash access. Its only job is to return the translated Markdown as its final message. The parent session does the file write.
 
 **Parallelism is mandatory and explicit: dispatch agents in batches of 4 by sending exactly 4 Agent tool calls in a single message.** Claude only parallelizes Agent calls when they appear together in a single tool-use message. Serial dispatch (one Agent call per message) is a defect — it processes pages sequentially and is dramatically slower.
 
