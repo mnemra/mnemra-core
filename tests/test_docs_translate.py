@@ -1372,6 +1372,50 @@ def test_summary_md_copied_to_both_sides_not_in_plan(tmp_path):
     )
 
 
+def test_glossary_md_copied_to_both_sides_not_in_plan(tmp_path):
+    """
+    Given a glossary.md in docs/src/ (the {{GLOSSARY}} injection source).
+    When --plan is run.
+    Then glossary.md is structural like SUMMARY.md: copied verbatim to both
+      _published/human/ and _published/agent/, and it does NOT appear in plan
+      items or the manifest.
+
+    Pins the AC#18 vs AC#3/#4 erratum: glossary.md is never translated/routed,
+    but it must still be published on both sides so SUMMARY.md nav links and
+    docs-llms --check resolve in every published subtree.
+    """
+    src = tmp_path / "src"
+    out = tmp_path / "out"
+    prompts = tmp_path / "prompts"
+    out.mkdir()
+
+    make_summary(src, ["page.md", "glossary.md"])
+    make_page(src / "page.md", title="Page", audience="agent")
+    make_glossary(src / "glossary.md")
+    make_prompt(prompts / "explain-pass.md")
+    make_prompt(prompts / "strip-pass.md")
+
+    glossary_content = (src / "glossary.md").read_text()
+
+    result = run_translate(src, out, prompts, "--plan")
+    assert result.returncode == 0, f"--plan failed:\nstderr: {result.stderr}"
+
+    # glossary.md copied to both sides, byte-verbatim
+    human_glossary = out / "human" / "glossary.md"
+    agent_glossary = out / "agent" / "glossary.md"
+    assert human_glossary.exists(), f"glossary.md must be copied to human side: {human_glossary}"
+    assert agent_glossary.exists(), f"glossary.md must be copied to agent side: {agent_glossary}"
+    assert human_glossary.read_text() == glossary_content, "Human glossary.md must be verbatim copy"
+    assert agent_glossary.read_text() == glossary_content, "Agent glossary.md must be verbatim copy"
+
+    # glossary.md NOT in plan items
+    plan = json.loads(result.stdout)
+    plan_paths = [item["source_path"] for item in plan["items"]]
+    assert not any("glossary.md" in p for p in plan_paths), (
+        f"glossary.md must not appear in plan items. Got: {plan_paths}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # §9 Orphan cleanup
 # ---------------------------------------------------------------------------
