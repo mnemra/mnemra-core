@@ -163,6 +163,8 @@ After this step:
 
 20. **Prompt-injection defense — per-run nonce delimiters.** Source pages and glossary content are user-authored Markdown that the script substitutes into prompts dispatched to general-purpose Agents. To prevent a source page containing a literal `</source-page>` (or `</glossary>`) close-tag from escaping the prompt frame and injecting instructions (OWASP LLM01), the wrapper tags SHALL include a per-run 16-hex-char nonce. The script generates the nonce via `secrets.token_hex(8)` per `--plan` invocation, substitutes it into `{{NONCE}}` everywhere in the prompt file before substituting `{{GLOSSARY}}` and `{{PAGE}}`. The nonce changes on every plan run; manifest hashing is unaffected (only the prompt FILE content is hashed via `prompt_sha256`, not the assembled prompt with nonce). Tests SHALL assert that the assembled prompt's open and close tags use the same nonce (matched pair) and that the nonce is 16 lowercase hex characters.
 
+   **Validator obligation.** Because the nonce wrappers are the load-bearing injection defense, the prompt-token validator (`--plan` / `--check`) SHALL reject a prompt file missing the `{{NONCE}}` token → exit 1 naming the prompt file, same as the existing `{{GLOSSARY}}` / `{{PAGE}}` checks (AC #1). This guards against a contributor editing a prompt and silently dropping the nonce wrappers, which would re-open the LLM01 boundary without any test catching it (the assembled-prompt nonce tests use synthetic fixtures, not the real prompt files). Presence check only — verifying the nonce sits in the correct wrapper position is out of scope (over-fit); a missing token is the realistic regression and the one worth gating.
+
 ## Prompt structure (initial drafts authored by Puck pre-Forge)
 
 Both prompts share an XML-tagged skeleton (per Anthropic's prompt-engineering best practices; XML boundaries disambiguate prompt frame from Markdown content the model processes):
@@ -389,3 +391,11 @@ Bolt is skipped (no UX surface). Warden + Glitch is the gate. If Forge's PR reve
 **Fix:** AC #1 amended to require both prompts use `{{NONCE}}` in wrapper tags. New AC #20 introduced documenting the per-run nonce mechanism (16 hex chars via `secrets.token_hex(8)`, substituted before content tokens, unaffects manifest hashing since only the prompt FILE is hashed via `prompt_sha256`). Tests SHALL assert nonce shape (16 lowercase hex) and matched open/close pair.
 
 **Effect on impl + tests:** Forge round-2 dispatched against this amendment — script change + prompt edits + new test cases.
+
+### Amendment — 2026-05-21: AC #20 validator obligation (nonce presence gate)
+
+**Surfaced by:** Forge round-2 (dispatch #623) followup.
+
+**Gap:** AC #20 required prompts use `{{NONCE}}` wrappers but no mechanical validator enforced it on the real `docs/prompts/*.md` files. The nonce tests use synthetic `make_prompt` fixtures, and `validate_prompt` only checked `{{GLOSSARY}}`/`{{PAGE}}`. A contributor dropping the nonce wrappers would silently re-open LLM01 with nothing catching it.
+
+**Fix:** AC #20 extended with a Validator obligation clause — the prompt-token validator (`--plan`/`--check`) rejects a prompt missing `{{NONCE}}` (presence check). Round-3: Glitch adds the test, Forge extends `validate_prompt`.
