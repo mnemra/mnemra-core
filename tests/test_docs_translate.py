@@ -778,6 +778,62 @@ def test_prompt_missing_page_token_exits_1(tmp_path):
     )
 
 
+def test_prompt_missing_nonce_token_exits_1(tmp_path):
+    """
+    AC #20 (Validator obligation): a prompt missing {{NONCE}} is rejected at validation time.
+
+    Given a prompt file that contains {{GLOSSARY}} and {{PAGE}} but NO {{NONCE}}
+      (the pre-fix vulnerable shape — naked <source-page>...</source-page> wrappers
+      that allow prompt-frame escape via an injected close tag in source content).
+    When --plan is run against a source tree using that prompt.
+    Then exit 1, and stderr names the offending prompt file.
+
+    Testing explain-pass.md only — the validator runs per-prompt-file and the gate
+    fires on the first invalid prompt encountered; one is sufficient to confirm the
+    validator obligation.
+
+    Currently RED: validate_prompt only checks {{GLOSSARY}} and {{PAGE}};
+    it does NOT yet gate on {{NONCE}}. Forge round-3 extends validate_prompt.
+    """
+    src = tmp_path / "src"
+    out = tmp_path / "out"
+    prompts = tmp_path / "prompts"
+    out.mkdir()
+
+    make_summary(src, ["page.md", "glossary.md"])
+    make_page(src / "page.md", title="Page", audience="agent")
+    make_glossary(src / "glossary.md")
+
+    # Prompt with {{GLOSSARY}} and {{PAGE}} but NO {{NONCE}} — the pre-fix vulnerable shape.
+    # Uses bare <source-page>...</source-page> wrappers (no nonce suffix), which means
+    # source content containing </source-page> can escape the prompt frame (LLM01).
+    # Do NOT use the default make_prompt body — it now includes {{NONCE}}.
+    nonce_free_body = textwrap.dedent("""\
+        <role>Translator role.</role>
+        <task>Translate the page.</task>
+        <glossary>
+        {{GLOSSARY}}
+        </glossary>
+        <source-page>
+        {{PAGE}}
+        </source-page>
+    """)
+    make_prompt(prompts / "explain-pass.md", body=nonce_free_body)
+    make_prompt(prompts / "strip-pass.md")
+
+    result = run_translate(src, out, prompts, "--plan")
+    assert result.returncode != 0, (
+        f"Expected non-zero exit for prompt missing {{{{NONCE}}}}, got 0.\n"
+        f"Current validate_prompt does not gate on {{NONCE}} — this test is expected to fail "
+        f"until Forge round-3 extends validate_prompt.\n"
+        f"stderr: {result.stderr}\nstdout: {result.stdout}"
+    )
+    assert "explain-pass.md" in result.stderr or "explain-pass.md" in result.stdout, (
+        f"Expected prompt filename named in output when {{NONCE}} missing.\n"
+        f"stderr: {result.stderr}\nstdout: {result.stdout}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # §5 --check mode
 # ---------------------------------------------------------------------------
