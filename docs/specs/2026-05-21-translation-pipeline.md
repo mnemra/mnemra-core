@@ -53,7 +53,7 @@ After this step:
 
    **Manifest mutation discipline:** ONLY `--finalize` writes the manifest. `--plan` and `--check` are manifest-readers.
 
-3. **Audience routing.** For each `docs/src/**/*.md` (excluding `SUMMARY.md`):
+3. **Audience routing.** For each `docs/src/**/*.md` (excluding `SUMMARY.md` and `glossary.md`):
    - Agent-primary pages: `_published/agent/<path>` is a verbatim copy of source; `_published/human/<path>` is the EXPLAIN-pass output.
    - Human-primary pages: `_published/human/<path>` is a verbatim copy of source; `_published/agent/<path>` is the STRIP-pass output.
    - Pages with no `primary-audience` in frontmatter: exit 1 naming the page. No default-by-directory inference inside the generator (required-field discipline per `feedback_validatability_lens_schema_design.md`).
@@ -367,3 +367,13 @@ Bolt is skipped (no UX surface). Warden + Glitch is the gate. If Forge's PR reve
 **Fix:** AC #11 second bullet rewritten to: "Records the orphan in the pending sidecar (`--plan` only); the corresponding manifest entry is removed by `--finalize` per the single-writer invariant (AC #5)."
 
 **Effect on Glitch's tests:** none — Glitch wrote tests against the single-writer interpretation (Test plan §9), which the errata confirms as the binding behavior.
+
+### Amendment — 2026-05-20: AC #3 errata (glossary.md exclusion)
+
+**Surfaced by:** Forge green-phase, dispatch #619.
+
+**Defect:** AC #3 said "For each `docs/src/**/*.md` (excluding `SUMMARY.md`)". `glossary.md` is *consumed* as the `{{GLOSSARY}}` substitution source per AC #10 and should not itself be translated (recursive). Glitch's red-phase fixtures and Forge's `collect_source_pages` already encoded this exclusion; the amendment makes the spec text match.
+
+**Fix:** AC #3 amended to: "For each `docs/src/**/*.md` (excluding `SUMMARY.md` and `glossary.md`)".
+
+**Effect on impl + tests:** none — already implemented this way.
