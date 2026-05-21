@@ -1,32 +1,3 @@
-<!-- ===== docs/src/intro.md ===== -->
-
----
-title: mnemra-core
-summary: "Entry point for the mnemra-core documentation site."
-primary-audience: human
----
-
-# mnemra-core
-
-mnemra-core is the core context layer for Mnemra: an MCP-native system for persistent, structured memory integrated with AI development workflows.
-
-Covers internal architecture, design decisions, and developer guides for mnemra-core contributors and integrators.
-
-## About This Site
-
-Built with [mdBook](https://rust-lang.github.io/mdBook/). Contents:
-
-- **Architecture Decision Records (ADRs)** — reasoning behind key design choices; see [ADRs section](adrs/README.md). MADR format per `../adrs/`.
-- **Developer Guides** — build, extend, contribute.
-
-## Repository
-
-Source: [https://github.com/mnemra/mnemra-core](https://github.com/mnemra/mnemra-core)
-
-Project overview and quick-start: [README](https://github.com/mnemra/mnemra-core/blob/main/README.md) in the repository root.
-
-<!-- ===== docs/src/intent/mnemra-core.md ===== -->
-
 ---
 title: "Product Brief: Mnemra Core"
 summary: "Product brief locking mnemra-core's intent and feature register."
@@ -39,28 +10,29 @@ primary-audience: agent
 
 > Format note: this is a living document. Its structure is a forward-contract with the
 > structured-delta tooling that will own its evolution (add idea · promote tier · retire
-> feature · adjust scope, applied as labeled `ADDED / MODIFIED / REMOVED` deltas). Do not
-> restructure ad hoc. Layer 1 (product-level intent) is stable and changes rarely; Layer 2
+> feature · adjust scope, applied as labeled `ADDED / MODIFIED / REMOVED` deltas). Don't
+> restructure it ad hoc. Layer 1 (product-level intent) is stable and changes rarely; Layer 2
 > (feature register) grows continuously. A new thought defaults to a Layer-2 register entry
-> at the `idea` tier; it escalates to a Layer-1 revision only if it shifts the product's
-> fundamental job-to-be-done or scope.
+> at the `idea` tier (a captured direction with no pipeline artifact yet). It escalates to a
+> Layer-1 revision only if it shifts the product's fundamental job-to-be-done or scope.
 
 > Register-model note: the feature register uses a five-tier lifecycle
 > (`idea → proposed → designed → committed → live`) whose tiers are validated by
-> **pipeline artifacts**, not prose judgement. This brief is the forcing instance for a
-> pending amendment to the canonical register model (the prior model was four-tier and
-> ordered `committed` before `designed`); the amendment is tracked separately and is the
-> reason the structure here leads its canonical adoption.
+> **pipeline artifacts**, not prose judgement. Each tier's check is simply whether a specific
+> artifact exists, so the register is mechanically checkable. This brief is the forcing
+> instance for a pending amendment to the canonical register model (the prior model was
+> four-tier and ordered `committed` before `designed`). The amendment is tracked separately,
+> and it's the reason the structure here leads its canonical adoption.
 
 > Scope boundary: this brief is **mnemra-core's product intent and capability roadmap**.
 > Sibling components in the mnemra umbrella (a dispatch CLI, a spec-delta/merge tool, a
 > markdown review/annotation tool) live in their own repositories with their own forthcoming
-> briefs and their own independent versions; they are referenced as external components,
+> briefs and their own independent versions. They're referenced as external components,
 > not absorbed into this brief's register.
 >
 > **Mnemra-as-a-whole does not carry a unified version.** Components version independently.
 > A release-manifest concept may pin specific component versions for a coordinated public
-> release; that is distinct from a version.
+> release; that's distinct from a version.
 >
 > Commercial validation thresholds, pricing, and go-to-market strategy are maintained as a
 > separate internal commercial record and are deliberately **not** inlined here. Where a
@@ -69,22 +41,23 @@ primary-audience: agent
 >
 > Brief-home: this artifact lives in the mnemra-core repository at
 > `docs/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component
-> it scopes (per-repo-first). The general multi-repo product-brief-home convention question
-> remains in APPARATUS-1's scope for future multi-repo briefs in other components.
+> it scopes, following the per-repo-first principle (build per-repo, extract a shared form
+> only after reuse is observed). The general multi-repo product-brief-home convention
+> question remains in APPARATUS-1's scope for future multi-repo briefs in other components.
 
 ## Product-level intent  (layer 1 — stable)
 
 ### JTBD
 
-Engineering teams that run coding agents (Claude Code, Cursor, Copilot) need their agents —
-and the humans working alongside them — to have **persistent, structured, queryable
+Engineering teams that run coding agents (Claude Code, Cursor, Copilot) need their agents,
+and the humans working alongside them, to have **persistent, structured, queryable
 context** of the team's codebase, decisions, tickets, docs, and prior agent sessions,
 available every session without re-explanation, so that context stops being a per-session
 tax that drifts and does not scale.
 
 Stated as the need, not the solution: an agent preparing to act on a task sits inside a
-graph — parent spec, related decisions, sibling tasks, prior reviews, recent adjacent
-commits — and today that graph must be hand-loaded per session by the orchestrating agent,
+graph (parent spec, related decisions, sibling tasks, prior reviews, recent adjacent
+commits), and today that graph must be hand-loaded per session by the orchestrating agent,
 which drifts and does not scale. Mnemra's job is to make that context a durable,
 agent-addressable substrate.
 
@@ -102,11 +75,11 @@ Each is a concrete not-this:
 - Not RAG-as-a-service.
 - The open-source core does not pursue multi-tenant isolation as a product goal; tenancy is
   a structural column-shape at V0 with policy enforcement deferred. The boundary between
-  OSS-core single-tenant and a future managed multi-tenant offering is commercial — out of
+  OSS-core single-tenant and a future managed multi-tenant offering is commercial, and out of
   scope for this brief.
 - **Not a general autonomous-agent framework.** The product *could* generalize toward one
   with work; single-use-case focus (a context layer for coding agents) is a deliberate
-  quality choice. The generalization is declined, not absent — recorded so the rejected
+  quality choice. The generalization is declined, not absent. It's recorded so the rejected
   option is preserved.
 
 ### Success criteria
@@ -132,7 +105,7 @@ identifiers:
 - **Self-hostable:** a team can run the full core on its own infrastructure with data never
   leaving that boundary.
 - Commercial validation thresholds exist but live in the separate internal commercial
-  record; they are not product success criteria and are not inlined here.
+  record; they aren't product success criteria and aren't inlined here.
 
 ### Hard constraints
 
@@ -140,20 +113,20 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
 
 - The agent-facing surface SHALL be **MCP-native** (MCP specification 2025-06-18).
   Transport is stdio at V0; streamable-HTTP is a later-version activation.
-- **An MCP server is a V0 deliverable** — intent-clarity: the MCP-native constraint is
+- **An MCP server is a V0 deliverable.** Intent-clarity: the MCP-native constraint is
   satisfied by a running MCP server in V0 scope, not merely a future protocol posture.
 - The substrate SHALL be a **single-process Postgres** instance with `pgvector` and
   `timescaledb` extensions present.
 - Plugins SHALL be **WebAssembly Component Model modules** hosted in-process via Wasmtime;
   plugin core logic MUST be IO-free; all plugin IO MUST be mediated by host-provided
-  functions. Plugins are leaves — no direct sideways linkage; cross-plugin calls are
+  functions. Plugins are leaves with no direct sideways linkage; cross-plugin calls are
   host-mediated.
 - Deployment posture SHALL be **self-hosted-first, single-binary**. The system MUST NOT
   host a language model; it calls out to an external one.
 - **"Single-binary" constrains the server, not the deployment packaging.** It means one
-  process (not a microservice mesh) — an immutable image/appliance is a valid packaging
+  process, not a microservice mesh. An immutable image/appliance is a valid packaging
   shape for that single binary and does not violate this constraint.
-- **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0 —
+- **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0:
   NOT NULL, indexed, explicitly passed, forward-compatible without migration. This is what
   makes deferring tenant-hierarchy/policy enforcement safe: the scoping key ships now;
   hierarchy and enforcement build on top later without a substrate migration.
@@ -163,14 +136,14 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   mnemra-core repository's current LICENSE/README (MIT) is corrected in a separate
   follow-up task; this brief's Hard constraints lock the direction.
 - Architecture MUST NOT be schedule-pressured. Dates appearing in marketing or landing
-  material are not architectural inputs and do not weight tradeoff analysis.
+  material aren't architectural inputs and don't weight tradeoff analysis.
 
 ### Evidence
 
 This brief exists because product intent that lived only in conversation was not an
 agent-addressable source. Across multiple research-lifecycle reviews, research and
-discovery work silently anchored scope to *mnemra-core-as-exists-live* — the only
-available ground truth — because no durable product-intent/roadmap artifact existed. The
+discovery work silently anchored scope to *mnemra-core-as-exists-live*, the only
+available ground truth, because no durable product-intent/roadmap artifact existed. The
 gap recurred at least three separate times before being remediated. This document is that
 remediation: the agent-addressable product-intent source against which future research,
 discovery, and architecture evaluate scope, so "the intended product" is a readable
@@ -185,7 +158,7 @@ commercial hypothesis (a set of testable claims, maintained separately).
 
 Primary consumer is **agents**: MCP-client coding agents and orchestration tooling that
 load this as the agent-addressable product-intent source during research, discovery, and
-architecture work — consistent with the project's agent-primary source-artifact stance.
+architecture work. That's consistent with the project's agent-primary source-artifact stance.
 Secondary consumer is the maintainer and future contributors evaluating scope.
 Human-readable rendered views, if needed, are derivative and generated on demand; this
 source is never the rendered view.
@@ -194,14 +167,14 @@ source is never the rendered view.
 
 This artifact is documentation; it touches no trust boundary itself. The *product* it
 describes carries trust boundaries (multi-tenancy, authentication, plugin sandbox,
-telemetry non-leak) — these are owned by the mnemra-core component architecture record
+telemetry non-leak). Those are owned by the mnemra-core component architecture record
 (threat-modeling trigger already met there) and are referenced by the register, not
 re-assessed here. Required risk assessment for any *implementing* work is deferred to the
 component-level frame where the mechanism is known.
 
 ## Feature register  (layer 2 — grows; each entry has a lifecycle tier)
 
-Each entry carries exactly one tier. Tiers are validated by **pipeline artifacts** — the
+Each entry carries exactly one tier. Tiers are validated by **pipeline artifacts**: the
 validator for each tier is "does this artifact exist?", which makes the register
 mechanically checkable and self-consistent with the intent → frame → spec pipeline that
 produces it:
@@ -216,15 +189,15 @@ produces it:
 
 The `designed`|`committed` boundary is the **permanent/ephemeral artifact line**: every
 permanent design artifact done = `designed`; add the disposable actioning plan = `committed`.
-The plan's ephemerality is *why* it marks commitment — a throwaway task list is only
+The plan's ephemerality is *why* it marks commitment. A throwaway task list is only
 generated once the work is being actioned against a release. `designed` precedes
 `committed` because release-fit cannot be judged until the design (culminating in the spec)
 is complete: the work generates the commitment, not the reverse.
 
-**Structural fence (unchanged):** no tier is a build authorization — not even `committed`.
+**Structural fence (unchanged):** no tier is a build authorization, not even `committed`.
 A tier is a readiness/commitment signal; the only build trigger is an explicit
 feature-altitude pass on the entry. The tiers track how far a feature's pipeline has
-progressed; they do not widen the build trigger.
+progressed; they don't widen the build trigger.
 
 > Provenance pointers reference decisions by name and lock-date. For a multi-repo project
 > much of the locked provenance lives in a maintainer-internal architecture record a public
@@ -233,9 +206,9 @@ progressed; they do not widen the build trigger.
 
 ### Idea
 
-Captured directions — unvalidated, or decision-locked but not yet through their own
+Captured directions: unvalidated, or decision-locked but not yet through their own
 pipeline. A provenance pointer (where one exists) records that a decision was taken; it
-does **not** promote the tier — only a dedicated intake does. **This tier is the
+does **not** promote the tier. Only a dedicated intake does. **This tier is the
 scope-anchor surface: research and discovery read `idea`-and-up so intended direction is
 never silently dropped to what-exists-live.**
 
@@ -282,7 +255,7 @@ carrying its own tier. The intake is by retrofit: a locked, high-stakes, reviewe
 findings V0 discovery (locked 2026-05-02) scopes the V0 contents; the V0.1 entries lock at
 this brief's altitude per maintainer ruling 2026-05-20. The increment decomposition was
 captured in the 2026-05-18 product-intake refine and extended 2026-05-20. Every increment
-is therefore `proposed` — none is `designed` (no per-increment frame+spec exists) nor
+is therefore `proposed`. None is `designed` (no per-increment frame+spec exists) nor
 `committed` (no plan, no release-bound date); the honest empty `designed`/`committed`
 tiers below are preserved, not papered.
 
@@ -292,12 +265,12 @@ tiers below are preserved, not papered.
   `0.y.z` is initial development, the API is not yet stable, which is exactly the V0 build
   period).
 - Backward-compatible fixes within an increment are **patch** bumps (`0.N.1`, `0.N.2`; §6).
-- The commit identifier is **build metadata** appended with `+` (`0.2.0+a1b2c3d`) — ignored
+- The commit identifier is **build metadata** appended with `+` (`0.2.0+a1b2c3d`), ignored
   in precedence (§10, §11). It is **not** a `-` pre-release identifier; pre-release has
   *lower* precedence than the release (§11.3, `1.0.0-alpha < 1.0.0`), which would
   misrepresent a delivered increment. Trunk commits advance the `+sha`; the version number
   bumps only when an increment's functionality is realized.
-- **`1.0.0` is the dogfood-cutover / MVP.** SemVer §5: `1.0.0` defines the public API —
+- **`1.0.0` is the dogfood-cutover / MVP.** SemVer §5: `1.0.0` defines the public API,
   precisely the V0 success criterion (the agent-facing surface and storage-substrate
   contracts are locked and the maintainer's workspace runs fully on mnemra-core). The road
   to `1.0.0` is the `0.y.z` increment sequence below.
@@ -340,7 +313,7 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
   where after a run the operator selectively reviews what the agent decided, flags
   divergences, and records what was learned; the structure makes findings aggregable
   across runs. Skill-run measurement operates at the substrate level and does not depend
-  on a separate decision to migrate workspace skill definitions into mnemra-core (D8) —
+  on a separate decision to migrate workspace skill definitions into mnemra-core (D8):
   the measurement substrate works whether skill definitions live in mnemra-core or remain
   as external files. *Order: sibling of dispatch metrics — the same measurement family.*
   Tier: `proposed`. Provenance: as `0.1.0`.
@@ -359,7 +332,7 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
   - **Dimension (the friction *axis*):** `scope`, `Acceptance Criteria (AC)`, `context`,
     `routing`, `priority`.
   Each event row records the (event-type × dimension) tuple plus context. Aggregated over
-  time the rows surface friction patterns per collaboration session and across sessions —
+  time the rows surface friction patterns per collaboration session and across sessions,
   the measurement substrate for trust-then-review iteration. *Order: completes the
   measurement/audit triad with dispatch + skill-run + activity.* Tier: `proposed`.
   Provenance: as `0.1.0`.
@@ -386,18 +359,18 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
   maintained knowledge subdirectories) → stored as files with frontmatter metadata, limited
   indexing (no full-text/vector — that is `idea` D1). *Order: placed after the
   structured-capability families per the maintainer's tasks/metrics-first priority; flagged
-  as a reorder candidate at the intake-exit gate — for a context-layer product the corpus
+  as a reorder candidate at the intake-exit gate. For a context-layer product the corpus
   is arguably core-value-early.* Tier: `proposed`. Provenance: V0 discovery §Migration
   scope (locked 2026-05-02); decomposition — 2026-05-18 refine.
 - **`1.0.0` — Dogfood cutover (public API defined).** The maintainer's workspace runs fully
   on mnemra-core with zero fallback to the prior tooling and the agent-facing +
   storage-substrate contracts are locked. SemVer §5: this is where the public API is
-  defined — the V0/MVP milestone. *Order: last in V0 by definition — it is the milestone
+  defined, the V0/MVP milestone. *Order: last in V0 by definition. It is the milestone
   gate.* Tier: `proposed`. Provenance: as `0.1.0`.
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
-The very-next-update phase after MVP cutover — net-new value beyond V0 workspace-fidelity.
+The very-next-update phase after MVP cutover: net-new value beyond V0 workspace-fidelity.
 Each V0.1 entry is `proposed` at this product altitude (this brief's intake locks the
 phase placement); each entry's own feature-altitude intake will lock its frame+spec
 before build. Maintainer ruling 2026-05-20: V0 = workspace-replacement (no regression);
@@ -406,7 +379,7 @@ not promise.
 
 - **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise).** A
   one-call MCP retrieval of persistent, typed, cross-session context for a given artifact,
-  rather than reconstructing it by hand each session. The headline V0.1 capability — the
+  rather than reconstructing it by hand each session. The headline V0.1 capability, the
   first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
   promise; first net-new value over V0.* Tier: `proposed`. Provenance: V0 discovery (D3 —
   locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`).
@@ -422,7 +395,7 @@ Future V0.1 increments (`1.3.0`+) land here as the "very-next-update" trigger fi
 new capabilities.
 
 **Build prerequisites (sequence, unchanged):** the V0 increment sequence's build is gated
-on three external predecessors — the intent → frame → spec pipeline being complete (it is
+on three external predecessors. First the intent → frame → spec pipeline being complete (it is
 being exercised and amended now), then the spec-delta/merge tool and the dispatch CLI being
 operational. Both prerequisite tools are **external components** with their own forthcoming
 briefs and their own independent versions (see Idea section pointers); this brief
@@ -432,7 +405,7 @@ references them as build-time dependencies, does not absorb them into its regist
 
 ### Designed
 
-A locked frame + locked spec exists. **Empty.** No mnemra feature has a locked spec — the
+A locked frame + locked spec exists. **Empty.** No mnemra feature has a locked spec: the
 spec stage has not been run for any feature, and V0's constraints/frame artifact is still
 draft. Stated explicitly: the register does not infer design completion that does not
 exist.
@@ -440,7 +413,7 @@ exist.
 ### Committed
 
 `designed` plus a plan, release-bound. **Empty.** Nothing is design-complete, and no
-release has a committed date — consistent with the product's stated posture that a phase
+release has a committed date, consistent with the product's stated posture that a phase
 commits a date only when work is far enough along. Stated explicitly: the register does
 not over-claim commitment. An empty `committed` tier early in a project is the register
 working, not a gap.
@@ -461,7 +434,7 @@ Built and verified in current code/canon.
 
 ## Open Decisions (resolve at the intake-exit gate)
 
-Surfaced for the decomposer; not resolved in this draft — source conflicts, unknowns, and
+Surfaced for the decomposer; not resolved in this draft. Source conflicts, unknowns, and
 unsettled scope are named, not papered.
 
 - **APPARATUS-1 — confirmed (tracked separately as a register-model amendment task).** The
@@ -470,18 +443,18 @@ unsettled scope are named, not papered.
   amendment: five tiers `idea → proposed → designed → committed → live`, each validated by
   a pipeline artifact, with the permanent/ephemeral boundary at `designed`|`committed`;
   plus the spec-is-permanent / plan-is-ephemeral distinction promoted to general workspace
-  canon; plus the multi-repo product-brief-home gap (DEFER-1). Do now while the
+  canon; plus the multi-repo product-brief-home gap (DEFER-1). Do it now while the
   structured-delta consumer does not yet exist (zero forward-contract migration; deferring
-  = a contract break later). Tracked as a separate amendment task/ADR — not a mid-run edit.
+  = a contract break later). Tracked as a separate amendment task/ADR, not a mid-run edit.
 - **INCR-1 — resolved.** V0 decomposed into a builtin-substrate-first,
   one-capability-per-increment staged sequence; versioning is Semantic Versioning 2.0.0
-  applied without abuse — each feature increment a **minor** bump within `0.y.z` initial
+  applied without abuse: each feature increment a **minor** bump within `0.y.z` initial
   development (`0.1.0` host core → `0.14.0`), backward-compatible fixes as patch, the commit
   pinned as `+build` metadata (not a lower-precedence `-pre-release`), and **`1.0.0`** the
   dogfood-cutover/MVP where the public API is defined (SemVer §5). Applied this round — see
   the Proposed section; the per-entry ordering rationale supports cheap reordering at this
   gate. The `{projects, agents}`-as-core-plugins question is resolved upstream (builtin
-  substrate; per-project plugin chicken-and-egg) — the stale architecture-alignment-record
+  substrate; per-project plugin chicken-and-egg). The stale architecture-alignment-record
   framing is flagged in the maintainer-internal intake record for a separate downstream
   amendment, not corrected here. The apparatus-relevant residue (the *canonical* register
   model expressing staged/incremental delivery) folds into APPARATUS-1; no longer an open
@@ -494,7 +467,7 @@ unsettled scope are named, not papered.
   `idea`-with-provenance entry; the byte-level provenance-tracing technique is an
   `idea` reimplementation-reference entry. No longer an open tiering question.
 - **PRV-1 — resolved.** Decision-name + lock-date confirmed as the provenance-pointer
-  convention (locked 2026-05-20). Pattern already in use throughout the brief; a public-
+  convention (locked 2026-05-20). The pattern is already in use throughout the brief; a public-
   repo artifact can cite internal-record decisions by name and date without exposing
   internal paths.
 - **DEFER-1 — resolved (relocated).** Brief moved from the landing-site repository to
@@ -543,7 +516,7 @@ unsettled scope are named, not papered.
   wording confirmed); µVM-OQ1..4 (all confirmed parked until streamable-HTTP active);
   APPARATUS-1 (confirmed tracked separately, no mid-brief absorption); alignment-doc
   framing flag confirmed as a separate downstream amendment candidate. Brief relocated
-  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/intent/mnemra-core.md` —
+  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/intent/mnemra-core.md`:
   the brief travels with the component it scopes (per-repo-first); DEFER-1 resolves to
   relocation rather than parking. Hard constraints
   updated for the license lock; `0.1.0` substrate updated for the LLM-API-key config
@@ -586,7 +559,7 @@ unsettled scope are named, not papered.
   committed → live`, pipeline-artifact validators, permanent/ephemeral boundary) across
   six refine rounds with the decomposer. This brief is the forcing instance for the
   canonical register-model amendment (APPARATUS-1). Honest state recorded: `committed` and
-  `designed` are empty (no locked spec for any feature; no committed release date) — the
+  `designed` are empty (no locked spec for any feature; no committed release date); the
   register declining to over-claim is the mirror of the under-capture gap it remediates.
   Elicited in-head intent folded in (the prior-tooling capability families, MCP-server-as-
   V0-deliverable, deliberate single-use-case focus, tenant-hierarchy deferral + invariant,
@@ -595,548 +568,3 @@ unsettled scope are named, not papered.
 - **2026-05-18** — Initial draft. Stage 1 (Intake) of a product-altitude structured
   product-intent authoring pass. Home and scope set by the decomposer across the intake
   conversation. (Superseded by the re-tier above; retained per decision-space preservation.)
-
-<!-- ===== docs/src/specs/README.md ===== -->
-
----
-title: Specifications
-summary: "How canonical architecture specs differ from implementation-history specs in this repo."
-primary-audience: human
----
-
-# Specifications
-
-Canonical architecture specifications: locked frame + spec deliverables produced by the `/brief` workflow on real features. Primary architectural reading for outside integrators and reviewers.
-
-A spec in this section is:
-
-- A *living, locked* deliverable. Living: updated as architecture evolves. Locked: no changes without explicit re-approval.
-- An agent-primary artifact (per `../adrs/G-0027.md`). Outside-human reading lands on translated views generated at publish time (per `../adrs/G-0029.md`).
-
-Implementation-history specs (dated snapshots of completed setup or infra work) live elsewhere on disk, are excluded from mdBook navigation, and contribute only to the agent-readable `llms-full.txt` surface.
-
-This section is empty. The first canonical spec lands as features progress through `/brief` Stage 3 (the Spec stage; output: locked spec).
-
-<!-- ===== docs/src/adrs/README.md ===== -->
-
----
-title: Architecture Decision Records
-summary: "How architecture decisions are structured here (G-* / P-* prefixes, MADR format)."
-primary-audience: human
----
-
-# Architecture Decision Records
-
-mnemra-core architectural decisions use the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
-
-## What is an ADR?
-
-An ADR captures a single architectural decision with its context and rationale. ADRs are immutable once accepted — superseded by newer ADRs when decisions evolve, never edited in place.
-
-## ADR Lifecycle
-
-ADR statuses:
-
-| Status | Meaning |
-|--------|---------|
-| `proposed` | Under discussion; not yet accepted |
-| `rejected` | Discussed and explicitly declined |
-| `accepted` | The current decision in effect |
-| `deprecated` | Was accepted; no longer applies (context changed) |
-| `superseded` | Replaced by a newer ADR; see `superseded_by` field |
-
-## G/P Prefix Projection Pattern
-
-Two-tier identifier convention encoding decision origin and propagation.
-
-- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files here; projected once into [`DEFAULTS.md`](DEFAULTS.md) as a concise entry without the full rationale chain. DEFAULTS.md is frozen at projection; upstream G-* changes do not auto-sync.
-- **P-NNNN (project)** — project-specific decisions, stored as individual `P-NNNN-*.md` files here. Two sub-categories:
-  - *Project-specific:* a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
-  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. The override P-ADR names the overridden default in its Status field (e.g., `Status: accepted, Overrides G-0017`).
-
-*The default is the starting point; any deviation is a new P-ADR.*
-
-## Using the Template
-
-To record a project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill all frontmatter fields, write the body sections. If the decision overrides a `DEFAULTS.md` entry, state that in the Status section.
-
-## Current ADRs
-
-None yet. P-ADRs are added as project-specific decisions are ratified. See [`DEFAULTS.md`](DEFAULTS.md) for the projected general standards in force.
-
-<!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
-
----
-title: Project Standards
-summary: "Project defaults projected from workspace G-* canon — baseline for mnemra-core."
-primary-audience: agent
----
-
-# Project Standards
-
-General architecture and engineering standards applied to this project.
-These were projected on 2026-05-20 and may be overridden by project-specific
-decisions (P-*.md files in this directory).
-
----
-
-## G-0001: Testing Philosophy — 90% Coverage, Inverted Pyramid
-
-90% code coverage threshold (lines and functions) as the enforced default. Inverted test pyramid — far more unit tests than integration tests, with integration tests only verifying actual integration seams. Threshold exceptions must be documented with explicit reasoning.
-
----
-
-## G-0002: No Compile-Time Asset Embedding in Containerized Projects
-
-Do not use `rust_embed` or similar compile-time asset embedding in Rust projects deployed via Docker containers. Serve static files at runtime (`tower_http::services::ServeDir` or equivalent) with startup directory validation. Docker multi-stage builds copy binary and frontend artifacts into the final image.
-
----
-
-## G-0003: Two-Tier Architecture Decision Records
-
-General standards live in this DEFAULTS.md file, projected once and owned by the project. Project-specific decisions go in P-NNNN-*.md files in this directory. If a project-specific decision overrides a default, it says so explicitly in its status field.
-
----
-
-## G-0004: Hybrid XML Format for Agent Profiles
-
-Use hybrid XML format for all team agent profiles: XML tags for structural sections (`<role>`, `<persona>`, `<principles>`, etc.), markdown preserved inside tags for prose. Maximum two levels of nesting.
-
----
-
-## G-0005: SQL File-Based Migrations for Embedded SQLite
-
-Use SQL file-based migrations embedded at compile time for all Rust projects with embedded SQLite. Migrations live in `migrations/NNNN_<description>.sql` and are embedded via `include_str!()` with a shared migration runner. Forward-only migrations — no down migrations.
-
----
-
-## G-0006: Justfile as CI Contract
-
-CI YAML invokes `just ci` and nothing else. Every project uses fixed `verify-*` recipe names (verify-test, verify-lint, verify-type, verify-coverage, verify-build, verify-smoke, ci). Each `verify-*` emits a `GATE <name> <PASS|FAIL>` line and is idempotent from any cwd. No `--fix` side effects under verify-*; auto-fix recipes live under `fix-*`.
-
----
-
-## G-0007: Knowledge-Extraction Skill — Task-Completion Nudge Hook
-
-Two-hook pattern for the knowledge-extraction nudge: a `Stop` hook at turn boundaries writes pending state to a session-keyed state file; `UserPromptSubmit` (or `SessionStart` fallback) reads the pending flag and injects the nudge into Claude's context. State file path: `.claude/hooks/state/knowledge-extraction-nudge`. Two-state enum (pending | fired); carrier accept/decline are conversational events on the `skill_run_captures` row, not the state file.
-
----
-
-## G-0008: Knowledge-Extraction — Capture Table Schema and Partial-State Recovery
-
-`skill_run_captures` table (FK to `skill_runs` with ON DELETE CASCADE) holds capture state with CHECK-constrained `state` (partial | complete | abandoned), `capture_type`, `destination_type`, plus `trigger_context`, `transcript`, `event_tallies`, `round_summary_log`. Puck is the only writer. Partial-state resume is carrier-picks and session-independent — partials survive `/clear`. Cleanup is manual via `brain skill-run capture list-partials` + `abandon <id>` in v1.
-
----
-
-## G-0009: Knowledge-Extraction — R17 Duplicate-Detection Scope
-
-Title-only flat grep over 5 destination types, 6 corpora (project-scoped ADRs conditional). Scope held as a config array in the skill file, not hardcoded in skill logic. Overlap judgment is LLM-driven; UPDATE diff is field-level (scope / example / counter-case side-by-side), not line-diff.
-
----
-
-## G-0010: Knowledge-Extraction — R10 Worked-Example Encoding
-
-13 initial worked examples in a `Worked Examples` appendix at the bottom of the skill file: 5 canonical (one per destination type), 5 contrasting, 3 cross-cutting. Refinement is retro-driven; soft cap of 20 examples. No CLI tooling for v1.
-
----
-
-## G-0011: Knowledge-Extraction — R7 Advisory-Drift Detection
-
-New skill file `skills/operational-form.md` for operational-form detection. Contains advisory phrase list (~12–15 for v1, growable), positive pattern definition (observable actor + action + outcome), and worked example pairs. On candidate ambiguity, skill emits an R20 redirect probe. Soft cap: 30 phrases.
-
----
-
-## G-0012: Knowledge-Extraction — R16b Safety Ceiling Values
-
-Safety ceilings: N=6 rounds per rule, M=20k tokens per rule, M_run=80k tokens per invocation. Transcript char-count approximation (~4 chars/token) for runtime safety check; M_run accumulator on the parent `skill_runs` row. On trip, capture row written with `state=abandoned`; abandoned captures are filed but not auto-offered for resume.
-
----
-
-## G-0013: Stage 6 Approval — Closed-Enum Label Vocabulary
-
-Closed-enum PR labels gate Stage 6 approval. Three families: `stage6-approved` (0 or 1), release mode (`release-mode-A` | `release-mode-B` | `release-mode-A-exception`, exactly 1 when approved), version bump (`bump:patch` | `bump:minor` | `bump:major` | `bump:none`, exactly 1 when approved). Cardinality failures ABORT loudly, never silently disambiguate. Stage 7 auto-merge reads labels via `gh api`.
-
----
-
-## G-0014: Review Finding Identity and Per-PR Per-Round Persistence
-
-Review finding identity is the `(file, content-anchor, severity)` triple. Content-anchor is SHA-256 of a normalized 5-line window (cited line + 2 lines of context above and below, trailing whitespace stripped per line). Reviewer output format includes the anchor inline so downstream dedup logic doesn't need to re-read the file at the cited round's commit.
-
----
-
-## G-0015: Devcontainer Architecture — Per-Repo Upstream FROM + GHCR Push
-
-Per-repo devcontainer FROM upstream language-native base, built and pushed to GHCR by the repo's own CI on `.devcontainer/**` change, SHA-pinned in the repo. Every `cargo install` line in a devcontainer Dockerfile MUST pass both `--locked` and `--version <X.Y.Z>`. Polyglot repos layer additional language bases in their own Dockerfile; no workspace-shared polyglot base.
-
----
-
-## G-0016: Layered Secret Detection — Pre-Commit + GitHub-Native + Stage 5 Alerts Query
-
-Three layers per in-scope repo: (1) Pre-commit `lefthook` hooks with a workspace-shared narrow regex; (2) GitHub-native `secret_scanning` + `secret_scanning_push_protection` enabled continuously; (3) Stage 5 `verify-secrets` recipe in `just ci` queries the secret-scanning alerts API with `permissions.security-events: read` and fails the build on any open alert.
-
----
-
-## G-0017: Feature Flags — FlagProvider Trait + Per-Repo Crate
-
-Each in-scope repo defines its own feature-flag crate implementing a small `FlagProvider` trait. Default backend is env-var-driven (`FLAG_<KEY>`); keys are kebab-case in source, env vars are SCREAMING_SNAKE_CASE with `FLAG_` prefix. Extract to a shared workspace crate only when commonality emerges across three or more repos (rule of three).
-
----
-
-## G-0018: Workspace Merge Template + Auto-Merge Recovery Cap
-
-Workspace template script at `bin/pr-create-with-automerge.sh` canonicalizes the Stage-6-approved → squash → push → label → auto-merge sequence. Recovery cap = 3 (count-all semantics); per-PR counter lives in PR description footer (`<!-- recovery-attempts: N -->`). Recovery-increment activity rows mirror counter changes in `brain activity log` so counter tampering is detectable retroactively.
-
----
-
-## G-0019: Tag-Race Serialization — GHA Concurrency Directive + R26b
-
-Per-repo release workflow uses GHA `concurrency:` scoped to the *release-pr* job (Mode A), NOT the release job, with `cancel-in-progress: false`. R26b ("at most one PR may merge to main at a time") is enforced via G-0023's GitHub Merge Queue for Mode B repos. Combined: two-layer serialization across release-PR-update and merge gates; Mode B rapid-merge release-job race is accepted as a v1 known limitation with fail-loud monitoring.
-
----
-
-## G-0020: Rust Release Automation = release-plz
-
-release-plz is the canonical Rust release-automation tool for both CHANGELOG generation and semver bump computation. Per-repo `release-plz.toml`; CI invokes via the official GitHub Action gated by main branch, per-G-0019 concurrency, and a fine-grained PAT or GitHub App token (mandatory — `GITHUB_TOKEN` does not trigger downstream workflows). Release-PR mode (Mode A) or direct-release mode (Mode B) declared per-repo.
-
----
-
-## G-0021: Monotonic Non-Decreasing Version Policy (Pattern A)
-
-For Pattern A repos, the version sequence on `main` MUST be monotonic non-decreasing — every merge produces `prev_version <= new_version`. Bump labels declare intent: `bump:major | bump:minor | bump:patch | bump:none`. `bump:none` is honor-system + Stage 4 reviewer responsibility, not tool-enforced. Revert PR bump labels reflect public-API impact, not numeric distance from the reverted version.
-
----
-
-## G-0022: Embargo Flow Architecture — β Default + GHSA Private-Fork
-
-Default posture: no embargo workflow built. When an embargoed disclosure arrives, use GitHub Security Advisories (GHSA) with temporary private fork pattern. Mode A flag-flip merges are suspended in the affected repo during embargo; an audit-PR opens at T0 to re-engage Stage 4/5 gates before the GitHub release publishes. Trip-wires upgrade this to a built workflow if embargoes become recurring.
-
----
-
-## G-0023: GitHub Merge Queue for R26b Enforcement and Intermediate-State CI
-
-GitHub Merge Queue enabled per in-scope repo enforces R26b at the structural level. Required checks split: tests / build / coverage run against the queue's intermediate-state branch (need `merge_group` trigger); lint / type / secrets are PR-only. Per-repo merge-queue merge method MUST be set to **rebase** in branch protection. Admin queue bypass requires a `brain activity log` audit row.
-
----
-
-## G-0024: Stage 6 Approval — Label-Set Authorization + Required-Status-Check Enforcement
-
-Two GitHub-native enforcement layers, both required per in-scope repo: (A) repository ruleset (or `verify-stage6-labeler` workflow) restricts who may apply gating-family labels — single-actor allowlist in v1 (Peter, plus Forge / Bolt during workspace template invocation); (B) `verify-stage6-labels` required-status-check enforces cardinality at branch-protection level. Both checks are required-status-checks; both block merge on failure. Audit cross-reference at retrieval time joins `brain activity log` rows to the GitHub event log to detect forged audit rows.
-
----
-
-## G-0025: Internal IPC Uses Typed Binary Encoding; JSON for Stored State and External Surfaces
-
-Internal IPC defaults to a typed binary encoding (Protocol Buffers or FlatBuffers); JSON is reserved for stored state and external surfaces. Internal = both endpoints under the same project / team's control, payload not persisted as the canonical record, no trust-domain boundary. Choice between protobuf and flatbuffers is per-use-case (protobuf for typical request/response with cross-language tooling; flatbuffers for read-heavy zero-copy / mmap-able payloads).
-
----
-
-## G-0026: Project Dev Docs — mdBook + D2 + Mermaid
-
-mdBook (Apache-2.0 / MIT, rust-lang official) as static-site generator per project repo; CI deploys to GitHub Pages. D2 for architecture-grade diagrams in built docs sites; Mermaid for diagrams in committed `.md` read in the GitHub web UI. Integration via mdBook custom preprocessors (`mdbook-d2` + `mdbook-mermaid`).
-
----
-
-## G-0027: Agent-Primary Source Artifacts; Human Views Derivative
-
-Source-of-truth artifacts (requirements, specs, architecture, ADRs) are authored, stored, and maintained in agent-primary form: structured and machine-addressable with stable IDs paired to human-readable names, no integrated-narrative requirement, mechanical operations on the format (parse / validate / merge / archive — deterministic, not LLM-driven). Human-readable views are derivative, generated on demand from the agent-primary source; they are never the source of truth.
-
----
-
-## G-0028: Agent-First Workflow Shape — /brief + /verify
-
-Adopt an agent-first workflow shape with two skills: `/brief` (unified intake → frame → spec, two human touchpoints, mandatory Stage 0 baseline load of values + principles + ADRs + constraint graph) and `/verify` (paired, four-signal stack: tests, property-based tests, intent-conformance review, decomposer spot-check). `/brief` is the single canonical entry for any work that produces a spec — `/discover`, `/spec`, `/clarify` survive only as internal mechanisms reused by stages.
-
----
-
-## G-0029: Publish-Time Human Render via Bidirectional Translation
-
-Agent-primary doc repos publish two surfaces from one canonical source tree (`docs/src/`): mdBook HTML for humans and llms.txt + llms-full.txt for agents. Each page declares `primary-audience: agent | human`; the opposite-audience render is generated via a local EXPLAIN pass (jargon resolution + narrative + glossary links) or STRIP pass (tighten to facts + cross-refs). Translations + the `_published/` tree are committed; CI is dumb. Hash-gated regeneration via `.translation-manifest.json` ensures translation runs only on actual source change.
-
-<!-- ===== docs/src/adrs/template.md ===== -->
-
----
-title: "P-NNNN: Title"
-summary: "MADR template for authoring new P-NNNN ADRs."
-primary-audience: agent
----
-
----
-status: "proposed"
-date: "YYYY-MM-DD"
-decision-makers: []
-consulted: []
-informed: []
-supersedes: null
-superseded_by: null
----
-
-# P-NNNN: Title
-
-## Status
-
-`proposed` | `rejected` | `accepted` | `deprecated` | `superseded`
-
-## Context and Problem Statement
-
-Describe the context and the problem you are solving. What forces or constraints led to this decision point?
-
-## Decision Drivers
-
-- Driver 1: e.g., operational simplicity
-- Driver 2: e.g., alignment with existing toolchain
-- Driver 3: e.g., security posture
-
-## Considered Options
-
-1. **Option A** — brief label
-2. **Option B** — brief label
-3. **Option C** — brief label
-
-## Decision Outcome
-
-Chosen option: **Option A**, because [brief rationale].
-
-### Consequences
-
-**Good:**
-- Consequence 1
-- Consequence 2
-
-**Bad / Trade-offs:**
-- Trade-off 1
-
-## Pros and Cons of the Options
-
-### Option A
-
-- Pro: ...
-- Pro: ...
-- Con: ...
-
-### Option B
-
-- Pro: ...
-- Con: ...
-- Con: ...
-
-### Option C
-
-- Pro: ...
-- Con: ...
-
-## More Information
-
-Links, references, related ADRs, or follow-up work items.
-
----
-
-### Frontmatter Field Reference
-
-**`superseded_by`** — Use this field when this ADR has been replaced by a newer decision. Set it to the identifier of the superseding ADR (e.g., `superseded_by: "0007-new-decision.md"`). When this field is non-null, this ADR's `status` MUST also be set to `superseded`. The superseding ADR SHOULD reference this one in its `supersedes` field, creating a bidirectional link. Do not delete or edit an accepted ADR to reflect new thinking — create a new ADR that supersedes it instead. The original record preserves the historical context and reasoning that led to the prior decision.
-
-<!-- ===== docs/src/glossary.md ===== -->
-
----
-title: Glossary
-summary: "Terms and conventions used across mnemra-core's intent, ADRs, and specs."
-primary-audience: human
----
-
-# Glossary
-
-Mnemra's documentation uses a consistent vocabulary drawn from its architecture decision records,
-operating principles, and work-shaping pipeline. This glossary anchors that vocabulary for readers
-who are not already familiar with these terms. Each entry is a terse reference; where a fuller
-treatment exists in the architecture documentation, the entry points there.
-
-Terms are grouped by category, then alphabetical within each group.
-
----
-
-## Architecture Decision Records
-
-### ADR
-
-An Architecture Decision Record captures a significant technical or process decision — the context
-that prompted it, the decision itself, rejected alternatives, and expected consequences. ADRs are
-not changelogs; they preserve the option space a decision was made against, so future readers can
-understand why the selected path was taken and what was ruled out.
-
-Mnemra-core uses the MADR format (Markdown Architectural Decision Records): each ADR is a separate
-`.md` file with structured sections. See the [ADRs section](adrs/README.md) of this documentation.
-
-### DEFAULTS.md
-
-The project's architectural baseline. DEFAULTS.md is a one-time snapshot of the workspace's
-general architecture decisions, projected at the time the project was created (or last
-re-projected). Each entry carries an ID (e.g., `G-0026`) and a concise description — 1–3 sentences
-summarizing the decision — without the full rationale chain.
-
-DEFAULTS.md is frozen at projection: updates to upstream workspace decisions do not auto-sync into
-it. Any deviation from a DEFAULTS.md entry becomes a [P-* ADR](#p--adr), not an edit to DEFAULTS.md.
-
-*The default is the starting point; any deviation is a new P-ADR.*
-
-See also [G-* ADR](#g--adr) and [P-* ADR](#p--adr).
-
-### G-* ADR
-
-A G-* ADR (the G stands for global) is a workspace-wide architecture decision that applies across
-all projects in the workspace. These decisions lock patterns that individual projects inherit: source
-artifact format, workflow shape, docs publication strategy.
-
-G-* ADRs live in workspace-internal canon and do not appear directly in mnemra-core's ADRs, guides,
-or other documentation. They surface in mnemra-core docs only in two places: (1) [DEFAULTS.md](#defaultsmd)
-entries that cite their origin G-ID, and (2) [P-* ADR](#p--adr) Status fields that mark an override
-(`Overrides G-NNNN`). The codes are stable identifiers, not version numbers.
-
-### P-* ADR
-
-A P-* ADR (the P stands for project) is an architecture decision scoped to a single project. Two
-categories:
-
-- **Project-specific:** a decision with no workspace-wide analog — a constraint, pattern, or
-  tradeoff unique to this project.
-- **Override:** a deviation from a [DEFAULTS.md](#defaultsmd) baseline entry. The Status field of
-  an override P-ADR names the default being overridden (`Overrides G-NNNN`).
-
-P-* ADRs live in the project's own repository under `docs/src/adrs/`. They use the same MADR format
-as other ADRs. See also [G-* ADR](#g--adr).
-
----
-
-## Architecture Principles
-
-Architecture principles are named rules that operationalize the workspace's core values. Each
-principle carries a short label (P-Defer, P-WriteTimeAudience, etc.) that ADRs and design
-documents use to ground their decisions. The full statement of each principle — its rationale, how
-it shows up in practice, and anti-examples — lives in the workspace's architecture-principles
-document. The entries below are terse pointers intended for readers encountering a principle label
-in a doc.
-
-### P-Defer
-
-Defer mechanism choice until evidence forces it. Trip-wire-driven adoption beats anticipated-need
-adoption: the shape of the evidence informs the shape of the mechanism. When a mechanism is named
-before its trip-wire fires, see the open/deferred section of the relevant ADR.
-
-### P-InstrumentBefore
-
-Every production surface ships instrumented before launch. Metrics, structured logs, and traces
-sized to the surface are in place at first use, not added after the first incident.
-
-### P-LockContract
-
-Lock the contract; vary the implementation. The contract is what other code depends on; a stable
-contract makes implementations swappable without breaking callers.
-
-### P-MinBlastRadius
-
-A change reaches as far as the architecture allows. The goal is that a fix isolates to one module
-and a feature lands behind one seam; when a minimal change would require touching many files in
-lock-step, the architecture is reporting structural debt.
-
-### P-PerRepoFirst
-
-Per-repo first; extract on rule-of-three. Shared abstractions emerge from observed reuse, not from
-speculation about what the reuse will look like. Extraction that precedes the third occurrence
-creates shared code before it has earned its keep.
-
-### P-PreserveDecisionSpace
-
-Preserve the option space. Every ADR carries an Alternatives Considered section listing rejected
-options with reasons. Dropping a rejected alternative because it now feels obviously wrong leaves
-future readers unable to see what was on the table.
-
-### P-TrustThenRetro
-
-Trust the loop; retro selectively. Direction is set up front; the team executes within it; review
-concentrates on outcomes and patterns. Walking every decision with the reviewer serializes work
-through their attention — the failure mode this principle exists to prevent.
-
-### P-WriteTimeAudience
-
-Generic at write-time for repo artifacts; identity-preserving for workspace artifacts. Repo-
-persisted artifacts (specs, ADRs, READMEs) use generic role labels and omit workspace-internal
-vocabulary, because any commit can become a publish event. Workspace-private artifacts preserve
-agent attribution and internal context because that attribution is the pattern signal worth keeping.
-
----
-
-## Feature Register Lifecycle Tiers
-
-The [feature register](intent/mnemra-core.md) tracks each product capability at exactly one
-lifecycle tier. Tiers are validated by pipeline artifacts — the validator for each tier is "does
-this artifact exist?", which makes the register mechanically checkable rather than prose-assessed.
-
-### idea
-
-A captured direction — a thought or a decision-locked pointer to a provenance record. No pipeline
-artifact exists yet. The `idea` tier is the scope-anchor surface: research and discovery read
-`idea`-and-up to ensure intended directions are never silently dropped to what-exists-live.
-
-### proposed
-
-The feature has a locked intake — it has been through intent capture. Permanent artifact; this
-status does not regress.
-
-### designed
-
-A locked frame plus a locked spec both exist — the permanent "what to build" is complete. Permanent
-artifact (kept). A feature reaches `designed` before it reaches `committed`: release-fit cannot be
-judged until the design is complete.
-
-### committed
-
-`designed` plus a plan, release-bound. The plan is ephemeral (not kept after the work completes);
-its ephemerality is why it marks commitment — a throwaway task list is generated only when work is
-being actively actioned against a release.
-
-### live
-
-Built and verified in current code and canon.
-
----
-
-## Pipeline Stages
-
-The work-shaping pipeline turns product intent into a verifiable, implementable spec in three
-stages. Each stage has a defined input, output, and owner; agents operate autonomously between the
-two human touchpoints (at intake-exit and at spec-exit).
-
-### Intake
-
-Stage 1. The decomposer writes; agents review. Structured intent is captured — job-to-be-done,
-non-goals, success criteria, hard constraints — and an agent review pass validates completeness and
-flags conflicts with architecture principles and values. The decomposer iterates until intent is
-locked. Output: validated intent.
-
-### Frame
-
-Stage 2. Agents synthesize. The constraint graph is walked from the validated intent; operating
-constraints are proposed; a review pass flags conflicts; routine architecture decisions are batched,
-novel ones escalated. Output: frame document (constraint summary and rationale chain).
-
-### Spec
-
-Stage 3. Agents synthesize. A testable spec is produced from the frame document; a review pass
-validates testability and spec quality. The spec is the contract that verification consumes.
-Output: locked spec.
-
----
-
-## Requirement Codes
-
-### R-codes
-
-R-codes are stable identifiers for numbered requirements in a canonical requirements or
-specification document. An R-code (e.g., `R7`, `R12`) refers to a specific requirement entry whose
-text, constraints, and rationale are defined in that document.
-
-When an R-code appears in mnemra-core documentation, it is always accompanied by its definition and
-originating context — either inline at the cite site or in mnemra-core's requirements document.
-R-codes do not carry stable public meaning on their own; their meaning is authoritative only in
-combination with the requirements document that defines them.
-
-Mnemra-core's R-codes will materialize once its requirements document is written. Until then, any
-requirement referenced in a doc is stated in full at the point of citation.
