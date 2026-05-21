@@ -380,6 +380,16 @@ Bolt is skipped (no UX surface). Warden + Glitch is the gate. If Forge's PR reve
 
 **Fix:** AC #3 amended to: "For each `docs/src/**/*.md` (excluding `SUMMARY.md` and `glossary.md`)".
 
+### Amendment — 2026-05-21: AC #4 + AC #18 (glossary.md both-sides verbatim publish)
+
+**Surfaced by:** end-to-end first run (AC #18).
+
+**Defect:** AC #3 excludes `glossary.md` from audience routing (it's the `{{GLOSSARY}}` injection source per AC #10, never translated), but AC #18's "7 current pages" includes `glossary.md`, and `SUMMARY.md` (copied to both subtrees) links to it in nav — so `docs-llms --check` fails when glossary is absent from a published subtree. No AC placed glossary into either surface: AC #3 excludes it from the routing/verbatim-copy loop, and AC #4's both-sides verbatim copy named only `SUMMARY.md`.
+
+**Fix:** AC #4 extended — `glossary.md`, like `SUMMARY.md`, is structural: never translated, copied verbatim to both `_published/human/glossary.md` and `_published/agent/glossary.md`, never appears in the manifest or plan items. AC #18's "7 pages" count is consistent once glossary is published to both subtrees by this mechanism.
+
+**Effect on impl + tests:** script copies `glossary.md` to both sides alongside `SUMMARY.md`; Glitch added a both-sides verbatim test mirroring the `SUMMARY.md` case (Test plan §8); manifest/plan exclusion already holds.
+
 **Effect on impl + tests:** none — already implemented this way.
 
 ### Amendment — 2026-05-21: AC #1 + new AC #20 (prompt-injection defense via nonce delimiters)
