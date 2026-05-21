@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-5e1df9b1.js";
+            window.path_to_searchindex_js = "../searchindex-726d6466.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-50d79c7c.js"></script>
@@ -178,10 +178,6 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <hr>
-<h2 id="title-p-nnnn-title-summary-madr-template-for-authoring-new-p-nnnn-adrs-primary-audience-agent"><a class="header" href="#title-p-nnnn-title-summary-madr-template-for-authoring-new-p-nnnn-adrs-primary-audience-agent">title: “P-NNNN: Title”
-summary: “MADR template for authoring new P-NNNN ADRs.”
-primary-audience: agent</a></h2>
-<hr>
 <h2 id="status-proposed-date-yyyy-mm-dd-decision-makers--consulted--informed--supersedes-null-superseded_by-null"><a class="header" href="#status-proposed-date-yyyy-mm-dd-decision-makers--consulted--informed--supersedes-null-superseded_by-null">status: “proposed”
 date: “YYYY-MM-DD”
 decision-makers: []
@@ -193,11 +189,11 @@ superseded_by: null</a></h2>
 <h2 id="status"><a class="header" href="#status">Status</a></h2>
 <p><code>proposed</code> | <code>rejected</code> | <code>accepted</code> | <code>deprecated</code> | <code>superseded</code></p>
 <h2 id="context-and-problem-statement"><a class="header" href="#context-and-problem-statement">Context and Problem Statement</a></h2>
-<p>Describe the context and the problem you are solving. What forces or constraints led to this decision point?</p>
+<p>Describe the context and the problem you’re solving. What forces or constraints led to this decision point?</p>
 <h2 id="decision-drivers"><a class="header" href="#decision-drivers">Decision Drivers</a></h2>
 <ul>
 <li>Driver 1: e.g., operational simplicity</li>
-<li>Driver 2: e.g., alignment with existing toolchain</li>
+<li>Driver 2: e.g., fit with the existing toolchain</li>
 <li>Driver 3: e.g., security posture</li>
 </ul>
 <h2 id="considered-options"><a class="header" href="#considered-options">Considered Options</a></h2>
@@ -240,7 +236,7 @@ superseded_by: null</a></h2>
 <p>Links, references, related ADRs, or follow-up work items.</p>
 <hr>
 <h3 id="frontmatter-field-reference"><a class="header" href="#frontmatter-field-reference">Frontmatter Field Reference</a></h3>
-<p><strong><code>superseded_by</code></strong> — Use this field when this ADR has been replaced by a newer decision. Set it to the identifier of the superseding ADR (e.g., <code>superseded_by: "0007-new-decision.md"</code>). When this field is non-null, this ADR’s <code>status</code> MUST also be set to <code>superseded</code>. The superseding ADR SHOULD reference this one in its <code>supersedes</code> field, creating a bidirectional link. Do not delete or edit an accepted ADR to reflect new thinking — create a new ADR that supersedes it instead. The original record preserves the historical context and reasoning that led to the prior decision.</p>
+<p><strong><code>superseded_by</code></strong> — Use this field when this <a href="../glossary.html#adr">ADR</a> (Architecture Decision Record: a document capturing a significant technical or process decision, its context, the rejected alternatives, and the expected consequences) has been replaced by a newer decision. Set it to the identifier of the superseding ADR (e.g., <code>superseded_by: "0007-new-decision.md"</code>). When this field is non-null, this ADR’s <code>status</code> MUST also be set to <code>superseded</code>. The superseding ADR SHOULD reference this one in its <code>supersedes</code> field, which creates a bidirectional link between the two records. Don’t delete or edit an accepted ADR to reflect new thinking. Create a new ADR that supersedes it instead. The original record preserves the historical context and reasoning that led to the prior decision.</p>
 
                     </main>
 
