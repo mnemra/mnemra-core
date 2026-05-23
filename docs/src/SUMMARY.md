@@ -5,6 +5,11 @@
 # Intent
 
 - [mnemra-core](intent/mnemra-core.md)
+- [Frame: mnemra-core](intent/mnemra-core-frame.md)
+
+# Architecture
+
+- [Overview](architecture/overview.md)
 
 # Specifications
 
