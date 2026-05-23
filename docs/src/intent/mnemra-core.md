@@ -39,7 +39,7 @@ primary-audience: agent
 > commercial gating is referenced, not described.
 >
 > Brief-home: this artifact lives in the mnemra-core repository at
-> `docs/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component
+> `docs/src/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component
 > it scopes (per-repo-first). The general multi-repo product-brief-home convention question
 > remains in APPARATUS-1's scope for future multi-repo briefs in other components.
 
@@ -469,7 +469,7 @@ unsettled scope are named, not papered.
   repo artifact can cite internal-record decisions by name and date without exposing
   internal paths.
 - **DEFER-1 — resolved (relocated).** Brief moved from the landing-site repository to
-  the mnemra-core repository at `docs/intent/mnemra-core.md` (2026-05-20). The brief
+  the mnemra-core repository at `docs/src/intent/mnemra-core.md` (2026-05-20). The brief
   lives with the component it scopes (per-repo-first). APPARATUS-1's broader multi-repo
   product-brief-home convention question still applies for future multi-repo briefs in
   other components.
@@ -514,7 +514,7 @@ unsettled scope are named, not papered.
   wording confirmed); µVM-OQ1..4 (all confirmed parked until streamable-HTTP active);
   APPARATUS-1 (confirmed tracked separately, no mid-brief absorption); alignment-doc
   framing flag confirmed as a separate downstream amendment candidate. Brief relocated
-  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/intent/mnemra-core.md` —
+  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/src/intent/mnemra-core.md` —
   the brief travels with the component it scopes (per-repo-first); DEFER-1 resolves to
   relocation rather than parking. Hard constraints
   updated for the license lock; `0.1.0` substrate updated for the LLM-API-key config
