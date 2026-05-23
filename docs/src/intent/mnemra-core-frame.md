@@ -36,6 +36,32 @@ This Frame reconciles every architectural claim against the locked brief's Hard 
 and the staged-increment sequence (`0.1.0` host core → `1.0.0` dogfood cutover) it locked
 at intake-exit (2026-05-20).
 
+## Stage 2a — Elicitation input record
+
+This section records the maintainer's architectural directions that anchored Stage 2b
+synthesis. Stage 2a was run **retroactively** against this Frame on 2026-05-23: the
+Frame-exit gate ran on the 2026-05-22 synthesized output (the result of the original lock
+under the warm-start two-touchpoint shape), returned a Revise verdict, and the four
+architectural directions below were locked through a Stage 2a-shaped walkthrough against
+the Warden Stage 2 code+security review's findings. The directions feed every revision in
+this Frame; later Spec-stage ADRs anchor on these slot descriptions, not on the original
+Warden findings.
+
+Origin: 2026-05-23 G-0028 cold-start amendment (calibration phase, N=5 Frame-exit-cohort
+trip-wire). Mnemra-core is the first cold-start exercise of the new shape.
+
+| Direction | Warden finding addressed | One-liner |
+|---|---|---|
+| Split `{{P-SigningKeyCustody}}` into Tier-A `{{P-V0SigningChain}}` (V0 build-host-on-disk for dogfood + multi-deployment trip-wire) and Tier-C `{{P-SigningKeyCustodyHardening}}` (HSM / runtime-fetch / never-on-node) | H1 | V0 ships signed `core: true` plugins under a stated-and-tripwire'd custody decision rather than under a deferred one. Per `P-Defer`. |
+| Add Tier-A `{{P-V0TenantEnforcement}}` with **typed `WorkspaceCtx` parameter binding at host-fn boundary** as the conservative lead, with storage-layer query rewriter and per-host-fn `workspace_id` parameter validation as open variants | H2 | The V0 enforcement layer for workspace isolation is named at Frame altitude; RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0. Per `P-SecurityLayered`. |
+| Rename Tier-C `{{P-PluginPoolMemory}}` to `{{P-PluginResourceLimits}}` and promote to Tier A; V0 turns on Wasmtime fuel + epoch-interruption + memory ceiling + table/instance limits | M3 | The plugin-sandbox DoS-containment outcomes the Frame commits to (kill-and-replace on infinite-loop, no single-process-wide DoS via plugin) require the mechanism named at Frame altitude. Per `P-StackDiscipline`. |
+| Split `{{P-RLSAdminToken}}` into Tier-A `{{P-AdminTokenShape}}` (opaque-vs-claim-carrying token structure + workspace-claim binding mechanism) and Tier-A `{{P-RLSAdminToken}}` (role model + permission shape, downstream of `{{P-AdminTokenShape}}`) | M4 | Token *shape* gates security architecture and belongs at Frame altitude; role + permission is mechanism downstream of shape. |
+
+The four directions above anchored revisions H1 + H2 + M3 + M4. Three additional Warden
+Mediums (M1 trust-boundary reconciliation, M2 DFD-builtin coverage, M5 core-plugin
+partition forward-reference) were absorbed as mechanical revisions without further
+maintainer input — their fixes are scoped tightly to Warden's spec.
+
 ## Framing corrections
 
 The Frame inherits work from artifacts that predate the brief's intake-exit lock. Three
@@ -159,10 +185,10 @@ server; it is one-shot import scope.
 
 ### Trust boundaries
 
-The Frame inherits seven trust boundaries from the constraints draft (corrected per
-Framing correction 1; the predecessor's `TB-fs-source` and `TB-fs-backup` are present in
-the architecture overview's data-flow diagram but are migration-and-backup-scoped and not
-part of the steady-state trust topology):
+The Frame inherits eight steady-state trust boundaries from the constraints draft
+(corrected per Framing correction 1; the predecessor's `TB-fs-source` and `TB-fs-backup`
+are present in the architecture overview's data-flow diagram but are migration-and-
+backup-scoped and not part of the steady-state trust topology):
 
 | Boundary | What it contains | What crosses it |
 |---|---|---|
@@ -173,10 +199,18 @@ part of the steady-state trust topology):
 | `TB-postgres` | The Postgres process | SQL connection from mnemra-core host; no agent or plugin code reaches Postgres directly |
 | `TB-fs-secrets` | Filesystem-stored secrets (mode 600) | Admin token and (per the open ADR slot for signing-key custody) plugin-signing key material; read by host code only |
 | `TB-build-pipeline` | Conceptual — the signing authority at build time | Signed plugin artifacts are what crosses into runtime; runtime sees signatures, not the key |
+| `TB-external-llm` | The external LLM provider hosting embeddings (out-of-deployment) | Per-embedding-batch HTTPS call from host functions; the LLM-API-key configuration surface (`0.1.0`) and a hostname allowlist gate the egress |
 
 The host trust boundary (`TB-mnemra-host`) is the locus of policy enforcement. Plugins
 execute inside `TB-plugin-sandbox` and cannot reach Postgres, the network, or the
 filesystem directly; every IO call traverses a host function.
+
+**Canonical TB enumeration.** The architecture overview ([overview](../architecture/overview.md))
+is the canonical source for the trust-boundary set, because the data-flow diagram lives
+there and the TB table sits adjacent to it. This Frame's table is the steady-state subset
+used in Frame-altitude prose; the overview's nine-row TB table additionally carries the
+two migration-and-backup-scoped boundaries (`TB-fs-source`, `TB-fs-backup`) plus the
+steady-state set above. When the two tables disagree, the overview wins.
 
 ## Component map
 
@@ -217,13 +251,20 @@ Wasmtime-hosted WebAssembly Component Model modules.
 - **Lifecycle.** Plugin pool per plugin; instances stateless w.r.t. tenant (every call
   carries the workspace-scoping key); failure containment via host-managed restart.
 - **Sandbox config.** Plugins receive only the host-fn surface their manifest declares;
-  no ambient network or filesystem authority.
+  no ambient network or filesystem authority. **Wasmtime fuel and epoch-interruption are
+  ON at V0**; ceiling values (fuel budget, epoch-interruption deadline, per-instance memory
+  ceiling, table/instance limits) are slotted in `{{P-PluginResourceLimits}}` (Tier A).
 - **Manifest validation.** Plugin manifests declare `content_types` (host-owned tables
   the plugin writes into via host-fns), `state_scopes` (small KV state the plugin owns),
   and the host-fn surface the plugin needs. `core: true` plugins ship signed by the
   mnemra root authority and uninstall is structurally blocked. The manifest schema and
-  the host-fn ABI surface are open ADR slots (see below).
-- **Signing.** Plugin signature verification; key custody is an open ADR slot.
+  the host-fn ABI surface are open ADR slots (see below). The capability-family increments
+  `0.2.0`–`0.14.0` are partitioned between additional builtins and `core: true` plugins;
+  `{{P-CorePluginPartition}}` (Tier A) determines the partition. The signed-and-non-
+  uninstallable invariant binds whichever increments are partitioned as plugins.
+- **Signing.** Plugin signature verification; the V0 custody decision lives at
+  `{{P-V0SigningChain}}` (Tier A) — minimum-viable build-host-on-disk for dogfood, with a
+  multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C).
 
 ### 4. Plugin-facing host functions
 
@@ -257,7 +298,9 @@ are the discipline mechanism.
 - **Security / permissions / auth.** Mnemra is **Resource Server only** (no
   authorization-server role at V0). Per-deployment OIDC AS via RFC 9728
   protected-resource-metadata; a static admin token bootstrap path for first-run and
-  solo deployments. Workspace claim is structural in every token.
+  solo deployments (token shape at `{{P-AdminTokenShape}}`, Tier A). Workspace claim is
+  structural in every token; the V0 enforcement mechanism for workspace isolation while
+  RLS policy enforcement is deferred lives at `{{P-V0TenantEnforcement}}` (Tier A).
 - **Observability / metrics.** Per-verb metrics, structured logs, a health endpoint;
   TimescaleDB hypertables with retention policies for metrics and events. Observability
   ships from `0.1.0` — workspace-wide observability principle: ship instrumented before
@@ -300,9 +343,14 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   mnemra-core advertises the configured AS via RFC 9728 protected-resource-metadata.
 - **Static admin token at V0.** Bootstrap path for first-run and solo deployments; held
   in `~/.config/mnemra/token` mode 600 (per the constraints draft's filesystem secrets
-  posture).
+  posture). The token's structure — opaque-with-server-side-lookup versus claim-carrying
+  signed — is the Frame-altitude decision at `{{P-AdminTokenShape}}` (Tier A); the
+  role-and-permission shape downstream of that decision sits at `{{P-RLSAdminToken}}`
+  (Tier A).
 - **Workspace claim is structural.** Every token carries a `workspace` claim; the host
-  scopes storage by it.
+  scopes storage by it. How the workspace claim is *bound* to the token — host-side
+  lookup against a server-side mapping table, or claim-carrying cryptographic signature —
+  is the `{{P-AdminTokenShape}}` decision.
 - **External authorization server integration** (federated authorization) is brief V0.1+
   scope.
 
@@ -313,7 +361,10 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   without migration (brief Hard constraints).
 - **RLS column-shape at V0.** Postgres Row-Level Security column infrastructure ships at
   V0; **policy enforcement activation** is brief V0.1+ scope (the brief's open `idea`
-  entry for row-level-security policy enforcement).
+  entry for row-level-security policy enforcement). The V0 enforcement mechanism is named
+  at `{{P-V0TenantEnforcement}}` (Tier A) — RLS at V0.1+ is the substrate-layer hardening
+  of an enforcement that is already load-bearing at V0 via application-layer mechanism
+  (per `P-SecurityLayered`, each layer is independently load-bearing).
 - **Tenant unit is workspace.** Solo dogfooding collapses to one `default` workspace.
 - **Tenant hierarchy** (org / + layers above the workspace=tenant boundary) is brief
   idea-tier deferred; safe to defer because the scoping key is structural.
@@ -327,7 +378,10 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 - **Plugin instance pool from V0.** Single-mutex breaks under multi-tenant load; pool
   size 3–5 per plugin at V0, adaptive sizing is V0.1+ work.
 - **`core: true` plugins signed by mnemra root and structurally non-uninstallable.**
-  Distribution at V0 is build-time-embedded.
+  Distribution at V0 is build-time-embedded. V0 custody decision at `{{P-V0SigningChain}}`
+  (Tier A); hardening decision at `{{P-SigningKeyCustodyHardening}}` (Tier C). The set of
+  `0.2.0`–`0.14.0` capability families that are `core: true` plugins (versus additional
+  builtins) is named at `{{P-CorePluginPartition}}` (Tier A).
 
 ### Storage shape
 
@@ -393,10 +447,14 @@ hardening.
 | Candidate ID | Decision | Notes |
 |---|---|---|
 | `{{P-StorageLayout}}` | The detailed layout of a single logical artifact across the four storage shapes (single-document vs composite-typed-slots vs multi-substrate-with-joins) | Central architectural fork. A Stage-1 strawman (2026-05-03) explored three candidates and recommended single-document for V0 with a non-breaking evolution path to composite-typed-slots; the recommendation is **not** locked here — the Spec stage owns the ADR. |
-| `{{P-CorePluginPartition}}` | Cohesion criterion for the V0 core plugin set | Depends-on `{{P-StorageLayout}}`. The plugin partition follows once the artifact-layout shape is fixed; under different storage layouts, plugins partition differently. |
+| `{{P-CorePluginPartition}}` | Cohesion criterion for the V0 core plugin set; partitions the capability-family increments `0.2.0`–`0.14.0` between additional builtins and `core: true` plugins | Depends-on `{{P-StorageLayout}}`. The plugin partition follows once the artifact-layout shape is fixed; under different storage layouts, plugins partition differently. The signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
 | `{{P-PluginManifest}}` | Plugin manifest schema + host-fn ABI surface | Depends-on `{{P-StorageLayout}}` and `{{P-CorePluginPartition}}`. ABI shape differs between single-document and composite-typed-slots layouts. |
 | `{{P-ObservabilityShape}}` | Observability deployment shape — per-verb metrics surface, TimescaleDB retention policies, health-endpoint detail body, continuous-aggregate windows | Drafted in parallel with the Tier A core. |
-| `{{P-RLSAdminToken}}` | RLS role model + admin token storage location + permission shape | Depends-on `{{P-StorageLayout}}`. Determines policy-surface count. |
+| `{{P-V0SigningChain}}` | Minimum-viable custody decision that lets V0 ship signed `core: true` plugins. **V0 mechanism:** the build host has the key on disk for dogfood. **Trip-wire:** the moment mnemra-core is deployed beyond the maintainer's single dogfood instance, the trip-wire fires and `{{P-SigningKeyCustodyHardening}}` (Tier C) is authored. | Anchored in `P-Defer` (Open/Deferred mechanism named with a stated trip-wire). Split out of the originally-Tier-C `{{P-SigningKeyCustody}}` because the `0.1.0` build pipeline cannot ship signed artifacts under a deferred custody decision — V0 needs a custody story even if the hardened story comes later. |
+| `{{P-V0TenantEnforcement}}` | V0 application-layer enforcement mechanism for workspace isolation while RLS policy enforcement is deferred to V0.1+. Conservative pick: **typed `WorkspaceCtx` parameter binding at host-fn boundary** — every host-fn signature requires a `WorkspaceCtx` argument that the host populates from the validated request token; queries that don't take it cannot be authored. Open variants: (a) typed parameter binding (lead), (b) storage-layer query rewriter, (c) per-host-fn explicit `workspace_id` parameter validation. | Anchored in `P-SecurityLayered` ("each layer is independently load-bearing; losing any layer weakens the whole"). The V0 enforcement layer is named here so RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0 via application-layer mechanism. |
+| `{{P-PluginResourceLimits}}` | Plugin sandbox resource limits per Wasmtime instance: **fuel (CPU-time ceiling) + epoch-interruption (deadline-based preemption) + memory ceiling + table/instance limits**. V0 turns on fuel and epoch; values specified in this ADR. | Anchored in `P-StackDiscipline` — Wasmtime's resource knobs are stack-aligned and already present in the library; this is a config decision, not a build decision. Promoted from Tier C `{{P-PluginPoolMemory}}` (renamed) because the sandbox security posture commitments in this Frame depend on these limits being live at V0. |
+| `{{P-AdminTokenShape}}` | Static admin token structure: opaque-with-server-side-lookup vs claim-carrying signed (JWT/PASETO/etc.). The choice gates security architecture (loss of the token-file means different things in each shape) and the binding mechanism for the workspace claim every token carries. | Split out of the originally-Tier-A `{{P-RLSAdminToken}}`. Upstream of role/permission shape — the role model lives downstream at `{{P-RLSAdminToken}}` and presupposes this decision. |
+| `{{P-RLSAdminToken}}` | RLS role model + admin token permission shape | Depends-on `{{P-StorageLayout}}` (determines policy-surface count) and `{{P-AdminTokenShape}}` (determines whether destructive ops bind on a claim-carrying or opaque-lookup token). The token *shape* sits at `{{P-AdminTokenShape}}`; this slot covers the role model and the permission shape downstream of that decision. |
 
 ### Tier B — unblock migration increments (`0.2.0`–`0.14.0`)
 
@@ -412,9 +470,8 @@ hardening.
 | Candidate ID | Decision |
 |---|---|
 | `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) |
-| `{{P-PluginPoolMemory}}` | Plugin pool sizing + memory budget per plugin |
 | `{{P-MCPWriteSemantics}}` | MCP write semantics — concurrent-write conflict resolution, deletion semantics, idempotency keys |
-| `{{P-SigningKeyCustody}}` | Mnemra root signing key custody (deployment-node, HSM, runtime-fetch, never-on-node) |
+| `{{P-SigningKeyCustodyHardening}}` | Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on `{{P-V0SigningChain}}`. |
 
 ### Cross-tier
 
@@ -435,14 +492,18 @@ The Frame's reconciliation discipline is direct citation: every claim above is e
 (a) directly stated in the locked brief, (b) directly stated in a locked predecessor
 decision (the V0 discovery, the architecture alignment record, the project defaults),
 or (c) an inference whose chain the Frame body makes explicit. No tensions surfaced that
-contradict the brief. Three are worth naming as Frame-level refinements (Frame is
-narrower than brief, but consistent):
+contradict the brief. The Frame-level refinements (Frame is narrower than brief, but
+consistent) are:
 
 | Refinement | Where the brief permits it |
 |---|---|
 | The four-shape storage model (content / timeseries / log / state-config) | Brief Hard constraints fix the substrate (`pgvector` + `timescaledb`) but do not enumerate the four shapes; the alignment record's round-4 mental model does, and the brief's `0.1.0` substrate description ("content/timeseries/log/state storage-shape partitions") cites it. |
 | Plugin instance pool size 3–5 at V0 | Brief Hard constraints require multi-tenancy structure; the alignment record's round-5 pool decision operationalizes it. |
-| RLS column-shape at V0, policy enforcement at V0.1+ | Brief Tenancy invariant locks "`workspace_id` structural from V0"; the brief's idea-tier entry for row-level-security policy enforcement defers activation. |
+| RLS column-shape at V0, policy enforcement at V0.1+, **application-layer enforcement load-bearing at V0** | Brief Tenancy invariant locks "`workspace_id` structural from V0"; the brief's idea-tier entry for row-level-security policy enforcement defers activation. The V0 enforcement mechanism for workspace isolation is named at `{{P-V0TenantEnforcement}}` (Tier A) — per `P-SecurityLayered`, the application layer is independently load-bearing at V0; RLS at V0.1+ is the substrate-layer hardening. |
+| `core: true` plugins ship signed at V0 under a Tier-A V0 custody decision | Brief Hard constraints commit to signed `core: true` plugins; this Frame names `{{P-V0SigningChain}}` (Tier A) as the V0 custody decision (build-host-on-disk for dogfood) with the multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C). Per `P-Defer`, the Open/Deferred mechanism names the V0 mechanism AND its trip-wire. |
+| Wasmtime fuel + epoch-interruption ON at V0 | Brief and predecessor specs commit to the plugin-sandbox security outcomes ("an infinite-loop plugin is killed and replaced from the pool"); this Frame names the *mechanism* — fuel, epoch-interruption, memory ceiling, table/instance limits — and slots ceiling values at `{{P-PluginResourceLimits}}` (Tier A, renamed/promoted from the prior Tier-C `{{P-PluginPoolMemory}}`). Per `P-StackDiscipline`, Wasmtime's resource knobs are stack-aligned. |
+| Static admin token shape is a Frame-altitude decision | Brief Hard constraints commit to the static admin token with a structural workspace claim; the *token structure* (opaque-with-server-side-lookup versus claim-carrying signed) and the workspace-claim *binding mechanism* gate downstream security architecture, so the choice lives at Frame altitude as `{{P-AdminTokenShape}}` (Tier A). The role-and-permission shape downstream sits at `{{P-RLSAdminToken}}` (Tier A). |
+| `core: true` plugins partition of `0.2.0`–`0.14.0` is named | Brief enumerates the capability-family increments but does not partition them between additional builtins and `core: true` plugins. `{{P-CorePluginPartition}}` (Tier A) determines the partition; the signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
 
 ## Out of Frame scope
 
@@ -475,6 +536,28 @@ boundary is unambiguous:
 
 ## Changelog
 
+- **2026-05-23** — Frame revision per Frame-exit gate Revise verdict. Frame-exit gate
+  ran retroactively on the 2026-05-22 synthesized Frame after the 2026-05-23 G-0028
+  cold-start amendment landed (Stage 2 split into 2a elicitation + 2b synthesis +
+  Frame-exit gate). Warden's Stage 2 code+security review (target_commit
+  `0fafbf39c2a5412bc99de0ecf499cebc7524ec63`, dispatch_id 652, dated 2026-05-22) returned
+  Approve-with-conditions; the gate read that as Revise. Four architectural directions
+  were locked via Stage 2a-shaped walkthrough (recorded at the new Stage 2a section
+  above): (H1) split `{{P-SigningKeyCustody}}` → Tier-A `{{P-V0SigningChain}}` + Tier-C
+  `{{P-SigningKeyCustodyHardening}}`; (H2) add Tier-A `{{P-V0TenantEnforcement}}`
+  application-layer enforcement backstop; (M3) rename `{{P-PluginPoolMemory}}` →
+  `{{P-PluginResourceLimits}}` and promote to Tier A; (M4) split `{{P-RLSAdminToken}}`
+  → Tier-A `{{P-AdminTokenShape}}` + Tier-A `{{P-RLSAdminToken}}` (narrowed). Three
+  Mediums absorbed mechanically: (M1) `TB-external-llm` row added to Frame TB table,
+  overview designated canonical TB enumeration; (M2) overview DFD extended with
+  `P-builtin-users`, `P-builtin-sessions`, `P-builtin-permissions`; (M5) inline forward-
+  reference to `{{P-CorePluginPartition}}` for the `0.2.0`–`0.14.0` partition. L1, L2,
+  N1 deferred (housekeeping). Net ADR-slot change: +3 Tier A slots
+  (`{{P-V0SigningChain}}`, `{{P-V0TenantEnforcement}}`, `{{P-AdminTokenShape}}`),
+  +1 promoted Tier A slot (`{{P-PluginResourceLimits}}`, renamed from
+  `{{P-PluginPoolMemory}}`), Tier C gains `{{P-SigningKeyCustodyHardening}}`, Tier C
+  loses `{{P-PluginPoolMemory}}` and `{{P-SigningKeyCustody}}`. Final tally: Tier A 9
+  (was 5), Tier B 4 (unchanged), Tier C 3 (was 4), Cross-tier 1 (unchanged).
 - **2026-05-22** — Frame doc initial draft. Stage 2 of `/brief` for mnemra-core; first
   real Stage-2 → Stage-3 dogfood of the new agent-first workflow shape. Reconciles to
   the locked brief (intake-exit 2026-05-20). Applies three framing corrections from

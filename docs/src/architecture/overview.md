@@ -240,6 +240,15 @@ TB-mnemra-host: {
   P-builtin-auth: {
     label: "P-builtin-auth\n(OIDC RS + admin token)"
   }
+  P-builtin-users: {
+    label: "P-builtin-users\n(host-builtin, not plugin)"
+  }
+  P-builtin-sessions: {
+    label: "P-builtin-sessions\n(per-MCP-connection)"
+  }
+  P-builtin-permissions: {
+    label: "P-builtin-permissions\n(per-plugin permissions)"
+  }
 }
 
 TB-plugin-sandbox: {
@@ -357,6 +366,9 @@ TB-plugin-sandbox.P-plugin-instance -> TB-mnemra-host.P-host-fns: "DF-host-fn-ca
 TB-mnemra-host.P-builtin-projects -> TB-mnemra-host.P-host-fns: "DF-host-fn-call"
 TB-mnemra-host.P-builtin-agents -> TB-mnemra-host.P-host-fns: "DF-host-fn-call"
 TB-mnemra-host.P-builtin-workspaces -> TB-mnemra-host.P-host-fns: "DF-host-fn-call"
+TB-mnemra-host.P-builtin-users -> TB-mnemra-host.P-host-fns: "DF-host-fn-call"
+TB-mnemra-host.P-builtin-sessions -> TB-mnemra-host.P-host-fns: "DF-host-fn-call"
+TB-mnemra-host.P-builtin-permissions -> TB-mnemra-host.P-host-fns: "DF-host-fn-call"
 
 # Host functions → Postgres
 TB-mnemra-host.P-host-fns -> TB-postgres.DS-pg-content: "DF-substrate-rw"
@@ -412,10 +424,13 @@ TB-mnemra-host.P-health-handler -> TB-postgres.DS-pg-content: "DF-health-probe"
   token at the filesystem secrets boundary. OIDC AS integration is V0.1+ (brief idea-tier
   entry).
 - **Builtin components are inside the host process, not in the plugin sandbox.** The
-  `P-builtin-projects`, `P-builtin-agents`, `P-builtin-workspaces`, and `P-builtin-auth`
-  nodes execute as host code. This corrects the predecessor framing where projects and
-  agents were drawn as plugins inside `TB-plugin-sandbox`. The corrected framing aligns
-  with the locked brief's `0.1.0` substrate description.
+  seven `P-builtin-*` nodes (`P-builtin-projects`, `P-builtin-agents`,
+  `P-builtin-workspaces`, `P-builtin-auth`, `P-builtin-users`, `P-builtin-sessions`,
+  `P-builtin-permissions`) execute as host code. This corrects the predecessor framing
+  where projects and agents were drawn as plugins inside `TB-plugin-sandbox`. The
+  corrected framing aligns with the locked brief's `0.1.0` substrate description and the
+  Frame's enumeration of builtins (Workspace, Users, Agents, Authentication, Agent
+  sessions, Per-plugin permissions, Projects).
 - **The four storage shapes are visible.** Content (`DS-pg-content`) and state
   (`DS-pg-state`) substrates are regular Postgres tables; timeseries
   (`DS-ts-metrics`, `DS-ts-events`) are TimescaleDB hypertables; logs (`DS-pg-logs`) at
@@ -535,6 +550,13 @@ set is extended with **Threats at crossing** — element-ID + STRIDE references 
 into the threats-by-element table. Trust assumption changes at each crossing are named
 under Authentication and Authorization.
 
+**Canonical TB enumeration.** This table is the canonical source for the mnemra-core
+trust-boundary set. The DFD lives in this document and the TB table sits adjacent to it,
+so this artifact (not the Frame) owns the enumeration. The Frame doc carries a
+steady-state subset (eight boundaries) used in Frame-altitude prose; this overview adds
+the two migration-and-backup-scoped boundaries (`TB-fs-source`, `TB-fs-backup`) for the
+full nine-row set. When the Frame's TB table and this one disagree, this one wins.
+
 | Trust boundary | Crosses | Direction | Authentication | Authorization | Threats at crossing |
 |---|---|---|---|---|---|
 | `TB-agent-runtime` ↔ `TB-mnemra-host` | `DF-mcp-stdio` (MCP stdio transport) | bidirectional (request/response) | Bearer-token presented per MCP session; `P-builtin-auth` verifies against OIDC AS or static admin token. **V0:** static admin token suffices; OIDC verification is V0.1+. | Workspace claim in token scopes every operation; per-verb capability check at `P-mcp-handler` against the plugin manifest. Admin scope distinct from user scope. | `EE-orchestrator-agent`/S,R; `EE-specialist-agent`/S,R; `P-mcp-handler`/S,T,I,D,E; `DF-mcp-stdio`/T,I |
@@ -611,6 +633,17 @@ resolution. Empty at port-time — Frame work did not surface a brief-level tens
 
 ## Session log
 
+- **2026-05-23** — Frame-exit gate revision. The companion Frame doc returned a Revise
+  verdict at Frame-exit (G-0028 cold-start amendment, 2026-05-23). Overview revisions:
+  (M1) the trust-boundaries table above is designated canonical for the mnemra-core TB
+  set, with the Frame's eight-row steady-state table as a subset; (M2) the DFD's
+  builtin component set extended from four (`P-builtin-projects`, `P-builtin-agents`,
+  `P-builtin-workspaces`, `P-builtin-auth`) to seven (adds `P-builtin-users`,
+  `P-builtin-sessions`, `P-builtin-permissions`) with the uniform host-fn edge pattern.
+  Threats-by-element / trust-boundary-crossings / accepted-risks tables from the
+  2026-05-22 terminal security review are preserved unchanged. Cross-reference: Frame
+  doc Changelog 2026-05-23 entry for the full revision tally; Warden Stage 2
+  code+security review of 2026-05-22 supplies the original findings.
 - **2026-05-22** — Stage 2 terminal security review (security-mode reviewer pass with
   the threat-modeling skill loaded). The three threat-scaffold tables (threats by data-
   flow element, trust boundaries, accepted risks) populated by STRIDE-per-element walk
