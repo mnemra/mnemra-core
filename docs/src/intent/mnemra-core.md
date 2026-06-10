@@ -113,8 +113,13 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   Transport is stdio at V0; streamable-HTTP is a later-version activation.
 - **An MCP server is a V0 deliverable** — intent-clarity: the MCP-native constraint is
   satisfied by a running MCP server in V0 scope, not merely a future protocol posture.
-- The substrate SHALL be a **single-process Postgres** instance with `pgvector` and
-  `timescaledb` extensions present.
+- The substrate SHALL be a **single-process Postgres** instance with the `pgvector`
+  extension present. TimescaleDB is demoted off the V0 stack (P-0010 D8) — it is absent by
+  decision, not oversight, because at V0 only content and state are persisted in-app
+  Postgres shapes; the former timeseries and log shapes are observability emission surfaces,
+  not in-app storage (telemetry is emitted, not stored — per the architecture-overview
+  observability baseline), so the time-series engine has no V0 store to back. TimescaleDB is
+  held behind a named latency/storage trip-wire for a later version.
 - Plugins SHALL be **WebAssembly Component Model modules** hosted in-process via Wasmtime;
   plugin core logic MUST be IO-free; all plugin IO MUST be mediated by host-provided
   functions. Plugins are leaves — no direct sideways linkage; cross-plugin calls are
@@ -278,8 +283,9 @@ ordered by dogfood value and dependency with the maintainer's stated priority (t
 after substrate). A one-clause ordering rationale accompanies each entry so the sequence
 can be reordered cheaply at the intake-exit gate without restructuring entries.
 
-- **`0.1.0` — Builtin substrate + host core.** Single-process Postgres (pgvector +
-  TimescaleDB); the content/timeseries/log/state storage-shape partitions; the pre-1.0
+- **`0.1.0` — Builtin substrate + host core.** Single-process Postgres (pgvector); the
+  content and state storage-shape partitions persisted in-app, with the former timeseries
+  and log shapes emitted to the observability minimum rather than stored (P-0010 D8); the pre-1.0
   host-fn ABI; an MCP server skeleton (stdio) onto which each capability increment adds its
   verbs; the admin/destructive control CLI; an observability minimum; an **LLM-API-key
   configuration surface** (mnemra-core calls out to an external model for embeddings per
