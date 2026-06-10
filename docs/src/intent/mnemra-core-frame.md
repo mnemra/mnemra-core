@@ -52,10 +52,10 @@ trip-wire). Mnemra-core is the first cold-start exercise of the new shape.
 
 | Direction | Warden finding addressed | One-liner |
 |---|---|---|
-| Split `{{P-SigningKeyCustody}}` into Tier-A `{{P-V0SigningChain}}` (V0 build-host-on-disk for dogfood + multi-deployment trip-wire) and Tier-C `{{P-SigningKeyCustodyHardening}}` (HSM / runtime-fetch / never-on-node) | H1 | V0 ships signed `core: true` plugins under a stated-and-tripwire'd custody decision rather than under a deferred one. Per `P-Defer`. |
-| Add Tier-A `{{P-V0TenantEnforcement}}` with **typed `WorkspaceCtx` parameter binding at host-fn boundary** as the conservative lead, with storage-layer query rewriter and per-host-fn `workspace_id` parameter validation as open variants | H2 | The V0 enforcement layer for workspace isolation is named at Frame altitude; RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0. Per `P-SecurityLayered`. |
-| Rename Tier-C `{{P-PluginPoolMemory}}` to `{{P-PluginResourceLimits}}` and promote to Tier A; V0 turns on Wasmtime fuel + epoch-interruption + memory ceiling + table/instance limits | M3 | The plugin-sandbox DoS-containment outcomes the Frame commits to (kill-and-replace on infinite-loop, no single-process-wide DoS via plugin) require the mechanism named at Frame altitude. Per `P-StackDiscipline`. |
-| Split `{{P-RLSAdminToken}}` into Tier-A `{{P-AdminTokenShape}}` (opaque-vs-claim-carrying token structure + workspace-claim binding mechanism) and Tier-A `{{P-RLSAdminToken}}` (role model + permission shape, downstream of `{{P-AdminTokenShape}}`) | M4 | Token *shape* gates security architecture and belongs at Frame altitude; role + permission is mechanism downstream of shape. |
+| Split `{{P-SigningKeyCustody}}` into Tier-A `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (V0 build-host-on-disk for dogfood + multi-deployment trip-wire) and Tier-C `{{P-SigningKeyCustodyHardening}}` (HSM / runtime-fetch / never-on-node) | H1 | V0 ships signed `core: true` plugins under a stated-and-tripwire'd custody decision rather than under a deferred one. Per `P-Defer`. |
+| Add Tier-A `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)` with **typed `WorkspaceCtx` parameter binding at host-fn boundary** as the conservative lead, with storage-layer query rewriter and per-host-fn `workspace_id` parameter validation as open variants | H2 | The V0 enforcement layer for workspace isolation is named at Frame altitude; RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0. Per `P-SecurityLayered`. |
+| Rename Tier-C `{{P-PluginPoolMemory}}` to `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` and promote to Tier A; V0 turns on Wasmtime fuel + epoch-interruption + memory ceiling + table/instance limits | M3 | The plugin-sandbox DoS-containment outcomes the Frame commits to (kill-and-replace on infinite-loop, no single-process-wide DoS via plugin) require the mechanism named at Frame altitude. Per `P-StackDiscipline`. |
+| Split `{{P-RLSAdminToken}}` into Tier-A `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` (opaque-vs-claim-carrying token structure + workspace-claim binding mechanism) and Tier-A `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (role model + permission shape, downstream of `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)`) | M4 | Token *shape* gates security architecture and belongs at Frame altitude; role + permission is mechanism downstream of shape. |
 
 The four directions above anchored revisions H1 + H2 + M3 + M4. Three additional Warden
 Mediums (M1 trust-boundary reconciliation, M2 DFD-builtin coverage, M5 core-plugin
@@ -155,8 +155,8 @@ the plugin runtime, and the builtin components. Per the brief's Hard constraints
 
 - The agent-facing surface is **MCP-native** (MCP specification 2025-06-18). Transport is
   **stdio at V0**; streamable-HTTP is a later-version activation.
-- The substrate is a **single-process Postgres** instance with `pgvector` and
-  `timescaledb` extensions present.
+- The substrate is a **single-process Postgres** instance with `pgvector` (bundled with
+  the embedded engine); TimescaleDB is demoted off the V0 stack (P-0010 D8).
 - Plugins are **WebAssembly Component Model modules** hosted in-process via Wasmtime.
 - Deployment posture is **self-hosted-first, single-binary**. The system MUST NOT host a
   language model; it calls out to an external one.
@@ -214,18 +214,26 @@ steady-state set above. When the two tables disagree, the overview wins.
 
 ## Component map
 
-The six responsibility buckets named in the architecture alignment record (round-6) map
-naturally onto the brief's `0.1.0` substrate description. Each bucket is a module surface
-inside the host process, not a microservice.
+The six responsibility buckets — (1) memory substrate, (2) inbound protocol surfaces,
+(3) plugin runtime, (4) plugin-facing host functions, (5) outbound integrations,
+(6) cross-cutting — map naturally onto the brief's `0.1.0` substrate description. Each
+bucket is a module surface inside the host process, not a microservice.
 
 ### 1. Memory substrate
 
 The content and projection layer the host owns directly.
 
-- **Storage substrate.** Single-process Postgres with `pgvector` (for V0.1+ vector
-  retrieval) and `timescaledb` (for V0 timeseries / hypertable shapes) extensions
-  installed. Brief Hard constraints lock this; the **storage-shape model** is the
-  alignment-doc round-4 four-shape model: content / timeseries / log / state-config.
+- **Storage substrate.** PostgreSQL ratified on merits, behind an engine-agnostic
+  swappable `Storage` trait (one implementation) — [P-0010](../adrs/P-0010-storage-substrate-engine.md)
+  D1 + D5. **V0 engine: embedded Postgres** (`postgresql_embedded` + bundled `pgvector`
+  for V0.1+ vector retrieval), shipping with the single binary. TimescaleDB is demoted off
+  the V0 stack (D8) — the V0 timeseries shape is plain timestamped Postgres tables, with
+  TimescaleDB held behind a latency/storage trip-wire. The **storage-shape model** is the
+  alignment-doc round-4 four-shape model: content / timeseries / log / state-config — but
+  re-derived 2026-06-09 (E1 dispositioned = re-derive now): only content and state-config are
+  persisted in-app Postgres shapes; the former timeseries and log shapes are observability
+  emission surfaces, not in-app storage at V0 (telemetry is emitted, not stored — see the
+  [observability baseline](../architecture/overview.md#observability)).
 - **Projections.** Materialized read-side derivatives over content. Refresh strategy and
   dependency tracking is a Frame-level open slot; see the open ADR list below.
 - **Indexing pipelines.** Content arrives, projections update reactively. The
@@ -253,23 +261,24 @@ Wasmtime-hosted WebAssembly Component Model modules.
 - **Sandbox config.** Plugins receive only the host-fn surface their manifest declares;
   no ambient network or filesystem authority. **Wasmtime fuel and epoch-interruption are
   ON at V0**; ceiling values (fuel budget, epoch-interruption deadline, per-instance memory
-  ceiling, table/instance limits) are slotted in `{{P-PluginResourceLimits}}` (Tier A).
+  ceiling, table/instance limits) are slotted in `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` (Tier A).
 - **Manifest validation.** Plugin manifests declare `content_types` (host-owned tables
   the plugin writes into via host-fns), `state_scopes` (small KV state the plugin owns),
   and the host-fn surface the plugin needs. `core: true` plugins ship signed by the
   mnemra root authority and uninstall is structurally blocked. The manifest schema and
   the host-fn ABI surface are open ADR slots (see below). The capability-family increments
   `0.2.0`–`0.14.0` are partitioned between additional builtins and `core: true` plugins;
-  `{{P-CorePluginPartition}}` (Tier A) determines the partition. The signed-and-non-
+  `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` (Tier A) determines the partition. The signed-and-non-
   uninstallable invariant binds whichever increments are partitioned as plugins.
 - **Signing.** Plugin signature verification; the V0 custody decision lives at
-  `{{P-V0SigningChain}}` (Tier A) — minimum-viable build-host-on-disk for dogfood, with a
+  `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A) — minimum-viable build-host-on-disk for dogfood, with a
   multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C).
 
 ### 4. Plugin-facing host functions
 
-The host-fn ABI is the contract plugins write against. Round-6 of the alignment record
-catalogs the surface:
+The host-fn ABI is the contract plugins write against. The following surface was
+established during the architectural alignment walk and is enumerated here for
+self-containment:
 
 - LLM handoff (MCP sampling — the plugin asks; the agent's MCP client runs the
   completion).
@@ -286,9 +295,14 @@ are the discipline mechanism.
 ### 5. Outbound integrations
 
 - **External LLM provider.** mnemra-core calls out to an external model for embeddings
-  per the ELT subsystem; an LLM-API-key configuration surface is folded into `0.1.0` per
-  the brief's T-5 resolution. The system MUST NOT host a language model (brief Hard
-  constraints).
+  via the embedding-batch pathway (the Extract-Load-Transform pipeline that routes
+  artifact content through host functions to the external provider and writes resulting
+  vectors into the projection substrate). The LLM-API-key configuration surface for this
+  pathway is folded into `0.1.0` per the brief's T-5 resolution. The detailed pipeline
+  shape (batching strategy, retry, provider-level hostname allowlist) is a Spec-stage
+  concern; the Frame names only the pathway's existence and its trust-boundary crossing
+  (`DF-embed-call` to `TB-external-llm` in the companion overview). The system MUST NOT
+  host a language model (brief Hard constraints).
 - **Federated MCP servers.** Mnemra-as-MCP-client to upstream MCP servers (re-exposing
   their tools under the mnemra namespace) is forward-context, not V0 scope.
 - **Filesystem and HTTP.** Host-fn-mediated; plugins cannot reach these directly.
@@ -298,13 +312,20 @@ are the discipline mechanism.
 - **Security / permissions / auth.** Mnemra is **Resource Server only** (no
   authorization-server role at V0). Per-deployment OIDC AS via RFC 9728
   protected-resource-metadata; a static admin token bootstrap path for first-run and
-  solo deployments (token shape at `{{P-AdminTokenShape}}`, Tier A). Workspace claim is
+  solo deployments (token shape at `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)`, Tier A). Workspace claim is
   structural in every token; the V0 enforcement mechanism for workspace isolation while
-  RLS policy enforcement is deferred lives at `{{P-V0TenantEnforcement}}` (Tier A).
-- **Observability / metrics.** Per-verb metrics, structured logs, a health endpoint;
-  TimescaleDB hypertables with retention policies for metrics and events. Observability
-  ships from `0.1.0` — workspace-wide observability principle: ship instrumented before
-  first user-touch.
+  RLS policy enforcement is deferred lives at `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)` (Tier A).
+- **Observability / metrics.** Per-verb metrics, structured logs, a health endpoint —
+  **emitted** (stdout structured logs + OTel metrics/events + health-endpoint-first),
+  storage-independently from the bare shell. Re-derived 2026-06-09 (E1 dispositioned) and
+  **re-altituded out of the project-ADR layer**: observability is a theory trait + chassis
+  mechanism, not a per-project ADR; the generation decisions live in the
+  [observability baseline](../architecture/overview.md#observability) in the companion
+  overview, and the original observability ADR [P-0004](../adrs/P-0004-observability-shape.md)
+  is `deprecated` (no successor ADR). The observability storage backend is deferred behind the
+  generation⊥storage separation (option set + named tripwire); there is no in-app
+  observability store at V0. Observability ships from `0.1.0` — workspace-wide observability
+  principle: ship instrumented before first user-touch.
 - **Configuration.** Per-deployment configuration surface; runtime configuration via
   state-shape storage.
 - **Agent sessions.** Per-MCP-connection technical primitive (MCP-protocol-defined),
@@ -344,13 +365,13 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 - **Static admin token at V0.** Bootstrap path for first-run and solo deployments; held
   in `~/.config/mnemra/token` mode 600 (per the constraints draft's filesystem secrets
   posture). The token's structure — opaque-with-server-side-lookup versus claim-carrying
-  signed — is the Frame-altitude decision at `{{P-AdminTokenShape}}` (Tier A); the
-  role-and-permission shape downstream of that decision sits at `{{P-RLSAdminToken}}`
+  signed — is the Frame-altitude decision at `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` (Tier A); the
+  role-and-permission shape downstream of that decision sits at `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)`
   (Tier A).
 - **Workspace claim is structural.** Every token carries a `workspace` claim; the host
   scopes storage by it. How the workspace claim is *bound* to the token — host-side
   lookup against a server-side mapping table, or claim-carrying cryptographic signature —
-  is the `{{P-AdminTokenShape}}` decision.
+  is the `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` decision.
 - **External authorization server integration** (federated authorization) is brief V0.1+
   scope.
 
@@ -362,7 +383,7 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 - **RLS column-shape at V0.** Postgres Row-Level Security column infrastructure ships at
   V0; **policy enforcement activation** is brief V0.1+ scope (the brief's open `idea`
   entry for row-level-security policy enforcement). The V0 enforcement mechanism is named
-  at `{{P-V0TenantEnforcement}}` (Tier A) — RLS at V0.1+ is the substrate-layer hardening
+  at `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)` (Tier A) — RLS at V0.1+ is the substrate-layer hardening
   of an enforcement that is already load-bearing at V0 via application-layer mechanism
   (per `P-SecurityLayered`, each layer is independently load-bearing).
 - **Tenant unit is workspace.** Solo dogfooding collapses to one `default` workspace.
@@ -378,24 +399,42 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 - **Plugin instance pool from V0.** Single-mutex breaks under multi-tenant load; pool
   size 3–5 per plugin at V0, adaptive sizing is V0.1+ work.
 - **`core: true` plugins signed by mnemra root and structurally non-uninstallable.**
-  Distribution at V0 is build-time-embedded. V0 custody decision at `{{P-V0SigningChain}}`
+  Distribution at V0 is build-time-embedded. V0 custody decision at `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`
   (Tier A); hardening decision at `{{P-SigningKeyCustodyHardening}}` (Tier C). The set of
   `0.2.0`–`0.14.0` capability families that are `core: true` plugins (versus additional
-  builtins) is named at `{{P-CorePluginPartition}}` (Tier A).
+  builtins) is named at `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` (Tier A).
 
 ### Storage shape
 
-- **Single-process Postgres with `pgvector` + `timescaledb` extensions** (brief Hard
-  constraints).
-- **Four storage shapes** (content / timeseries / log / state-config), with the right
-  Postgres-resident backend per shape (`pgvector`-enabled tables / TimescaleDB
-  hypertables / log tables / state KV tables).
+> **Reframed 2026-06-08 (substrate re-opened on merits — [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)).** The original Frame treated the storage substrate as a hard-locked brief carry-forward with no substrate ADR slot. A storage-engine evaluation (ratified 2026-06-07) re-opened it on merits: **PostgreSQL is ratified on merits** (the only license-clean + capable + mature contender after a license gate), **behind an engine-agnostic, swappable `Storage` trait** with Postgres as the only implementation. This reverses the prior "Postgres-natural / no-swap" treatment. The substrate is now a decided artifact (P-0010), not an unexamined constraint. The points below are updated to that decision; the four-shape model and the layout fork are unchanged in substance.
+
+- **PostgreSQL ratified on merits as the storage substrate**, behind an engine-agnostic
+  swappable `Storage` trait (one implementation) — [P-0010](../adrs/P-0010-storage-substrate-engine.md)
+  D1 + D5. The **V0 engine is embedded Postgres** (`postgresql_embedded` + bundled
+  `pgvector`), shipping with the single self-hosted binary — not an operator-provisioned
+  external Postgres server.
+- **V0 stack is A1-clean** ([P-0010](../adrs/P-0010-storage-substrate-engine.md) D2):
+  pgvector HNSW + native FTS + recursive CTEs + JSONB. Extensions beyond pgvector are
+  adopted only on named trip-wires (keyword/BM25-fidelity → D3; graph/AGE → D4;
+  time-series/TimescaleDB → D8).
+- **Storage shapes at V0: content + state-config (persisted); observability is emitted, not
+  stored in-app.** The content shape is `pgvector`-ready tables and state-config is state KV
+  tables — the two persisted Postgres shapes. **The former timeseries and log shapes are
+  observability emission surfaces** (the [observability baseline](../architecture/overview.md#observability),
+  re-derived 2026-06-09 — E1 dispositioned = re-derive now): the server emits structured logs
+  to stdout and OTel metrics/events; *where* telemetry lands is the operator's choice behind
+  the generation⊥storage separation, deferred and not in the binary at V0. The content-substrate's
+  own time-series tables (if any beyond observability) are plain timestamped Postgres tables
+  ([P-0010](../adrs/P-0010-storage-substrate-engine.md) D8 demotes TimescaleDB off the V0 stack
+  to a latency/storage trip-wire).
 - **Content-first with CQRS-real projections.** Mutations write content;
   projections rebuild reactively from content; reads hit projections.
 - **The detailed layout of a single logical artifact across the four shapes** (whether a
   task lives in one row, in multiple tables in the content substrate, or fans across
   content + state + log substrates) is the central architectural fork at the Spec stage.
-  This is an open ADR slot; see the candidate `{{P-StorageLayout}}` below.
+  This is resolved in `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` (Tier A)
+  as the Postgres *implementation* under P-0010's substrate decision; see the Tier A table
+  below for context.
 
 ### MCP transport
 
@@ -406,10 +445,15 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 ### Observability
 
 - **Ship instrumented from V0.** Metrics, structured logs, and traces in place at first
-  user-touch; per-verb metrics on every MCP call; TimescaleDB hypertables with retention
-  policies (a workspace-wide observability discipline).
+  user-touch; per-verb metrics on every MCP call — **emitted** (stdout + OTel) storage-independently
+  from the bare shell (a workspace-wide observability discipline). The observability storage
+  backend is deferred behind the generation⊥storage separation, not in the binary at V0
+  (the [observability baseline](../architecture/overview.md#observability), re-derived 2026-06-09 —
+  re-altituded out of the project-ADR layer; P-0004 `deprecated`, no successor ADR).
 - **Health endpoint shape.** Structured-detail body identifying which dependency failed
-  (Postgres reachable / extensions loaded / workspace=default exists).
+  (Postgres reachable / `pgvector` loaded / workspace=default exists). The listener binds
+  loopback-only at V0, so loopback IS the gate on the detail body (named tripwire: if the
+  listener ever binds non-loopback, admin-token gating becomes required).
 
 ### Migration discipline
 
@@ -442,19 +486,29 @@ adapted for the brief's INCR-1 staged-increment shape — Tier A unblocks the `0
 substrate; Tier B unblocks the migration increments; Tier C unblocks operational
 hardening.
 
+**Placeholder-to-ADR resolution mechanism.** At Spec stage, the implementing developer
+authors the actual ADR files using MADR format with the `P-` prefix, stored at
+`docs/src/adrs/P-NNNN-<slug>.md` (e.g., `{{P-StorageLayout}}` resolves to
+`P-0001-storage-layout.md`). Each `{{P-XXX}}` placeholder in this Frame and in the
+companion overview is back-updated to cite the resolved ADR file at that point. The
+resolution mapping is recorded in a placeholder-resolution table authored at Spec stage
+as part of the first ADR dispatch, so the Frame and overview do not carry orphaned
+placeholders beyond the Spec authoring window.
+
 ### Tier A — unblock `0.1.0` substrate
 
 | Candidate ID | Decision | Notes |
 |---|---|---|
-| `{{P-StorageLayout}}` | The detailed layout of a single logical artifact across the four storage shapes (single-document vs composite-typed-slots vs multi-substrate-with-joins) | Central architectural fork. A Stage-1 strawman (2026-05-03) explored three candidates and recommended single-document for V0 with a non-breaking evolution path to composite-typed-slots; the recommendation is **not** locked here — the Spec stage owns the ADR. |
-| `{{P-CorePluginPartition}}` | Cohesion criterion for the V0 core plugin set; partitions the capability-family increments `0.2.0`–`0.14.0` between additional builtins and `core: true` plugins | Depends-on `{{P-StorageLayout}}`. The plugin partition follows once the artifact-layout shape is fixed; under different storage layouts, plugins partition differently. The signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
-| `{{P-PluginManifest}}` | Plugin manifest schema + host-fn ABI surface | Depends-on `{{P-StorageLayout}}` and `{{P-CorePluginPartition}}`. ABI shape differs between single-document and composite-typed-slots layouts. |
-| `{{P-ObservabilityShape}}` | Observability deployment shape — per-verb metrics surface, TimescaleDB retention policies, health-endpoint detail body, continuous-aggregate windows | Drafted in parallel with the Tier A core. |
-| `{{P-V0SigningChain}}` | Minimum-viable custody decision that lets V0 ship signed `core: true` plugins. **V0 mechanism:** the build host has the key on disk for dogfood. **Trip-wire:** the moment mnemra-core is deployed beyond the maintainer's single dogfood instance, the trip-wire fires and `{{P-SigningKeyCustodyHardening}}` (Tier C) is authored. | Anchored in `P-Defer` (Open/Deferred mechanism named with a stated trip-wire). Split out of the originally-Tier-C `{{P-SigningKeyCustody}}` because the `0.1.0` build pipeline cannot ship signed artifacts under a deferred custody decision — V0 needs a custody story even if the hardened story comes later. |
-| `{{P-V0TenantEnforcement}}` | V0 application-layer enforcement mechanism for workspace isolation while RLS policy enforcement is deferred to V0.1+. Conservative pick: **typed `WorkspaceCtx` parameter binding at host-fn boundary** — every host-fn signature requires a `WorkspaceCtx` argument that the host populates from the validated request token; queries that don't take it cannot be authored. Open variants: (a) typed parameter binding (lead), (b) storage-layer query rewriter, (c) per-host-fn explicit `workspace_id` parameter validation. | Anchored in `P-SecurityLayered` ("each layer is independently load-bearing; losing any layer weakens the whole"). The V0 enforcement layer is named here so RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0 via application-layer mechanism. |
-| `{{P-PluginResourceLimits}}` | Plugin sandbox resource limits per Wasmtime instance: **fuel (CPU-time ceiling) + epoch-interruption (deadline-based preemption) + memory ceiling + table/instance limits**. V0 turns on fuel and epoch; values specified in this ADR. | Anchored in `P-StackDiscipline` — Wasmtime's resource knobs are stack-aligned and already present in the library; this is a config decision, not a build decision. Promoted from Tier C `{{P-PluginPoolMemory}}` (renamed) because the sandbox security posture commitments in this Frame depend on these limits being live at V0. |
-| `{{P-AdminTokenShape}}` | Static admin token structure: opaque-with-server-side-lookup vs claim-carrying signed (JWT/PASETO/etc.). The choice gates security architecture (loss of the token-file means different things in each shape) and the binding mechanism for the workspace claim every token carries. | Split out of the originally-Tier-A `{{P-RLSAdminToken}}`. Upstream of role/permission shape — the role model lives downstream at `{{P-RLSAdminToken}}` and presupposes this decision. |
-| `{{P-RLSAdminToken}}` | RLS role model + admin token permission shape | Depends-on `{{P-StorageLayout}}` (determines policy-surface count) and `{{P-AdminTokenShape}}` (determines whether destructive ops bind on a claim-carrying or opaque-lookup token). The token *shape* sits at `{{P-AdminTokenShape}}`; this slot covers the role model and the permission shape downstream of that decision. |
+| `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` | The storage **substrate and engine**: which engine (Postgres-on-merits vs unified vs polyglot), the V0 engine shape (embedded vs external), the V0 extension stack, and whether storage sits behind an engine-agnostic swap trait or a Postgres-shaped one | **Fold-added slot (2026-06-08).** The original Frame had *no* substrate slot — the substrate was treated as a hard-locked brief carry-forward. A storage-engine evaluation (ratified 2026-06-07, after the substrate spec lock) re-opened it on merits. **Resolved:** PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (D5, one implementation); V0 embedded Postgres; A1-clean V0 stack (D2); keyword/graph/time-series on named trip-wires (D3/D4/D8); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. P-0001 (layout) sits under this decision. Escalation E1 (D8 vs the observability hypertables) dispositioned 2026-06-09 (re-derive now) → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
+| `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` | The detailed layout of a single logical artifact across the four storage shapes (single-document vs composite-typed-slots vs multi-substrate-with-joins) | Central architectural fork. **Resolved 2026-05-24: C1 single-document layout.** Whole artifact in one row; JSONB frontmatter + body + system fields; non-breaking C2 evolution path designed into the projection layer. Sits under `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` (the Postgres implementation under the swap trait). |
+| `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` | Cohesion criterion for the V0 core plugin set; partitions the capability-family increments `0.2.0`–`0.14.0` between additional builtins and `core: true` plugins | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)`. **Resolved 2026-05-24:** 4 `core: true` plugins (tasks / repos / jobs / contacts) + 7 builtins. Verb-on-content discriminator. |
+| `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` | Plugin manifest schema + host-fn ABI surface | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` and `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)`. **Resolved 2026-05-24:** Universal `content.emit` verb shape; `schema_version: 1`; typed host-fn allowlist compiled per-instance from signed manifest. |
+| `{{P-ObservabilityShape}}` → **re-altituded out of the ADR layer** to the [observability baseline](../architecture/overview.md#observability) (a theory-trait baseline in the companion overview — **not** an ADR); [P-0004](../adrs/P-0004-observability-shape.md) `deprecated`, **no successor ADR** | Observability shape re-derived around generation⊥storage separation — the server EMITS telemetry (stdout structured logs + OTel metrics/events + health-endpoint-first) storage-independently; the storage backend is deferred behind the separation (option set + named tripwire), not locked. The maintainer ruled observability a theory trait + chassis mechanism, **not a per-project ADR**, so this Frame ADR-slot resolves to a non-ADR baseline (the altitude re-disposition is marked explicitly). P-0004 (TimescaleDB hypertables + retention + continuous aggregate in the app's own Postgres) is the `deprecated` historical record; its storage core was falsified by P-0010 D8. | Originally drafted as P-0004 in parallel with the Tier A core; re-derived 2026-06-09 (E1 disposition) and re-altituded out of the ADR layer to the overview observability baseline. |
+| `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` | Minimum-viable custody decision that lets V0 ship signed `core: true` plugins. **V0 mechanism:** the build host has the key on disk for dogfood. **Trip-wire:** the moment mnemra-core is deployed beyond the maintainer's single dogfood instance, the trip-wire fires and `{{P-SigningKeyCustodyHardening}}` (Tier C) is authored. | Anchored in `P-Defer` (Open/Deferred mechanism named with a stated trip-wire). Split out of the originally-Tier-C `{{P-SigningKeyCustody}}` because the `0.1.0` build pipeline cannot ship signed artifacts under a deferred custody decision — V0 needs a custody story even if the hardened story comes later. |
+| `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)` | V0 application-layer enforcement mechanism for workspace isolation while RLS policy enforcement is deferred to V0.1+. Conservative pick: **typed `WorkspaceCtx` parameter binding at host-fn boundary** — every host-fn signature requires a `WorkspaceCtx` argument that the host populates from the validated request token; queries that don't take it cannot be authored. Open variants: (a) typed parameter binding (lead), (b) storage-layer query rewriter, (c) per-host-fn explicit `workspace_id` parameter validation. | Anchored in `P-SecurityLayered` ("each layer is independently load-bearing; losing any layer weakens the whole"). The V0 enforcement layer is named here so RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0 via application-layer mechanism. |
+| `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` | Plugin sandbox resource limits per Wasmtime instance: **fuel (CPU-time ceiling) + epoch-interruption (deadline-based preemption) + memory ceiling + table/instance limits**. V0 turns on fuel and epoch; values specified in this ADR. | Anchored in `P-StackDiscipline` — Wasmtime's resource knobs are stack-aligned and already present in the library; this is a config decision, not a build decision. Promoted from Tier C `{{P-PluginPoolMemory}}` (renamed) because the sandbox security posture commitments in this Frame depend on these limits being live at V0. |
+| `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` | Static admin token structure: opaque-with-server-side-lookup vs claim-carrying signed (JWT/PASETO/etc.). The choice gates security architecture (loss of the token-file means different things in each shape) and the binding mechanism for the workspace claim every token carries. | Split out of the originally-Tier-A `{{P-RLSAdminToken}}`. Upstream of role/permission shape — the role model lives downstream at `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` and presupposes this decision. |
+| `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` | RLS role model + admin token permission shape | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` (determines policy-surface count) and `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` (determines whether destructive ops bind on a claim-carrying or opaque-lookup token). **Resolved 2026-05-24:** binary admin/read-observer role enum; permission matrix per role; V0 app-layer enforcement; V0.1+ RLS policy hardening path. |
 
 ### Tier B — unblock migration increments (`0.2.0`–`0.14.0`)
 
@@ -471,7 +525,7 @@ hardening.
 |---|---|
 | `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) |
 | `{{P-MCPWriteSemantics}}` | MCP write semantics — concurrent-write conflict resolution, deletion semantics, idempotency keys |
-| `{{P-SigningKeyCustodyHardening}}` | Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on `{{P-V0SigningChain}}`. |
+| `{{P-SigningKeyCustodyHardening}}` | Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`. |
 
 ### Cross-tier
 
@@ -497,13 +551,13 @@ consistent) are:
 
 | Refinement | Where the brief permits it |
 |---|---|
-| The four-shape storage model (content / timeseries / log / state-config) | Brief Hard constraints fix the substrate (`pgvector` + `timescaledb`) but do not enumerate the four shapes; the alignment record's round-4 mental model does, and the brief's `0.1.0` substrate description ("content/timeseries/log/state storage-shape partitions") cites it. |
+| The four-shape storage model (content / timeseries / log / state-config), re-derived 2026-06-09 to two persisted shapes (content / state-config) + observability emission surfaces (former timeseries / log) | Brief Hard constraints fix the substrate (`pgvector`) but do not enumerate the four shapes; the alignment record's round-4 mental model does, and the brief's `0.1.0` substrate description ("content/timeseries/log/state storage-shape partitions") cites it. The substrate is re-opened on merits by [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md) (TimescaleDB demoted off the V0 stack, D8); the former timeseries/log shapes are observability emission surfaces, not in-app storage at V0 (telemetry is emitted, not stored — see the [observability baseline](../architecture/overview.md#observability)). |
 | Plugin instance pool size 3–5 at V0 | Brief Hard constraints require multi-tenancy structure; the alignment record's round-5 pool decision operationalizes it. |
-| RLS column-shape at V0, policy enforcement at V0.1+, **application-layer enforcement load-bearing at V0** | Brief Tenancy invariant locks "`workspace_id` structural from V0"; the brief's idea-tier entry for row-level-security policy enforcement defers activation. The V0 enforcement mechanism for workspace isolation is named at `{{P-V0TenantEnforcement}}` (Tier A) — per `P-SecurityLayered`, the application layer is independently load-bearing at V0; RLS at V0.1+ is the substrate-layer hardening. |
-| `core: true` plugins ship signed at V0 under a Tier-A V0 custody decision | Brief Hard constraints commit to signed `core: true` plugins; this Frame names `{{P-V0SigningChain}}` (Tier A) as the V0 custody decision (build-host-on-disk for dogfood) with the multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C). Per `P-Defer`, the Open/Deferred mechanism names the V0 mechanism AND its trip-wire. |
-| Wasmtime fuel + epoch-interruption ON at V0 | Brief and predecessor specs commit to the plugin-sandbox security outcomes ("an infinite-loop plugin is killed and replaced from the pool"); this Frame names the *mechanism* — fuel, epoch-interruption, memory ceiling, table/instance limits — and slots ceiling values at `{{P-PluginResourceLimits}}` (Tier A, renamed/promoted from the prior Tier-C `{{P-PluginPoolMemory}}`). Per `P-StackDiscipline`, Wasmtime's resource knobs are stack-aligned. |
-| Static admin token shape is a Frame-altitude decision | Brief Hard constraints commit to the static admin token with a structural workspace claim; the *token structure* (opaque-with-server-side-lookup versus claim-carrying signed) and the workspace-claim *binding mechanism* gate downstream security architecture, so the choice lives at Frame altitude as `{{P-AdminTokenShape}}` (Tier A). The role-and-permission shape downstream sits at `{{P-RLSAdminToken}}` (Tier A). |
-| `core: true` plugins partition of `0.2.0`–`0.14.0` is named | Brief enumerates the capability-family increments but does not partition them between additional builtins and `core: true` plugins. `{{P-CorePluginPartition}}` (Tier A) determines the partition; the signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
+| RLS column-shape at V0, policy enforcement at V0.1+, **application-layer enforcement load-bearing at V0** | Brief Tenancy invariant locks "`workspace_id` structural from V0"; the brief's idea-tier entry for row-level-security policy enforcement defers activation. The V0 enforcement mechanism for workspace isolation is named at `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)` (Tier A) — per `P-SecurityLayered`, the application layer is independently load-bearing at V0; RLS at V0.1+ is the substrate-layer hardening. |
+| `core: true` plugins ship signed at V0 under a Tier-A V0 custody decision | Brief Hard constraints commit to signed `core: true` plugins; this Frame names `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A) as the V0 custody decision (build-host-on-disk for dogfood) with the multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C). Per `P-Defer`, the Open/Deferred mechanism names the V0 mechanism AND its trip-wire. |
+| Wasmtime fuel + epoch-interruption ON at V0 | Brief and predecessor specs commit to the plugin-sandbox security outcomes ("an infinite-loop plugin is killed and replaced from the pool"); this Frame names the *mechanism* — fuel, epoch-interruption, memory ceiling, table/instance limits — and slots ceiling values at `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` (Tier A, renamed/promoted from the prior Tier-C `{{P-PluginPoolMemory}}`). Per `P-StackDiscipline`, Wasmtime's resource knobs are stack-aligned. |
+| Static admin token shape is a Frame-altitude decision | Brief Hard constraints commit to the static admin token with a structural workspace claim; the *token structure* (opaque-with-server-side-lookup versus claim-carrying signed) and the workspace-claim *binding mechanism* gate downstream security architecture, so the choice lives at Frame altitude as `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` (Tier A). The role-and-permission shape downstream sits at `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (Tier A). |
+| `core: true` plugins partition of `0.2.0`–`0.14.0` is named | Brief enumerates the capability-family increments but does not partition them between additional builtins and `core: true` plugins. `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` (Tier A) determines the partition; the signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
 
 ## Out of Frame scope
 
@@ -536,6 +590,42 @@ boundary is unambiguous:
 
 ## Changelog
 
+- **2026-06-09** — Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
+  out of the project-ADR layer**. The maintainer dispositioned escalation E1 by separating
+  observability **generation** from **storage**: the server EMITS telemetry (stdout structured
+  logs + OTel metrics/events + health-endpoint-first) storage-independently from the bare shell;
+  the observability storage backend is deferred behind the separation (option set {Prometheus,
+  InfluxDB, TimescaleDB, plain Postgres tables}, named tripwire), not locked; the standalone
+  binary survives (observability storage is external operator infra). The maintainer further
+  ruled observability a **theory trait + chassis mechanism, not a per-project ADR**: the
+  generation decisions land in the [observability baseline](../architecture/overview.md#observability)
+  in the companion overview (a theory-trait baseline, not an ADR), and the original observability
+  ADR `[P-0004-observability-shape](../adrs/P-0004-observability-shape.md)` is `deprecated`
+  (its storage core falsified by P-0010 D8; **no successor ADR**). The intermediate
+  observability ADR (P-0011) drafted earlier this day is **dissolved** — it
+  over-built the altitude (re-asserting at project-ADR altitude a thing that is a theory baseline
+  plus chassis wiring). Reframed the Frame's two Observability sections, the storage-shape model
+  (the former timeseries/log shapes are emission surfaces, not in-app storage), and the Tier-A
+  slot table (the `{{P-ObservabilityShape}}` slot is marked re-altituded out of the ADR layer to
+  the overview baseline; P-0010's E1 tail re-targeted). The `/health` detail body is gated by the
+  loopback-only listener bind (loopback IS the gate at V0; named tripwire if it ever binds
+  non-loopback). The host capability-manifest is a settled invariant (generated from WIT, never
+  hand-maintained; generation mechanism routes to the chassis). Non-observability Frame content
+  unchanged.
+- **2026-06-08** — Storage-substrate fold. A storage-engine evaluation (ratified
+  2026-06-07, *after* the 2026-05-24 substrate spec lock) re-opened the storage substrate
+  on merits and was folded into the WS-E-2 designed tier before merge. The Frame's
+  storage treatment is reframed from "hard-locked brief constraint, no substrate slot" →
+  "PostgreSQL ratified on merits, behind an engine-agnostic swappable `Storage` trait"
+  (new `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)`,
+  added to the Tier-A slot table). Reframed: the Storage-shape cross-cutting block, the
+  Memory-substrate component bullet, and the four-shape model's timeseries shape (plain
+  timestamped Postgres tables at V0 — TimescaleDB demoted off the V0 stack to a trip-wire,
+  D8). The V0 engine is embedded Postgres (not an external server). Carried escalation
+  **E1** (D8 vs the then-accepted `[P-0004-observability-shape](../adrs/P-0004-observability-shape.md)`
+  hypertables — a maintainer scope/sequencing call, pending at fold time) — **dispositioned
+  2026-06-09 (re-derive now); see the 2026-06-09 entry above.** Non-storage Frame content is
+  unchanged.
 - **2026-05-23** — Frame revision per Frame-exit gate Revise verdict. Frame-exit gate
   ran retroactively on the 2026-05-22 synthesized Frame after the 2026-05-23 G-0028
   cold-start amendment landed (Stage 2 split into 2a elicitation + 2b synthesis +
@@ -543,21 +633,36 @@ boundary is unambiguous:
   `0fafbf39c2a5412bc99de0ecf499cebc7524ec63`, dispatch_id 652, dated 2026-05-22) returned
   Approve-with-conditions; the gate read that as Revise. Four architectural directions
   were locked via Stage 2a-shaped walkthrough (recorded at the new Stage 2a section
-  above): (H1) split `{{P-SigningKeyCustody}}` → Tier-A `{{P-V0SigningChain}}` + Tier-C
-  `{{P-SigningKeyCustodyHardening}}`; (H2) add Tier-A `{{P-V0TenantEnforcement}}`
+  above): (H1) split `{{P-SigningKeyCustody}}` → Tier-A `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` + Tier-C
+  `{{P-SigningKeyCustodyHardening}}`; (H2) add Tier-A `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)`
   application-layer enforcement backstop; (M3) rename `{{P-PluginPoolMemory}}` →
-  `{{P-PluginResourceLimits}}` and promote to Tier A; (M4) split `{{P-RLSAdminToken}}`
-  → Tier-A `{{P-AdminTokenShape}}` + Tier-A `{{P-RLSAdminToken}}` (narrowed). Three
+  `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` and promote to Tier A; (M4) split `{{P-RLSAdminToken}}`
+  → Tier-A `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` + Tier-A `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (narrowed). Three
   Mediums absorbed mechanically: (M1) `TB-external-llm` row added to Frame TB table,
   overview designated canonical TB enumeration; (M2) overview DFD extended with
   `P-builtin-users`, `P-builtin-sessions`, `P-builtin-permissions`; (M5) inline forward-
-  reference to `{{P-CorePluginPartition}}` for the `0.2.0`–`0.14.0` partition. L1, L2,
+  reference to `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` for the `0.2.0`–`0.14.0` partition. L1, L2,
   N1 deferred (housekeeping). Net ADR-slot change: +3 Tier A slots
-  (`{{P-V0SigningChain}}`, `{{P-V0TenantEnforcement}}`, `{{P-AdminTokenShape}}`),
-  +1 promoted Tier A slot (`{{P-PluginResourceLimits}}`, renamed from
+  (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`, `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)`, `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)`),
+  +1 promoted Tier A slot (`[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)`, renamed from
   `{{P-PluginPoolMemory}}`), Tier C gains `{{P-SigningKeyCustodyHardening}}`, Tier C
   loses `{{P-PluginPoolMemory}}` and `{{P-SigningKeyCustody}}`. Final tally: Tier A 9
   (was 5), Tier B 4 (unchanged), Tier C 3 (was 4), Cross-tier 1 (unchanged).
+- **2026-05-23** (Stage 3 entry housekeeping) — Resolved three deferred housekeeping
+  items from the Stage 2 code+security review (d652/d655): (L1) ELT subsystem forward
+  reference resolved — removed undefined "ELT subsystem" term; replaced with inline
+  description of the embedding-batch pathway (Extract-Load-Transform pipeline routing
+  artifact content through host functions to external provider; Spec-stage detail deferred
+  with explicit callout to `DF-embed-call`/`TB-external-llm`); (L2) workspace-internal
+  citation resolved — "Round-6 of the alignment record" citations removed from component
+  map intro and host-fn surface intro; six bucket names inlined directly; host-fn surface
+  enumeration already present inline so only the citation header changed; (N1) placeholder
+  resolution mechanism added — explicit paragraph inserted at the open-ADR-slots section
+  (before Tier A table) specifying that the implementing developer at Spec stage authors
+  `P-NNNN-<slug>.md` ADR files in MADR format; each placeholder resolves to a numbered
+  filename; resolution recorded in a placeholder-resolution table at Spec stage. No
+  architectural content changes — Frame remains locked at acc511f baseline. Companion
+  overview updated in the same commit for slot citation routing and R-0004 rewrite.
 - **2026-05-22** — Frame doc initial draft. Stage 2 of `/brief` for mnemra-core; first
   real Stage-2 → Stage-3 dogfood of the new agent-first workflow shape. Reconciles to
   the locked brief (intake-exit 2026-05-20). Applies three framing corrections from

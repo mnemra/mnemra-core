@@ -1,0 +1,78 @@
+# BOM sidecar — mnemra-core V0 substrate spec (WS-E-2)
+# ---------------------------------------------------------------------------
+# HAND-AUTHORED FIXTURE (pre-#1154). The audit_chain producer side (the /brief
+# Stage 2/3 auto-append) has not shipped, so this chain was reconstructed after
+# the fact from the committed branch state rather than appended at each gate.
+# /verify's `skills/verify.md` and `team/charon.md` precondition both check the
+# chain for STRUCTURAL COMPLETENESS (all blocks present, each carrying its
+# required fields) — not for #1154 provenance — so a complete hand-authored
+# chain is a valid input. See `.claude/commands/verify.md` "hand-authored
+# fixture" note.
+#
+# Same-branch fixture: every `version` below is the current blob SHA on
+# ws-e2-storage-fold, and every `generated_against` points at the same-branch
+# upstream SHA. There is no lock->verify drift window, so chain_freshness passes
+# by construction — honestly (locked SHA == current branch blob). The real
+# verification value of this run is Charon's canon-conformance pass + the
+# spot-check, not the freshness check.
+# ---------------------------------------------------------------------------
+
+spec_type = "architecture"
+
+[audit_chain.intent]
+ref = "docs/src/intent/mnemra-core.md"
+# RE-LOCKED 2026-06-10 (dispatch 963): reconciled to P-0010 D8 (TimescaleDB demoted; content+state
+# persisted in-app, timeseries+log emit-not-store) to close the Charon /verify finding (dispatch 962,
+# High/88 — the intent lagged the fold's locked D8). Prior version 20be537 carried the stale
+# TimescaleDB Hard constraint (L116-117) + the four-shape 0.1.0 description (L281-282).
+version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
+locked_at = 2026-06-10
+
+[audit_chain.frame]
+ref = "docs/src/intent/mnemra-core-frame.md"
+version = "d80ccf0b1b738cbb83d915e0aa3df7207671dbfe"
+# PROVENANCE (thin — read before trusting): the fold reviews 958/959/961 reviewed
+# the Frame's FOLD EDITS (P-0011 dissolution record, observability re-home,
+# frame:232/550 emission reconciliation) for coherence/correctness. A discrete
+# "Frame conforms to intent (mnemra-core.md)" gate (Frame-exit) predates #1154 and
+# was not separately recorded. "pass" here represents: (a) fold edits reviewed +
+# approved, (b) Charon re-checks the Frame dimension against intent at /verify,
+# (c) this representation is blessed by Peter at the /verify spot-check. If the
+# spot-check rejects it, this becomes a finding -> requires_upstream_change_at: frame.
+internal_conformance = "pass"
+
+[audit_chain.frame.generated_against]
+intent_version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
+
+[audit_chain.spec]
+ref = "docs/specs/2026-05-24-mnemra-core-v0-substrate.md"
+version = "dc0ed3bb29e0668973cd381faf5ff7d389235b22"
+# PROVENANCE: Warden fold-review chain 959 (request-changes) -> 961 (APPROVE)
+# against the content committed as 5df42c7; round-2 re-review (task 1582) confirmed
+# the P-0010 re-target, E1 Option-A narrative, and storage D1-D8 intact, with a
+# clean filesystem sound gate (sole P-0011 hit is the intentional frame:605
+# dissolution record). Strong backing.
+internal_conformance = "pass"
+
+[audit_chain.spec.generated_against]
+intent_version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
+frame_version = "d80ccf0b1b738cbb83d915e0aa3df7207671dbfe"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = false   # architecture spec — no impl/code change set to scan
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true
