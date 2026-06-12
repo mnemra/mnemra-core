@@ -10,7 +10,4 @@ name = "mnemra"
 path = "main.rs"
 
 [dependencies]
-wasmtime = { workspace = true }
-wasmtime-wasi = { workspace = true }
-tokio = { workspace = true }
-anyhow = { workspace = true }
+mnemra-host = { path = "../../crates/mnemra-host" }
