@@ -60,3 +60,80 @@ run: plugin
 # Inspect the plugin component's WIT
 plugin-wit: plugin
     wasm-tools component wit target/wasm32-wasip2/release/mnemra_echo.wasm
+
+# ---------------------------------------------------------------------------
+# CI gate recipes (R-0018-f)
+# Each recipe emits exactly one "GATE <name> PASS|FAIL" line on stdout.
+# No recipe has --fix side effects.
+# ---------------------------------------------------------------------------
+
+# Verify: compile-check (type-level correctness)
+verify-type:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if cargo check --workspace 2>&1; then
+        echo "GATE type PASS"
+    else
+        echo "GATE type FAIL"
+        exit 1
+    fi
+
+# Verify: lint — clippy (deny warnings) + fmt check.
+# scaffold: WHERE-clause lint slot reserved for Task 12 / R-0018-d
+verify-lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Host crates: deny all warnings
+    cargo clippy --workspace --exclude mnemra-echo -- -D warnings 2>&1
+    # Plugin crate: lint for wasm32-wasip2 target
+    cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings 2>&1
+    # Format check (no --fix)
+    cargo fmt --all --check 2>&1
+    # scaffold: WHERE-clause lint (Task 12 / R-0018-d) wired here when ready
+    echo "GATE lint PASS"
+
+# Verify: tests pass
+verify-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if cargo test --workspace 2>&1; then
+        echo "GATE test PASS"
+    else
+        echo "GATE test FAIL"
+        exit 1
+    fi
+
+# Verify: coverage (emit number; no threshold gate at scaffold stage)
+verify-coverage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if cargo llvm-cov --workspace 2>&1; then
+        echo "GATE coverage PASS"
+    else
+        echo "GATE coverage FAIL"
+        exit 1
+    fi
+
+# Verify: debug build succeeds (release-build hardening lands in Task 26)
+verify-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if cargo build --workspace 2>&1; then
+        echo "GATE build PASS"
+    else
+        echo "GATE build FAIL"
+        exit 1
+    fi
+
+# Verify: smoke tests
+# scaffold: real smoke gate lands in Task 27
+verify-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # scaffold: real smoke gate lands in Task 27
+    echo "GATE smoke PASS"
+
+# CI entry point — runs every verify-* recipe in order.
+# First failure stops and exits non-zero.
+# This is the sole CI entry point (R-0018-c, R-0018-f).
+ci: verify-type verify-lint verify-test verify-coverage verify-build verify-smoke
