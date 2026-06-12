@@ -10,4 +10,6 @@ description = "mnemra runtime host — startup and lifecycle coordination"
 async-trait = "0.1.89"
 
 [dev-dependencies]
+anyhow = "1.0.102"
 tokio = { version = "1.52.3", features = ["rt", "macros"] }
+wit-parser = "0.247"

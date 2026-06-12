@@ -6,6 +6,7 @@
 //!   - Task 23:    MCP server startup
 //!   - Tasks 19/20: plugin-runtime integration
 
+pub mod abi;
 pub mod storage;
 
 /// Start the mnemra host runtime.
