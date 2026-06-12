@@ -7,3 +7,7 @@ license.workspace = true
 description = "mnemra runtime host — startup and lifecycle coordination"
 
 [dependencies]
+async-trait = "0.1.89"
+
+[dev-dependencies]
+tokio = { version = "1.52.3", features = ["rt", "macros"] }
