@@ -20,6 +20,7 @@
 //! other plumbing changes in this module.
 
 pub mod memory;
+pub mod postgres;
 
 use async_trait::async_trait;
 use std::error::Error;
