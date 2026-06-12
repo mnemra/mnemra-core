@@ -1,13 +1,9 @@
 [package]
-name = "mnemra"
+name = "mnemra-host"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-
-[[bin]]
-name = "mnemra"
-path = "main.rs"
+description = "mnemra runtime host — startup and lifecycle coordination"
 
 [dependencies]
-mnemra-host = { path = "../../crates/mnemra-host" }
