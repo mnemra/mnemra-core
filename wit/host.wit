@@ -1,0 +1,147 @@
+package mnemra:host@0.0.1;
+
+/// Shared types used across all host-fn interfaces.
+interface types {
+    /// Opaque JSON value — serialised as a UTF-8 string.
+    /// Must not be list<u8> (R-0012-f).
+    type json = string;
+
+    /// Host-derived workspace context.  Carried as the first parameter of
+    /// every host-fn (R-0006-a).  Declared as a record so the named type
+    /// survives wit-parser's typedef resolution and `type_is_named` passes.
+    ///
+    /// Note: a resource handle would provide stronger spoof-resistance
+    /// (the host controls construction), but the contract test resolves
+    /// `workspace-ctx` via `Type::Id → TypeDef.name`, which only works for
+    /// records and type-aliases, not resource own/borrow handles.  This is
+    /// flagged in the completion report for the spec owner.
+    record workspace-ctx {
+        /// Workspace identifier — host-derived, never a bare host-fn param.
+        workspace-id: string,
+    }
+}
+
+/// Artifact CRUD host-fns.  All write-path fns derive workspace from ctx;
+/// workspace-id never appears as a standalone parameter (R-0012-d, R-0003-d).
+///
+/// R-0012-a, R-0003-g
+interface artifact {
+    use types.{json, workspace-ctx};
+
+    /// Create a new artifact and return its generated id.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    artifact-create: func(ctx: workspace-ctx, %type: string, frontmatter: json, body: option<string>) -> string;
+
+    /// Patch an artifact's frontmatter and/or body.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    artifact-update: func(ctx: workspace-ctx, id: string, frontmatter-patch: json, body: option<string>);
+
+    /// Retrieve a single artifact by id.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    artifact-get: func(ctx: workspace-ctx, id: string) -> option<string>;
+
+    /// List artifacts by type with optional filter criteria.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    artifact-list: func(ctx: workspace-ctx, %type: string, filters: json) -> list<string>;
+
+    /// Permanently delete an artifact.  Opt-in at the host_fns.required
+    /// declaration level (R-0003-g).
+    ///
+    /// R-0012-a, R-0003-g
+    @since(version = 0.0.1)
+    artifact-delete: func(ctx: workspace-ctx, id: string);
+}
+
+/// Structured metrics emission.
+///
+/// R-0012-a
+interface metrics {
+    use types.{workspace-ctx};
+
+    /// Record a single metric observation.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    metrics-record: func(ctx: workspace-ctx, verb: string, duration-ms: u64, outcome: string);
+}
+
+/// Structured log emission.
+///
+/// R-0012-a
+interface log {
+    use types.{json, workspace-ctx};
+
+    /// Emit a structured log line.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    log-emit: func(ctx: workspace-ctx, level: string, message: string, context: option<json>);
+}
+
+/// Domain event emission.
+///
+/// R-0012-a
+interface event {
+    use types.{json, workspace-ctx};
+
+    /// Emit a versioned domain event.
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    event-emit: func(ctx: workspace-ctx, event-type: string, event-version: u16, payload: json);
+}
+
+/// Projection (read-model) update emission.
+///
+/// R-0012-a, R-0003-d
+interface projection {
+    use types.{json, workspace-ctx};
+
+    /// Emit a named projection update.  Workspace is derived from ctx —
+    /// workspace-id is never an explicit parameter (R-0003-d).
+    ///
+    /// R-0012-a
+    @since(version = 0.0.1)
+    projection-emit: func(ctx: workspace-ctx, projection-name: string, data: json);
+}
+
+/// Sampling / LLM-inference request.  Optional opt-in surface (R-0012-b).
+/// context-ids are opaque handle strings; the host never resolves them to
+/// artifact bodies within this interface.
+///
+/// R-0012-b
+interface sampling {
+    use types.{json, workspace-ctx};
+
+    /// Request a sampling inference.  context-ids carries references to
+    /// context artifacts; bodies are not passed across the ABI boundary
+    /// (R-0012-b — host never resolves IDs to bodies inside this call).
+    ///
+    /// Marked @unstable: the sampling protocol shape may change as the
+    /// LLM integration layer evolves.
+    ///
+    /// R-0012-b
+    @unstable(feature = sampling-v0)
+    sampling-request: func(ctx: workspace-ctx, context-ids: list<string>, prompt: string) -> option<string>;
+}
+
+/// Secrets read surface.  Optional opt-in; no write path at V0 (R-0012-c).
+///
+/// R-0012-c
+interface secrets {
+    use types.{workspace-ctx};
+
+    /// Retrieve a secret value by name.  Read-only; no secrets-set / secrets-delete.
+    ///
+    /// R-0012-c
+    @since(version = 0.0.1)
+    secrets-get: func(ctx: workspace-ctx, name: string) -> option<string>;
+}
