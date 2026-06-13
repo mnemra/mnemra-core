@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/mnemra-host",
+    "libs/mnemra-host",
     "cmd/mnemra",
     "plugins/mnemra-echo",
 ]
@@ -13,7 +13,7 @@ default-members = [
 version = "0.0.1"
 edition = "2024"
 authors = ["Peter Manahan"]
-license = "MIT"
+license = "Apache-2.0"
 
 [workspace.dependencies]
 wit-bindgen = "0.57"
