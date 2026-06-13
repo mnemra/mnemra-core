@@ -374,7 +374,7 @@ async fn r0001f_enqueue_drain_matview_reflects_write() {
 /// # Why `spawn_blocking` + `std::sync::mpsc::recv_timeout`?
 ///
 /// `tokio::time` is not enabled in the dev-dependency feature set and
-/// `crates/mnemra-host/Cargo.toml` is out of this agent's edit scope.
+/// `libs/mnemra-host/Cargo.toml` is out of this agent's edit scope.
 /// `std::sync::mpsc::recv_timeout` provides a deadline on a OS thread without
 /// requiring the tokio `time` feature.
 #[tokio::test]

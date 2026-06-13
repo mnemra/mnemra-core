@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 description = "mnemra runtime host — startup and lifecycle coordination"
 
+[lib]
+path = "./mnemra_host.rs"
+
 [dependencies]
 async-trait = "0.1.89"
 base64 = "0.22.1"

@@ -57,7 +57,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 2: Runtime workspace scaffold — host crate + crate layout
 
-**Files:** `Cargo.toml` (workspace members), `crates/mnemra-host/Cargo.toml` (to-be-created), `crates/mnemra-host/src/lib.rs` (to-be-created), `cmd/mnemra/main.rs` (replace spike entry), `cmd/mnemra/Cargo.toml`
+**Files:** `Cargo.toml` (workspace members), `libs/mnemra-host/Cargo.toml` (to-be-created), `libs/mnemra-host/mnemra_host.rs` (to-be-created), `cmd/mnemra/main.rs` (replace spike entry), `cmd/mnemra/Cargo.toml`
 **Type:** infra
 **Depends on:** Task 1
 **Size:** M
@@ -77,7 +77,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 3 (RED): Host-fn WIT ABI contract tests — `WorkspaceCtx`-first, no write-path `workspace_id`
 
-**Files:** `wit/host.wit` (to-be-created), `crates/mnemra-host/tests/abi_contract.rs` (to-be-created)
+**Files:** `wit/host.wit` (to-be-created), `libs/mnemra-host/tests/abi_contract.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 2
 **Size:** M
@@ -99,7 +99,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 4 (GREEN): Host-fn WIT ABI definition + binding skeleton
 
-**Files:** `wit/host.wit` (to-be-created), `crates/mnemra-host/src/abi/mod.rs` (to-be-created), `crates/mnemra-host/src/abi/host_fns.rs` (to-be-created)
+**Files:** `wit/host.wit` (to-be-created), `libs/mnemra-host/abi.rs` (to-be-created), `libs/mnemra-host/abi/host_fns.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 3
 **Size:** L
@@ -119,7 +119,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 5: `Storage` trait + in-memory adapter + two-adapter contract test
 
-**Files:** `crates/mnemra-host/src/storage/mod.rs` (to-be-created), `crates/mnemra-host/src/storage/memory.rs` (to-be-created), `crates/mnemra-host/tests/storage_contract.rs` (to-be-created)
+**Files:** `libs/mnemra-host/storage.rs` (to-be-created), `libs/mnemra-host/storage/memory.rs` (to-be-created), `libs/mnemra-host/tests/storage_contract.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 2
 **Size:** L
@@ -140,7 +140,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 6: Embedded Postgres engine bring-up + `Storage` Postgres adapter
 
-**Files:** `crates/mnemra-host/src/storage/postgres/mod.rs` (to-be-created), `crates/mnemra-host/src/storage/postgres/engine.rs` (to-be-created), `Cargo.toml` (deps: `postgresql_embedded`, `pgvector_compiled`)
+**Files:** `libs/mnemra-host/storage/postgres.rs` (to-be-created), `libs/mnemra-host/storage/postgres/engine.rs` (to-be-created), `Cargo.toml` (deps: `postgresql_embedded`, `pgvector_compiled`)
 **Type:** backend
 **Depends on:** Task 5
 **Size:** L
@@ -163,7 +163,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 7: Schema initialization — `mnemra init` (tables, indexes, pgvector, default workspace, health-ok)
 
-**Files:** `crates/mnemra-host/src/schema/init.rs` (to-be-created), `crates/mnemra-host/src/schema/migrations/` (to-be-created), `cmd/mnemra/src/cmd/init.rs` (to-be-created)
+**Files:** `libs/mnemra-host/schema/init.rs` (to-be-created), `libs/mnemra-host/schema/migrations/` (to-be-created), `cmd/mnemra/cmd/init.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 6
 **Size:** L
@@ -188,7 +188,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 8 (RED): Content-substrate schema tests — C1 layout, system-column separation, CHECK constraints
 
-**Files:** `crates/mnemra-host/tests/content_schema.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/content_schema.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 7
 **Size:** M
@@ -208,7 +208,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 9 (GREEN): Per-artifact-type table generator + history shadow tables + projection refresh queue
 
-**Files:** `crates/mnemra-host/src/schema/artifact_table.rs` (to-be-created), `crates/mnemra-host/src/schema/history_trigger.rs` (to-be-created), `crates/mnemra-host/src/projection/refresh_queue.rs` (to-be-created), `crates/mnemra-host/src/projection/worker.rs` (to-be-created)
+**Files:** `libs/mnemra-host/schema/artifact_table.rs` (to-be-created), `libs/mnemra-host/schema/history_trigger.rs` (to-be-created), `libs/mnemra-host/projection/refresh_queue.rs` (to-be-created), `libs/mnemra-host/projection/worker.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 8
 **Size:** L
@@ -229,7 +229,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 10 (RED): Admin-token shape + auth tests
 
-**Files:** `crates/mnemra-host/tests/admin_token.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/admin_token.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 7
 **Size:** M
@@ -252,7 +252,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 11 (GREEN): Admin-token implementation + `authentication` builtin bootstrap
 
-**Files:** `crates/mnemra-host/src/auth/token.rs` (to-be-created), `crates/mnemra-host/src/builtins/authentication.rs` (to-be-created)
+**Files:** `libs/mnemra-host/auth/token.rs` (to-be-created), `libs/mnemra-host/builtins/authentication.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 10
 **Size:** L
@@ -272,7 +272,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 12 (RED): `WorkspaceCtx` ABI tests + WHERE-clause lint check
 
-**Files:** `crates/mnemra-host/tests/workspace_ctx.rs` (to-be-created), `crates/mnemra-host/tests/lint_workspace_clause.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/workspace_ctx.rs` (to-be-created), `libs/mnemra-host/tests/lint_workspace_clause.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 4, Task 11
 **Size:** M
@@ -295,7 +295,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 13 (GREEN): `WorkspaceCtx` + `Role` + host-fn `WorkspaceCtx` threading + wire WHERE-lint into `verify-lint`
 
-**Files:** `crates/mnemra-host/src/auth/workspace_ctx.rs` (to-be-created), `crates/mnemra-host/src/auth/role.rs` (to-be-created), `crates/mnemra-host/src/abi/host_fns.rs` (extend), `justfile` (wire lint into `verify-lint`)
+**Files:** `libs/mnemra-host/auth/workspace_ctx.rs` (to-be-created), `libs/mnemra-host/auth/role.rs` (to-be-created), `libs/mnemra-host/abi/host_fns.rs` (extend), `justfile` (wire lint into `verify-lint`)
 **Type:** backend
 **Depends on:** Task 12
 **Size:** L
@@ -319,7 +319,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 14: Role-based permission enforcement at the host-fn boundary
 
-**Files:** `crates/mnemra-host/src/auth/permissions.rs` (to-be-created), `crates/mnemra-host/src/builtins/permissions.rs` (to-be-created)
+**Files:** `libs/mnemra-host/auth/permissions.rs` (to-be-created), `libs/mnemra-host/builtins/permissions.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 13
 **Size:** M
@@ -340,7 +340,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 15: Identity builtins — workspaces, users, agents, sessions, projects
 
-**Files:** `crates/mnemra-host/src/builtins/workspaces.rs`, `users.rs`, `agents.rs`, `sessions.rs`, `projects.rs` (all to-be-created), `crates/mnemra-host/src/builtins/mod.rs` (init ordering)
+**Files:** `libs/mnemra-host/builtins/workspaces.rs`, `users.rs`, `agents.rs`, `sessions.rs`, `projects.rs` (all to-be-created), `libs/mnemra-host/builtins.rs` (init ordering)
 **Type:** backend
 **Depends on:** Task 13
 **Size:** L
@@ -364,7 +364,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 16 (RED): Signing-chain tests — synchronous verify, provenance-not-field, fail-shut
 
-**Files:** `crates/mnemra-host/tests/signing_chain.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/signing_chain.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 4
 **Size:** M
@@ -387,7 +387,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 17 (GREEN): Signing-chain verification + embedded root material + startup file-mode invariant
 
-**Files:** `crates/mnemra-host/src/signing/verify.rs` (to-be-created), `crates/mnemra-host/src/signing/root_material.rs` (to-be-created), `crates/mnemra-host/src/startup/file_mode_check.rs` (to-be-created)
+**Files:** `libs/mnemra-host/signing/verify.rs` (to-be-created), `libs/mnemra-host/signing/root_material.rs` (to-be-created), `libs/mnemra-host/startup/file_mode_check.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 16
 **Size:** L
@@ -410,7 +410,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 18 (RED+GREEN): LLM-API-key config + outbound hostname allowlist
 
-**Files:** `crates/mnemra-host/tests/llm_key_allowlist.rs` (to-be-created), `crates/mnemra-host/src/config/llm_key.rs` (to-be-created), `crates/mnemra-host/src/net/hostname_allowlist.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/llm_key_allowlist.rs` (to-be-created), `libs/mnemra-host/config/llm_key.rs` (to-be-created), `libs/mnemra-host/net/hostname_allowlist.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 17
 **Size:** M
@@ -431,7 +431,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 19: Reference/fixture plugin manifest + fixture content-type table
 
-**Files:** `plugins/mnemra-echo/manifest.toml` (to-be-created), `wit/host.wit` (reference plugin imports), `plugins/mnemra-echo/mnemra_echo.rs` (extend to call `artifact.*` host-fns), `crates/mnemra-host/src/schema/fixtures/` (fixture content-type table)
+**Files:** `plugins/mnemra-echo/manifest.toml` (to-be-created), `wit/host.wit` (reference plugin imports), `plugins/mnemra-echo/mnemra_echo.rs` (extend to call `artifact.*` host-fns), `libs/mnemra-host/schema/fixtures/` (fixture content-type table)
 **Type:** full-stack
 **Depends on:** Task 9, Task 17
 **Size:** M
@@ -453,7 +453,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 20 (RED): Plugin-manifest load pipeline + host-fn allowlist tests
 
-**Files:** `crates/mnemra-host/tests/manifest_load.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/manifest_load.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 17, Task 19
 **Size:** M
@@ -473,7 +473,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 21 (GREEN): Plugin runtime — manifest load, allowlist compile, pool, resource limits
 
-**Files:** `crates/mnemra-host/src/plugin/runtime.rs` (to-be-created), `crates/mnemra-host/src/plugin/manifest.rs` (to-be-created), `crates/mnemra-host/src/plugin/allowlist.rs` (to-be-created), `crates/mnemra-host/src/plugin/pool.rs` (to-be-created), `crates/mnemra-host/src/plugin/limits.rs` (to-be-created), `crates/mnemra-host/src/plugin/epoch_thread.rs` (to-be-created)
+**Files:** `libs/mnemra-host/plugin/runtime.rs` (to-be-created), `libs/mnemra-host/plugin/manifest.rs` (to-be-created), `libs/mnemra-host/plugin/allowlist.rs` (to-be-created), `libs/mnemra-host/plugin/pool.rs` (to-be-created), `libs/mnemra-host/plugin/limits.rs` (to-be-created), `libs/mnemra-host/plugin/epoch_thread.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 20
 **Size:** L
@@ -497,7 +497,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 22 (RED+GREEN): Resource-limit trap handling — kill-and-replace (fuel + epoch)
 
-**Files:** `crates/mnemra-host/tests/resource_limits.rs` (to-be-created), `crates/mnemra-host/src/plugin/trap_recovery.rs` (to-be-created)
+**Files:** `libs/mnemra-host/tests/resource_limits.rs` (to-be-created), `libs/mnemra-host/plugin/trap_recovery.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 21
 **Size:** M
@@ -521,7 +521,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 23: MCP server — stdio transport, auth-check, dispatch, error codes
 
-**Files:** `crates/mnemra-host/src/mcp/server.rs` (to-be-created), `crates/mnemra-host/src/mcp/dispatch.rs` (to-be-created), `crates/mnemra-host/src/mcp/errors.rs` (to-be-created)
+**Files:** `libs/mnemra-host/mcp/server.rs` (to-be-created), `libs/mnemra-host/mcp/dispatch.rs` (to-be-created), `libs/mnemra-host/mcp/errors.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 14, Task 17, Task 22
 **Size:** L
@@ -545,7 +545,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 24: Admin CLI — schema-driven subcommands, control-plane ops, token auth
 
-**Files:** `cmd/mnemra/src/cli/mod.rs` (to-be-created), `cmd/mnemra/src/cli/generate.rs` (to-be-created), `cmd/mnemra/src/cli/control_plane.rs` (to-be-created)
+**Files:** `cmd/mnemra/cli.rs` (to-be-created), `cmd/mnemra/cli/generate.rs` (to-be-created), `cmd/mnemra/cli/control_plane.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 11, Task 15, Task 21
 **Size:** L
@@ -568,7 +568,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 25: Observability emission + `/health` endpoint (loopback-only)
 
-**Files:** `crates/mnemra-host/src/observability/emit.rs` (to-be-created), `crates/mnemra-host/src/observability/redaction.rs` (to-be-created), `crates/mnemra-host/src/health/listener.rs` (to-be-created), `crates/mnemra-host/src/health/handler.rs` (to-be-created)
+**Files:** `libs/mnemra-host/observability/emit.rs` (to-be-created), `libs/mnemra-host/observability/redaction.rs` (to-be-created), `libs/mnemra-host/health/listener.rs` (to-be-created), `libs/mnemra-host/health/handler.rs` (to-be-created)
 **Type:** backend
 **Depends on:** Task 6, Task 13
 **Size:** L
@@ -616,7 +616,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 27: Acceptance smoke — `verify-smoke` end-to-end init + dispatch
 
-**Files:** `justfile` (`verify-smoke`), `crates/mnemra-host/tests/smoke_e2e.rs` (to-be-created)
+**Files:** `justfile` (`verify-smoke`), `libs/mnemra-host/tests/smoke_e2e.rs` (to-be-created)
 **Type:** test
 **Depends on:** Task 23, Task 24, Task 25, Task 26
 **Size:** M
@@ -683,8 +683,8 @@ CI scaffold (1) → runtime scaffold (2)
 
 Cross-task test infrastructure (per-task Test Expectations are scoped above):
 
-- **Unit tests:** `crates/mnemra-host/src/**` inline `#[cfg(test)]` modules — per-component logic (token hashing, allowlist compilation, role derivation, redaction).
-- **Integration tests:** `crates/mnemra-host/tests/*.rs` — run against the **real** embedded Postgres + bundled `pgvector` and real HTTP `/health` handler, **not mocks** (`R-0018-b`). The `postgresql_embedded` engine runs in-process; integration tests bring it up per-suite. This is named test infra, not a per-task concern.
+- **Unit tests:** `libs/mnemra-host/**` inline `#[cfg(test)]` modules — per-component logic (token hashing, allowlist compilation, role derivation, redaction).
+- **Integration tests:** `libs/mnemra-host/tests/*.rs` — run against the **real** embedded Postgres + bundled `pgvector` and real HTTP `/health` handler, **not mocks** (`R-0018-b`). The `postgresql_embedded` engine runs in-process; integration tests bring it up per-suite. This is named test infra, not a per-task concern.
 - **Contract tests:** the two-adapter `Storage` contract (`tests/storage_contract.rs`) runs the same suite against in-memory + Postgres adapters; the host-fn ABI contract suite (`tests/abi_contract.rs`) pins the WIT structural invariants.
 - **Lint test:** `cargo test --test lint_workspace_clause` (`syn` AST over host-fn source) — wired into `verify-lint`; a planted read-path violation must return non-zero and name the offending function (`R-0018-d`).
 - **Smoke / E2E:** `just verify-smoke` — `mnemra init` → dispatch → emit → `/health` ok against the real engine + signed reference plugin (Task 27).
