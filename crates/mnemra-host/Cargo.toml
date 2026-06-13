@@ -8,15 +8,22 @@ description = "mnemra runtime host — startup and lifecycle coordination"
 
 [dependencies]
 async-trait = "0.1.89"
+base64 = "0.22.1"
+blake3 = "1.8.5"
+chrono = { version = "0.4.45", features = ["serde"] }
+libc = "0.2.186"
 postgresql_embedded = { version = "0.20.4", features = ["tokio"] }
 postgresql_extensions = { version = "0.20.4", features = ["tokio", "portal-corp"] }
+rand = "0.10.1"
 sha2 = "0.11.0"
 # A-19: sqlx over tokio-postgres — Task 7 migrations use `sqlx migrate run`;
 # macro-heavy compile cost (~44s test profile) accepted for that tooling value.
-sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "uuid"] }
+sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "uuid", "chrono"] }
+subtle = "2.6.1"
 uuid = { version = "1.23.3", features = ["v4"] }
 
 [dev-dependencies]
 anyhow = "1.0.102"
+tempfile = "3.27.0"
 tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
 wit-parser = "0.247"
