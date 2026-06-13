@@ -31,12 +31,32 @@
 //! HTTP handler calls it and serializes the result. Init asserts it returns
 //! `overall: "ok"` at completion; Task 25 owns the HTTP wrapper.
 
+use crate::schema::artifact_table::create_artifact_table;
+use crate::schema::history_trigger::create_history_machinery;
 use crate::schema::migrations::{Migration, MigrationError, apply as run_migrations};
 use crate::storage::postgres::engine::{EmbeddedEngine, ExtensionError};
 use sqlx::PgPool;
 use std::error::Error;
 use std::fmt;
 use uuid::Uuid;
+
+// ---------------------------------------------------------------------------
+// Fixture content types (Task 9 → Task 19 seam)
+// ---------------------------------------------------------------------------
+
+/// Content types registered at V0 for testing and fixture scaffolding.
+///
+/// Each name in this list causes `init()` to call `create_artifact_table` and
+/// `create_history_machinery`, creating the per-type table, shadow table, and
+/// triggers.
+///
+/// # Task 19 seam
+///
+/// Task 19 extends this by reading the plugin manifest content-type list. The
+/// call site in `init()` iterates `FIXTURE_CONTENT_TYPES`; Task 19 extends
+/// that loop to also iterate manifest-provided types. No changes to this const
+/// are expected post-V0.
+pub(crate) const FIXTURE_CONTENT_TYPES: &[&str] = &["echo_fixture"];
 
 // ---------------------------------------------------------------------------
 // V0 substrate migrations
@@ -180,6 +200,10 @@ pub enum InitError {
     ExtensionUnavailable(ExtensionError),
     /// A migration failed (destructive guard or DB error).
     Migration(MigrationError),
+    /// The artifact-table generator failed (type-name or DB error).
+    ArtifactTable(crate::schema::artifact_table::ArtifactTableError),
+    /// The history trigger machinery failed.
+    HistoryMachinery(crate::schema::history_trigger::HistoryMachineryError),
     /// A database operation failed during init.
     Db(Box<dyn Error + Send + Sync>),
 }
@@ -191,6 +215,12 @@ impl fmt::Display for InitError {
                 write!(f, "mnemra init: extension unavailable — {e}")
             }
             InitError::Migration(e) => write!(f, "mnemra init: migration failed — {e}"),
+            InitError::ArtifactTable(e) => {
+                write!(f, "mnemra init: artifact table generator failed — {e}")
+            }
+            InitError::HistoryMachinery(e) => {
+                write!(f, "mnemra init: history trigger machinery failed — {e}")
+            }
             InitError::Db(e) => write!(f, "mnemra init: db error — {e}"),
         }
     }
@@ -201,6 +231,8 @@ impl std::error::Error for InitError {
         match self {
             InitError::ExtensionUnavailable(e) => Some(e),
             InitError::Migration(e) => Some(e),
+            InitError::ArtifactTable(e) => Some(e),
+            InitError::HistoryMachinery(e) => Some(e),
             InitError::Db(e) => Some(e.as_ref()),
         }
     }
@@ -209,6 +241,18 @@ impl std::error::Error for InitError {
 impl From<MigrationError> for InitError {
     fn from(e: MigrationError) -> Self {
         InitError::Migration(e)
+    }
+}
+
+impl From<crate::schema::artifact_table::ArtifactTableError> for InitError {
+    fn from(e: crate::schema::artifact_table::ArtifactTableError) -> Self {
+        InitError::ArtifactTable(e)
+    }
+}
+
+impl From<crate::schema::history_trigger::HistoryMachineryError> for InitError {
+    fn from(e: crate::schema::history_trigger::HistoryMachineryError) -> Self {
+        InitError::HistoryMachinery(e)
     }
 }
 
@@ -473,14 +517,21 @@ pub async fn health_snapshot(pool: &PgPool) -> Result<HealthSnapshot, StorageErr
 ///    Returns `InitError::ExtensionUnavailable` and halts on failure (R-0013-a).
 /// 2. Run forward-only migrations (V0_MIGRATIONS) via the app-role pool.
 /// 3. Upsert the `default` workspace row (idempotent, R-0015-a/h).
-/// 4. Create the four least-privilege roles (idempotent, R-0013-e).
-/// 5. Assert the health snapshot returns `overall: "ok"`.
+/// 4. Create per-artifact-type tables for all `FIXTURE_CONTENT_TYPES` (Tasks
+///    8/9). Each call to `create_artifact_table` + `create_history_machinery`
+///    is idempotent. This step runs BEFORE role creation so that the
+///    `GRANT ... ON ALL TABLES` in step 5 covers the newly created tables.
+/// 5. Create the four least-privilege roles (idempotent, R-0013-e).
+///    The grant covers all tables existing at call time — step 4 tables are
+///    included because they are created first.
 ///
 /// # Idempotency
 ///
 /// Safe to run on an empty or already-initialized database. The migration
 /// runner skips applied versions; the default workspace insert uses
-/// `ON CONFLICT DO NOTHING`; roles use `IF NOT EXISTS`.
+/// `ON CONFLICT DO NOTHING`; roles use `IF NOT EXISTS`; artifact-table
+/// generator uses `CREATE TABLE/INDEX IF NOT EXISTS` and
+/// `CREATE OR REPLACE TRIGGER`.
 ///
 /// # Negative-path seam note
 ///
@@ -512,7 +563,20 @@ pub async fn init(engine: &EmbeddedEngine, extension_name: &str) -> Result<(), I
     .await
     .map_err(|e| InitError::Db(Box::new(e)))?;
 
-    // Step 4: create the four least-privilege roles via the superuser seam (A-17).
+    // Step 4: create per-artifact-type tables for all fixture types (Tasks 8/9).
+    //
+    // Generator-executed (not through migrations::apply) because per-type DDL
+    // is structural but not authored ahead of time — the set grows at
+    // plugin-registration (Task 19 seam).
+    //
+    // Run BEFORE create_least_privilege_roles (step 5) so that the
+    // `GRANT ... ON ALL TABLES` covers tables created here.
+    for type_name in FIXTURE_CONTENT_TYPES {
+        create_artifact_table(engine.pool.as_ref(), type_name).await?;
+        create_history_machinery(engine.pool.as_ref(), type_name).await?;
+    }
+
+    // Step 5: create the four least-privilege roles via the superuser seam (A-17).
     engine
         .create_least_privilege_roles()
         .await
