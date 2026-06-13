@@ -11,7 +11,11 @@ pub mod auth;
 pub mod builtins;
 pub mod projection;
 pub mod schema;
+// Task 17: plugin signing-chain verification + embedded root (R-0005).
+pub mod signing;
 pub mod storage;
+// Task 17: host startup invariant checks — file-mode gate before plugin load (R-0005-f).
+pub mod startup;
 
 /// Start the mnemra host runtime.
 ///
