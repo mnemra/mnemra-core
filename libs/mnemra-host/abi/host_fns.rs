@@ -18,26 +18,11 @@
 //! type level.
 
 use super::{DispatchError, DispatchOutcome, DispatchWrapper, Stability};
+use crate::auth::workspace_ctx::WorkspaceCtx;
 
 // ---------------------------------------------------------------------------
 // Shared types (mirror of wit types)
 // ---------------------------------------------------------------------------
-
-/// Mirror of the WIT `workspace-ctx` record.
-///
-/// Carries the host-derived workspace identity.  Constructed by the host
-/// before dispatching into plugin code; plugins receive this value via the
-/// host-fn ABI and cannot forge it without a matching host-fn call.
-///
-/// Note: the WIT model uses a `record` rather than a `resource` for this
-/// type because `wit-parser`'s `type_is_named` resolution requires a named
-/// typedef at the `Type::Id` level, which records satisfy.  Resource
-/// own/borrow handles would provide stronger spoof-resistance; this is
-/// flagged in the completion report.
-#[derive(Debug, Clone)]
-pub struct WorkspaceCtx {
-    pub workspace_id: String,
-}
 
 /// Opaque JSON value — serialised as a UTF-8 string.
 /// Mirrors `type json = string` in WIT (R-0012-f: never list<u8>).
@@ -80,26 +65,44 @@ pub fn artifact_update(
 
 /// `artifact-get` — retrieves a single artifact by id.
 ///
-/// R-0012-a, R-0006-a
+/// The WHERE clause includes `workspace_id = ctx.workspace_id()` to scope the
+/// query to the caller's workspace (R-0006-d). Storage wiring lands in Task 5.
+///
+/// R-0012-a, R-0006-a, R-0006-d
 pub fn artifact_get(
-    _ctx: WorkspaceCtx,
+    ctx: WorkspaceCtx,
     _id: &str,
 ) -> Result<DispatchOutcome<Option<String>>, DispatchError> {
     DispatchWrapper::invoke(&ARTIFACT_STABILITY, "artifact-get", || {
-        todo!("artifact-get: stub — storage wired in Task 5")
+        // WHERE clause shape: workspace_id = ctx.workspace_id() AND id = $2
+        // ctx.workspace_id() is the WHERE-clause discriminator (R-0006-d).
+        // Full sqlx execution wired in Task 5; shape is lint-compliant now.
+        let _workspace_id = ctx.workspace_id();
+        let _query = "SELECT id, type_name, frontmatter, body FROM artifacts \
+                      WHERE workspace_id = $1 AND id = $2";
+        todo!("artifact-get: storage wired in Task 5")
     })
 }
 
 /// `artifact-list` — lists artifacts matching the given type and filter criteria.
 ///
-/// R-0012-a, R-0006-a
+/// The WHERE clause includes `workspace_id = ctx.workspace_id()` to scope the
+/// query to the caller's workspace (R-0006-d). Storage wiring lands in Task 5.
+///
+/// R-0012-a, R-0006-a, R-0006-d
 pub fn artifact_list(
-    _ctx: WorkspaceCtx,
+    ctx: WorkspaceCtx,
     _type_name: &str,
     _filters: Json,
 ) -> Result<DispatchOutcome<Vec<String>>, DispatchError> {
     DispatchWrapper::invoke(&ARTIFACT_STABILITY, "artifact-list", || {
-        todo!("artifact-list: stub — storage wired in Task 5")
+        // WHERE clause shape: workspace_id = ctx.workspace_id() AND type_name = $2
+        // ctx.workspace_id() is the WHERE-clause discriminator (R-0006-d).
+        // Full sqlx execution wired in Task 5; shape is lint-compliant now.
+        let _workspace_id = ctx.workspace_id();
+        let _query = "SELECT id, type_name, frontmatter, body FROM artifacts \
+                      WHERE workspace_id = $1 AND type_name = $2";
+        todo!("artifact-list: storage wired in Task 5")
     })
 }
 

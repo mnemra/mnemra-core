@@ -78,8 +78,7 @@ verify-type:
         exit 1
     fi
 
-# Verify: lint — clippy (deny warnings) + fmt check.
-# scaffold: WHERE-clause lint slot reserved for Task 12 / R-0018-d
+# Verify: lint — clippy (deny warnings) + fmt check + WHERE-clause lint (R-0018-d).
 verify-lint:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -89,7 +88,8 @@ verify-lint:
     cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings 2>&1
     # Format check (no --fix)
     cargo fmt --all --check 2>&1
-    # scaffold: WHERE-clause lint (Task 12 / R-0018-d) wired here when ready
+    # WHERE-clause lint (R-0018-d): every read-path host-fn must reference ctx.workspace_id
+    cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_workspace_clause 2>&1
     echo "GATE lint PASS"
 
 # Verify: tests pass
