@@ -122,7 +122,10 @@ pub const APP_DB: &str = "mnemra";
 ///   data operations.
 /// - `superuser_pool`: bootstrap-superuser pool.  Used by `ensure_pgvector()`
 ///   and Task 7's init gate for privileged operations (CREATE EXTENSION, schema
-///   bootstrap).  Not exposed to data-path callers.
+///   bootstrap).  Deliberately `pub(crate)` — privileged access is gated through
+///   named methods (e.g. `ensure_pgvector`) rather than direct field access.
+///   Task 7's `mnemra init` role-creation (R-0013-e) goes through a new method
+///   on this type, not by re-widening the field.
 ///
 /// The server is kept alive as long as this struct is live.
 pub struct EmbeddedEngine {
@@ -131,8 +134,10 @@ pub struct EmbeddedEngine {
     /// sqlx connection pool authenticated as `mnemra_app` (ordinary role).
     pub pool: Arc<PgPool>,
     /// sqlx connection pool authenticated as the bootstrap superuser.
-    /// Used only for privileged init operations.
-    pub superuser_pool: Arc<PgPool>,
+    /// Narrowed to `pub(crate)` (A-14): privileged ops are exposed as named
+    /// methods, not as a raw pool field, so data-path callers cannot accidentally
+    /// use superuser credentials.
+    pub(crate) superuser_pool: Arc<PgPool>,
 }
 
 impl EmbeddedEngine {
@@ -176,8 +181,9 @@ impl EmbeddedEngine {
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
         let elapsed_ms = t0.elapsed().as_millis();
-        // elapsed_ms is preserved for caller inspection; not yet wired to tracing.
-        let _ = elapsed_ms;
+        // A-09: emit startup timing so cold-runner regressions are visible.
+        // Migrates to `log.emit` / structured OTel when Task 25 observability lands.
+        eprintln!("engine_startup_ms={elapsed_ms}");
 
         // Install the pgvector_compiled precompiled extension package.
         // portal-corp provides the precompiled .so + .control + .sql files.
@@ -267,10 +273,16 @@ impl EmbeddedEngine {
 
         // max_connections: generous for test parallelism; enough for concurrent
         // queries across multiple test cases sharing this pool.
+        // A-13: idle_timeout + max_lifetime ensure stale connections evict promptly
+        // after engine restart (health-probe restart path, Task 25 degraded state).
+        // Values are conservative placeholders; revisit for production concurrency
+        // when the MCP server (Task 23) has a known concurrency model.
         let app_pool = PgPoolOptions::new()
             .max_connections(20)
             .min_connections(2)
             .acquire_timeout(Duration::from_secs(60))
+            .idle_timeout(Duration::from_secs(600))
+            .max_lifetime(Duration::from_secs(1800))
             .connect(&app_url)
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
