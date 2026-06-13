@@ -15,7 +15,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -26,11 +26,21 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Cache Postgres binaries (theseus)
+        uses: actions/cache@v4
+        with:
+          path: ~/.theseus
+          key: theseus-pg16.4.0-${{ runner.os }}-${{ runner.arch }}
+
       - name: Install just
-        uses: taiki-e/install-action@just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just@1.51.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.8.6
 
       - name: Run CI gates
         run: just ci
