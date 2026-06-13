@@ -23,7 +23,11 @@ static STARTUP_LOCK: Mutex<()> = Mutex::new(());
 #[tokio::test]
 async fn app_role_is_not_superuser_and_not_bypassrls() {
     let storage = {
-        let _guard = STARTUP_LOCK.lock().expect("startup lock poisoned");
+        // Recover from a poisoned mutex so a failing sibling test does not
+        // cascade a PoisonError into this test.  The guard is held only for
+        // the duration of engine startup to serialise archive extraction and
+        // pgvector download; its state carries no invariant across tests.
+        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         PostgresStorage::start_embedded().await.unwrap()
     };
 
@@ -54,7 +58,11 @@ async fn app_role_is_not_superuser_and_not_bypassrls() {
 #[tokio::test]
 async fn pgvector_extension_is_available_and_creates_successfully() {
     let engine = {
-        let _guard = STARTUP_LOCK.lock().expect("startup lock poisoned");
+        // Recover from a poisoned mutex so a failing sibling test does not
+        // cascade a PoisonError into this test.  The guard is held only for
+        // the duration of engine startup to serialise archive extraction and
+        // pgvector download; its state carries no invariant across tests.
+        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         EmbeddedEngine::start().await.unwrap()
     };
 
