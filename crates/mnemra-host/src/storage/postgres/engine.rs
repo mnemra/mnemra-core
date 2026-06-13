@@ -568,13 +568,37 @@ impl EmbeddedEngine {
     /// After a successful call, the `vector` extension is available on the
     /// `mnemra` database for the app role to use.
     pub async fn ensure_pgvector(&self) -> Result<(), ExtensionError> {
-        sqlx::query("CREATE EXTENSION IF NOT EXISTS vector")
-            .execute(self.superuser_pool.as_ref())
-            .await
-            .map_err(|e| ExtensionError {
-                extension: "vector".into(),
-                cause: e.to_string(),
-            })?;
+        self.ensure_extension("vector").await
+    }
+
+    /// Enable a named Postgres extension via the superuser path.
+    ///
+    /// Parameterized so Task 7's `init()` can inject a bogus extension name
+    /// for the pgvector-unavailable negative test path (fidelity note: this
+    /// exercises the structured-error refusal code, not a genuinely-missing
+    /// bundled extension). Production callers use `ensure_pgvector()`.
+    pub async fn ensure_extension(&self, extension_name: &str) -> Result<(), ExtensionError> {
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "CREATE EXTENSION IF NOT EXISTS \"{extension_name}\""
+        )))
+        .execute(self.superuser_pool.as_ref())
+        .await
+        .map_err(|e| ExtensionError {
+            extension: extension_name.into(),
+            cause: e.to_string(),
+        })?;
         Ok(())
+    }
+
+    /// Create the four least-privilege DB roles (R-0013-e, A-17).
+    ///
+    /// This is a `pub(crate)` named method on the superuser seam. Task 7's
+    /// `init()` calls it; data-path callers cannot access the superuser pool
+    /// directly (field is `pub(crate)` but not exposed on this method).
+    pub(crate) async fn create_least_privilege_roles(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        crate::schema::init::create_least_privilege_roles(self.superuser_pool.as_ref(), APP_DB)
+            .await
     }
 }

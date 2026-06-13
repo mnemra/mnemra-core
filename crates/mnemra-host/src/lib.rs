@@ -7,6 +7,7 @@
 //!   - Tasks 19/20: plugin-runtime integration
 
 pub mod abi;
+pub mod schema;
 pub mod storage;
 
 /// Start the mnemra host runtime.
