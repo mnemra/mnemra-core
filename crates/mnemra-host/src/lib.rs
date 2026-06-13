@@ -9,6 +9,7 @@
 pub mod abi;
 pub mod auth;
 pub mod builtins;
+pub mod projection;
 pub mod schema;
 pub mod storage;
 
