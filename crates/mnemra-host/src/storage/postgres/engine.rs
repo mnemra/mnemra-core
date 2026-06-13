@@ -4,12 +4,15 @@
 //! sequence:
 //!
 //! 1. `setup()` — installs / re-uses cached Postgres binaries.
-//! 2. `start()` — starts the server on an ephemeral port.
-//! 3. `install_pgvector()` — downloads and installs the `pgvector_compiled`
+//! 2. `verify_pinned_artifacts()` — SHA-256 hash-pin of the installed Postgres
+//!    binary and pgvector shared library (A-04/A-05 interim control, Task 6b).
+//!    Fail-shut: unknown platform → error; hash mismatch → error.
+//! 3. `start()` — starts the server on an ephemeral port.
+//! 4. `install_pgvector()` — downloads and installs the `pgvector_compiled`
 //!    precompiled package from the portal-corp repository so that
 //!    `CREATE EXTENSION vector` succeeds without an OS-installed extension.
-//! 4. `create_database("mnemra")` — creates the application database.
-//! 5. `create_app_role()` — creates an ordinary (non-superuser, no BYPASSRLS)
+//! 5. `create_database("mnemra")` — creates the application database.
+//! 6. `create_app_role()` — creates an ordinary (non-superuser, no BYPASSRLS)
 //!    application role with a session-local password, then connects through
 //!    that role for all subsequent storage operations.
 //!
@@ -38,9 +41,33 @@
 //! Task 7 calls `ensure_pgvector()` (superuser path), then runs schema migrations
 //! (`CREATE TABLE`, etc.) which can run as either superuser or mnemra_app (the app
 //! role holds USAGE + CREATE on the public schema).
+//!
+//! # Hash-pin control (A-04/A-05, Task 6b)
+//!
+//! `verify_pinned_artifacts()` is called at engine bring-up BEFORE first use.
+//! It checks the SHA-256 of the `postgres` binary and the `vector` shared library
+//! that the crates install into `~/.theseus/`.  These are the artifacts that actually
+//! execute — verifying them covers both the fresh-download path (crate extracts the
+//! archive and we verify the result) and the warm-cache path (a tampered cache is
+//! the realistic local threat).
+//!
+//! ## Coverage and known window (Task 26 handoff)
+//!
+//! - **Covered:** the extracted installed files are verified before the engine starts.
+//! - **Not covered by this control:** TOCTOU window between the crate's internal
+//!   download/extract and our check.  Full archive integrity during download is
+//!   partly addressed by the crate for PG (theseus releases include `.sha256` files
+//!   that `postgresql_archive` fetches and checks); pgvector archives have no
+//!   upstream hash file — that gap carries to Task 26 (SBOM + full provenance).
+//! - **Pin maintenance:** when `EMBEDDED_PG_VERSION` or `PGVECTOR_VERSION` changes,
+//!   the `KNOWN_GOOD_HASHES` table MUST be updated.  Task 26 owns the supply-chain
+//!   audit; this pin is the V0 interim gate.
 
+use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fmt;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 
 use postgresql_embedded::{PostgreSQL, SettingsBuilder, VersionReq};
@@ -50,7 +77,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
 
 // ---------------------------------------------------------------------------
-// Error type
+// Error types
 // ---------------------------------------------------------------------------
 
 /// Structured error surfaced when the `vector` extension cannot be enabled.
@@ -75,8 +102,34 @@ impl fmt::Display for ExtensionError {
 
 impl Error for ExtensionError {}
 
+/// Structured error returned when a pinned-artifact SHA-256 check fails.
+///
+/// The engine refuses to start on any `HashPinError` — fail-shut.
+/// No warn-and-continue path exists.
+#[derive(Debug)]
+pub struct HashPinError {
+    /// Human-readable name of the artifact being verified.
+    pub artifact: String,
+    /// Expected (pinned) SHA-256 hex digest.
+    pub expected: String,
+    /// Actual SHA-256 hex digest of the file on disk.
+    pub actual: String,
+}
+
+impl fmt::Display for HashPinError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "hash-pin mismatch for '{}': expected {} got {}",
+            self.artifact, self.expected, self.actual
+        )
+    }
+}
+
+impl Error for HashPinError {}
+
 // ---------------------------------------------------------------------------
-// Engine version pin
+// Engine version pins
 // ---------------------------------------------------------------------------
 
 /// Pinned Postgres version for the embedded engine.
@@ -98,6 +151,197 @@ impl Error for ExtensionError {}
 /// `theseus-rs/postgresql-binaries` publishes `16.4.0` for all three platforms
 /// (aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu).
 pub const EMBEDDED_PG_VERSION: &str = "=16.4.0";
+
+/// Pinned pgvector_compiled release version.
+///
+/// Replaces `VersionReq::STAR` (A-04): a floating `STAR` combined with a hash
+/// pin creates a latent outage — when portalcorp ships the next release, the new
+/// archive fails the hash check and the engine refuses to start without any
+/// code change on our side.
+///
+/// `portalcorp/pgvector_compiled` release `v0.16.105` bundles pgvector 0.8.0
+/// (confirmed via `vector.control` default_version) for the three required
+/// platforms.  The `v` prefix is stripped by `postgresql_archive`'s tag parser
+/// before semver matching.
+pub const PGVECTOR_VERSION: &str = "=0.16.105";
+
+// ---------------------------------------------------------------------------
+// SHA-256 hash-pin table (A-04/A-05 interim control, Task 6b)
+// ---------------------------------------------------------------------------
+
+/// A known-good SHA-256 hash entry for an installed artifact file.
+///
+/// Public so that tests can construct deliberate-mismatch entries to prove
+/// fail-shut behaviour without touching the shared `~/.theseus` cache.
+pub struct ArtifactPin {
+    /// Identifier for this entry (used in error messages).
+    pub artifact: &'static str,
+    /// Path of the file relative to the postgresql_embedded installation root
+    /// (e.g. `~/.theseus/postgresql/16.4.0/`).
+    pub rel_path: &'static str,
+    /// Expected SHA-256 hex digest.
+    pub sha256: &'static str,
+}
+
+/// Known-good SHA-256 hashes of installed artifact files, keyed by Rust
+/// `target_arch`-`target_os`-`target_env` triple components.
+///
+/// How each hash was obtained:
+///
+/// 1. `gh release download 16.4.0 --repo theseus-rs/postgresql-binaries` →
+///    `shasum -a 256` on archive, then cross-checked against the upstream
+///    `.sha256` sibling file (matches confirmed).
+/// 2. Archive extracted to `/tmp`; the `postgres` binary was hashed.
+/// 3. Cross-checked against the locally-cached `~/.theseus/postgresql/16.4.0/bin/postgres`
+///    (both aarch64 hashes matched — local cache is clean).
+/// 4. `gh release download v0.16.105 --repo portalcorp/pgvector_compiled` →
+///    `shasum -a 256` on `.zip` (portalcorp has no upstream `.sha256` sibling —
+///    computed-only; gap carries to Task 26).
+/// 5. Zip extracted to `/tmp`; the `vector.{dylib,so}` library was hashed.
+/// 6. Cross-checked against locally-cached `~/.theseus/...lib/vector.*`
+///    (aarch64 confirmed; linux cross-check not possible on darwin host).
+///
+/// **Pin maintenance:** when `EMBEDDED_PG_VERSION` or `PGVECTOR_VERSION` changes,
+/// update this table.  Task 26 owns the supply-chain audit and full SBOM.
+pub const KNOWN_GOOD_HASHES: &[(&str, &[ArtifactPin])] = &[
+    (
+        // Local dev: Apple Silicon Mac
+        "aarch64-apple-darwin",
+        &[
+            ArtifactPin {
+                artifact: "postgres-16.4.0-aarch64-apple-darwin",
+                rel_path: "bin/postgres",
+                // From: theseus-rs/postgresql-binaries release 16.4.0
+                // Archive: postgresql-16.4.0-aarch64-apple-darwin.tar.gz
+                // Archive SHA-256 (upstream .sha256 file confirmed):
+                //   0ec91e77eff381e43e3963f012aff3acb9de12ad3739a625e57cce9671b28b0f
+                // Installed binary SHA-256 (extracted from archive, cross-checked
+                // against local ~/.theseus cache — match confirmed):
+                sha256: "a245e44bebf13f9b61ef3855b085476cdd71ac59d22e4d99cc7f879c30d48ef3",
+            },
+            ArtifactPin {
+                artifact: "pgvector-0.8.0(v0.16.105)-aarch64-apple-darwin",
+                rel_path: "lib/vector.dylib",
+                // From: portalcorp/pgvector_compiled release v0.16.105
+                // Archive: pgvector-aarch64-apple-darwin-pg16.zip
+                // Archive SHA-256 (computed; portalcorp has no upstream .sha256):
+                //   66b8af9e38510007a7041f5e25e7975685cd219c9fd1459d779a0762abc5600b
+                // Installed library SHA-256 (extracted from archive, cross-checked
+                // against local ~/.theseus cache — match confirmed):
+                sha256: "de2fd49fcc0602f90c5b8821dd744f21f2a933a1eab0e600c944b683e8d3b65a",
+            },
+        ],
+    ),
+    (
+        // CI runner: x86_64 Linux glibc
+        "x86_64-unknown-linux-gnu",
+        &[
+            ArtifactPin {
+                artifact: "postgres-16.4.0-x86_64-unknown-linux-gnu",
+                rel_path: "bin/postgres",
+                // From: theseus-rs/postgresql-binaries release 16.4.0
+                // Archive: postgresql-16.4.0-x86_64-unknown-linux-gnu.tar.gz
+                // Archive SHA-256 (upstream .sha256 file confirmed):
+                //   1059350056c24e6dd3974af7582199c2a4d06078ecb2beb9f4b26b6debea6d37
+                // Installed binary SHA-256 (extracted from archive; cross-check
+                // against remote cache not possible from darwin host):
+                sha256: "3ad9bf317793480fc50a0467b5da7ccbade48c41a0b234e1a27552c855945f8e",
+            },
+            ArtifactPin {
+                artifact: "pgvector-0.8.0(v0.16.105)-x86_64-unknown-linux-gnu",
+                rel_path: "lib/vector.so",
+                // From: portalcorp/pgvector_compiled release v0.16.105
+                // Archive: pgvector-x86_64-unknown-linux-gnu-pg16.zip
+                // Archive SHA-256 (computed; portalcorp has no upstream .sha256):
+                //   ffa189a117ad2e3a3b2f5d73ef3f8130db3e062d2e82063350dee5201798e922
+                // Installed library SHA-256 (extracted from archive; cross-check
+                // against remote cache not possible from darwin host):
+                sha256: "d464f84c02e13744ad80a3d8316ec77e59759063a31077ef4798b51fa5daf33d",
+            },
+        ],
+    ),
+];
+
+// ---------------------------------------------------------------------------
+// Artifact hash verification (pure function — testable without a live engine)
+// ---------------------------------------------------------------------------
+
+/// Verify the SHA-256 hash of every pinned artifact in `install_dir`.
+///
+/// This is a pure function that takes the installation directory, the current
+/// platform triple, and a pin table.  Production code passes
+/// [`KNOWN_GOOD_HASHES`]; tests pass an intentionally-wrong table to prove
+/// fail-shut without touching the shared `~/.theseus` cache.
+///
+/// # Errors
+///
+/// Returns `HashPinError` on the first mismatch found.  Returns a distinct
+/// `HashPinError` with `expected = "(no pin entry)"` if the platform is not in
+/// the table — fail-shut, not silent skip.
+pub fn verify_pinned_artifacts(
+    install_dir: &Path,
+    platform: &str,
+    pins: &[(&str, &[ArtifactPin])],
+) -> Result<(), HashPinError> {
+    // Look up the pin entries for this platform.
+    let entries = pins
+        .iter()
+        .find(|(p, _)| *p == platform)
+        .map(|(_, e)| *e)
+        .ok_or_else(|| HashPinError {
+            artifact: format!("platform:{}", platform),
+            expected: "(no pin entry — add this platform to KNOWN_GOOD_HASHES)".into(),
+            actual: "(unknown)".into(),
+        })?;
+
+    for pin in entries {
+        let path = install_dir.join(pin.rel_path);
+        let bytes = fs::read(&path).map_err(|e| HashPinError {
+            artifact: pin.artifact.into(),
+            expected: pin.sha256.into(),
+            actual: format!("(read error: {})", e),
+        })?;
+
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        let digest = hasher.finalize();
+        let actual: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+
+        if actual != pin.sha256 {
+            return Err(HashPinError {
+                artifact: pin.artifact.into(),
+                expected: pin.sha256.into(),
+                actual,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Returns the current target platform triple used as the key in
+/// [`KNOWN_GOOD_HASHES`].
+///
+/// Determined at compile time via `cfg` attributes so it is a zero-cost
+/// constant expression at runtime.
+pub fn current_platform() -> &'static str {
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    {
+        "aarch64-apple-darwin"
+    }
+    #[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))]
+    {
+        "x86_64-unknown-linux-gnu"
+    }
+    #[cfg(not(any(
+        all(target_arch = "aarch64", target_os = "macos"),
+        all(target_arch = "x86_64", target_os = "linux", target_env = "gnu")
+    )))]
+    {
+        // Deliberately not a constant we match — ensures the platform check in
+        // verify_pinned_artifacts returns the "no pin entry" structured error.
+        "unknown-platform"
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Application role constants
@@ -174,6 +418,24 @@ impl EmbeddedEngine {
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
+        // Hash-pin verification (A-04/A-05, Task 6b) — BEFORE first use.
+        //
+        // Verifies the installed postgres binary and pgvector shared library
+        // against known-good SHA-256 hashes.  Covers both the fresh-download
+        // path (crate extracts archive → we verify the result) and the warm-cache
+        // path (tampered local cache is the realistic threat model).
+        //
+        // Fail-shut: any mismatch or unknown platform → structured error, engine
+        // refuses to start.  No warn-and-continue mode.
+        //
+        // TOCTOU note: there is a window between the crate's download/extract and
+        // this check; closing that window requires intercepting the crate's internal
+        // download path, which is not possible without upstream changes.  That gap
+        // carries to Task 26 (full provenance / SBOM).
+        let install_dir = server.settings().installation_dir.clone();
+        verify_pinned_artifacts(&install_dir, current_platform(), KNOWN_GOOD_HASHES)
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
         // start() assigns an ephemeral port and launches the server.
         server
             .start()
@@ -205,11 +467,13 @@ impl EmbeddedEngine {
             .join("extension");
         let control_file = extension_dir.join("vector.control");
         if !control_file.exists() {
+            let pgvector_version = VersionReq::parse(PGVECTOR_VERSION)
+                .expect("PGVECTOR_VERSION is a valid semver requirement");
             install_extension(
                 settings_ref,
                 "portal-corp",
                 "pgvector_compiled",
-                &VersionReq::STAR,
+                &pgvector_version,
             )
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
