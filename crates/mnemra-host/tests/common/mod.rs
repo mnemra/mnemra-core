@@ -38,6 +38,7 @@
 //! fine-grained so a partial failure points directly at the broken invariant.
 
 use mnemra_host::storage::{Record, Storage, WorkspaceId};
+use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Invariant A: Atomic multi-write — commit direction
@@ -50,7 +51,7 @@ use mnemra_host::storage::{Record, Storage, WorkspaceId};
 /// 2. Open a second txn in the same workspace, list all records.
 /// 3. Assert both records are present (commit-or-none — at least "all" half).
 pub async fn assert_atomicity_commit<S: Storage>(storage: S) {
-    let ws = WorkspaceId(1);
+    let ws = WorkspaceId(Uuid::from_u128(1)); // A-16 mechanical fix
 
     let mut txn = storage.begin(ws).await.expect("begin failed");
     txn.put(Record {
@@ -93,7 +94,7 @@ pub async fn assert_atomicity_commit<S: Storage>(storage: S) {
 /// 2. Open a second txn in the same workspace, list all records.
 /// 3. Assert neither staged write is visible (rollback — "all-or-none").
 pub async fn assert_atomicity_rollback<S: Storage>(storage: S) {
-    let ws = WorkspaceId(2);
+    let ws = WorkspaceId(Uuid::from_u128(2)); // A-16 mechanical fix
 
     {
         let mut txn = storage.begin(ws).await.expect("begin failed");
@@ -132,8 +133,8 @@ pub async fn assert_atomicity_rollback<S: Storage>(storage: S) {
 /// 2. Open a transaction in workspace B, list records.
 /// 3. Assert zero rows returned from workspace B's perspective.
 pub async fn assert_isolation_no_cross_workspace_read<S: Storage>(storage: S) {
-    let ws_a = WorkspaceId(10);
-    let ws_b = WorkspaceId(11);
+    let ws_a = WorkspaceId(Uuid::from_u128(10)); // A-16 mechanical fix
+    let ws_b = WorkspaceId(Uuid::from_u128(11)); // A-16 mechanical fix
 
     // Write into workspace A.
     let mut txn_a = storage.begin(ws_a).await.expect("begin ws_a failed");
@@ -174,8 +175,8 @@ pub async fn assert_isolation_no_cross_workspace_read<S: Storage>(storage: S) {
 /// 2. Write and commit a different value for key="shared" from workspace B.
 /// 3. Read key="shared" from workspace A — assert original value is intact.
 pub async fn assert_isolation_no_cross_workspace_write<S: Storage>(storage: S) {
-    let ws_a = WorkspaceId(20);
-    let ws_b = WorkspaceId(21);
+    let ws_a = WorkspaceId(Uuid::from_u128(20)); // A-16 mechanical fix
+    let ws_b = WorkspaceId(Uuid::from_u128(21)); // A-16 mechanical fix
 
     // Establish initial state in workspace A.
     let mut txn_a = storage.begin(ws_a).await.expect("begin ws_a failed");

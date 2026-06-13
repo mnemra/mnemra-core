@@ -11,3 +11,4 @@ path = "main.rs"
 
 [dependencies]
 mnemra-host = { path = "../../crates/mnemra-host" }
+tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
