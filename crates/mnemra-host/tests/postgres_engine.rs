@@ -40,8 +40,12 @@
 //! interruptions accumulate dirs under the system temp path.  Low-priority at V0;
 //! tracked for a housekeeping follow-up when local-dev ergonomics are prioritised.
 
+use mnemra_host::storage::postgres::engine::{
+    ArtifactPin, KNOWN_GOOD_HASHES, current_platform, verify_pinned_artifacts,
+};
 use mnemra_host::storage::postgres::{PostgresStorage, engine::EmbeddedEngine};
 use sqlx::Row;
+use std::path::Path;
 use std::sync::Mutex;
 
 /// Serialises engine startup across concurrent test threads.
@@ -79,6 +83,101 @@ async fn app_role_is_not_superuser_and_not_bypassrls() {
     assert!(
         !rolbypassrls,
         "mnemra_app must not have BYPASSRLS (P-0010 precondition); got rolbypassrls=true"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Hash-pin control tests (A-04/A-05, Task 6b)
+// ---------------------------------------------------------------------------
+//
+// These tests exercise `verify_pinned_artifacts` as a pure function — no live
+// engine, no shared `~/.theseus` cache touched — so they are fast and safe to
+// run in parallel with other tests.
+
+/// NEGATIVE: A deliberately-wrong expected hash produces a structured
+/// `HashPinError` naming the artifact and both digest values.
+///
+/// Proves the control fails SHUT (structured error, not panic) on a hash
+/// mismatch.  The install_dir is the real theseus cache so the file IS
+/// readable; only the expected sha256 is wrong.
+#[test]
+fn hash_pin_mismatch_returns_structured_error_not_panic() {
+    // Build a pin table with a known-wrong expected hash.
+    // We use the real postgres binary path but a bogus expected digest.
+    let wrong_pins: &[(&str, &[ArtifactPin])] = &[(
+        current_platform(),
+        &[ArtifactPin {
+            artifact: "postgres-tampered-test",
+            rel_path: "bin/postgres",
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        }],
+    )];
+
+    // Locate the real installation directory via HOME env var.
+    let home = std::env::var("HOME").unwrap_or_default();
+    let install_dir = std::path::PathBuf::from(&home).join(".theseus/postgresql/16.4.0");
+
+    if !install_dir.join("bin/postgres").exists() {
+        // Skip on a cold runner that has never run the engine; the positive
+        // pgvector_extension_is_available test covers the warm-cache path.
+        eprintln!("SKIP hash_pin_mismatch_returns_structured_error_not_panic: cache not warm");
+        return;
+    }
+
+    let result = verify_pinned_artifacts(&install_dir, current_platform(), wrong_pins);
+    assert!(
+        result.is_err(),
+        "verify_pinned_artifacts must return Err on a hash mismatch, got Ok"
+    );
+    let err = result.unwrap_err();
+    assert_eq!(
+        err.artifact, "postgres-tampered-test",
+        "HashPinError must name the artifact"
+    );
+    assert_eq!(
+        err.expected, "0000000000000000000000000000000000000000000000000000000000000000",
+        "HashPinError must carry the expected hash"
+    );
+    assert!(
+        !err.actual.is_empty(),
+        "HashPinError must carry the actual hash"
+    );
+    assert_ne!(
+        err.actual, err.expected,
+        "actual and expected must differ in the error"
+    );
+    // The error must be displayable without panic (Display is the structured surface
+    // Task 7 builds on).
+    let msg = format!("{}", err);
+    assert!(
+        msg.contains("postgres-tampered-test"),
+        "Display output must name the artifact: {msg}"
+    );
+}
+
+/// NEGATIVE: An unknown platform produces a structured `HashPinError` telling
+/// the operator to add a pin — not a silent skip, not a panic.
+#[test]
+fn hash_pin_unknown_platform_returns_structured_error() {
+    let result = verify_pinned_artifacts(
+        Path::new("/tmp"),
+        "unknown-platform-not-in-table",
+        KNOWN_GOOD_HASHES,
+    );
+    assert!(
+        result.is_err(),
+        "verify_pinned_artifacts must return Err for an unknown platform, got Ok"
+    );
+    let err = result.unwrap_err();
+    assert!(
+        err.artifact.contains("platform:"),
+        "HashPinError for unknown platform must name the platform in artifact field: {:?}",
+        err.artifact
+    );
+    assert!(
+        err.expected.contains("no pin entry"),
+        "HashPinError for unknown platform must say 'no pin entry' in expected: {:?}",
+        err.expected
     );
 }
 

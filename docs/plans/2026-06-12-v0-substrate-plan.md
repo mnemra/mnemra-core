@@ -633,6 +633,13 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ---
 
+## Gate A amendments (2026-06-13, maintainer-ratified)
+
+1. **Task 6b (this change, A-04/A-05):** interim SHA-256 hash-pin of the embedded PG + pgvector archives, verified at engine bring-up, fail-shut. Task 26 retains full provenance/SBOM/signature scope; the named gap (TOCTOU window + per-platform pin maintenance) carries to Task 26.
+2. **A-15 → Task 7:** a structured `StorageError::EngineUnavailable` degradation seam threads into Task 7's init/schema work (engine crash must not surface as opaque driver errors); Task 25's `/health` "degraded" state consumes it.
+3. **A-18 → Task 7 (R-0013-d ruling):** V0 migrations are forward-only; the migration runner **structurally refuses** destructive operations (no destructive path exists), satisfying R-0013-d at V0. A real backup mechanism fires on the first genuine destructive-migration need — named tripwire, not V0 scope.
+4. **A-16/A-17 confirmations:** `WorkspaceId` u64→UUID widening and the four R-0013-e least-privilege roles land at Task 7 as already planned.
+
 ## Sequencing
 
 **Layer-up order (greenfield substrate — data/ABI up, each layer green-on-merge):**
