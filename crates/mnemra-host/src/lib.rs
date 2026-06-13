@@ -7,6 +7,8 @@
 //!   - Tasks 19/20: plugin-runtime integration
 
 pub mod abi;
+pub mod auth;
+pub mod builtins;
 pub mod schema;
 pub mod storage;
 

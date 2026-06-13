@@ -145,6 +145,27 @@ pub(crate) const V0_MIGRATIONS: &[Migration] = &[
                 ON state_config (workspace_id)
         ",
     },
+    // Task 11 (R-0008-c): admin token storage.
+    // Six columns exactly (R-0008-c, R-0008-h): no additional key-material column.
+    // token_hash BYTEA NOT NULL UNIQUE — raw token bytes are never stored (R-0008-b).
+    // workspace_id NOT NULL — absence of workspace claim is a schema violation (R-0008-d).
+    // rotated_at nullable — NULL before first rotation.
+    Migration {
+        version: 7,
+        name: "create_admin_tokens",
+        sql: "
+            CREATE TABLE IF NOT EXISTS admin_tokens (
+                id           UUID        NOT NULL DEFAULT gen_random_uuid(),
+                token_hash   BYTEA       NOT NULL,
+                workspace_id UUID        NOT NULL,
+                scopes       TEXT[]      NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                rotated_at   TIMESTAMPTZ,
+                CONSTRAINT admin_tokens_pkey    PRIMARY KEY (id),
+                CONSTRAINT admin_tokens_hash_uq UNIQUE      (token_hash)
+            )
+        ",
+    },
 ];
 
 // ---------------------------------------------------------------------------
