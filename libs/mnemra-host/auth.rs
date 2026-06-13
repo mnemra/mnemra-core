@@ -12,6 +12,7 @@
 //! - `resolve` — single production `WorkspaceCtx` construction site after
 //!   token validation (R-0006-b).
 
+pub mod permissions;
 pub mod resolve;
 pub mod role;
 pub mod token;
