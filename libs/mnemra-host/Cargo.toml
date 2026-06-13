@@ -14,6 +14,9 @@ async-trait = "0.1.89"
 base64 = "0.22.1"
 blake3 = "1.8.5"
 chrono = { version = "0.4.45", features = ["serde"] }
+# Task 17: Ed25519 signature verification for plugin signing chain (R-0005-a/b/d/h).
+# Promoted from dev-dep (green phase); runtime verify path needs it at load time.
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 libc = "0.2.186"
 postgresql_embedded = { version = "0.20.4", features = ["tokio"] }
 postgresql_extensions = { version = "0.20.4", features = ["tokio", "portal-corp"] }
@@ -23,6 +26,11 @@ sha2 = "0.11.0"
 # macro-heavy compile cost (~44s test profile) accepted for that tooling value.
 sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "uuid", "chrono"] }
 subtle = "2.6.1"
+# Task 17: TOML parsing for manifest field extraction in signing verification.
+# Used only for field reads (name/version/core/sig_bytes); canonical signed bytes
+# are extracted by byte-string stripping, NOT by re-serializing (canonicalization
+# contract requires exact original byte layout).
+toml = "0.8"
 # Task 9: projection/worker.rs uses tokio::spawn + JoinHandle in library code.
 # Features: rt (spawn), sync (Mutex in DrainHandle).
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
@@ -30,6 +38,7 @@ uuid = { version = "1.23.3", features = ["v4"] }
 
 [dev-dependencies]
 anyhow = "1.0.102"
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 quote = "1.0.45"
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
 tempfile = "3.27.0"
