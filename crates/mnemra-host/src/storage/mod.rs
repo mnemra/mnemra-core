@@ -24,6 +24,7 @@ pub mod postgres;
 
 use async_trait::async_trait;
 use std::error::Error;
+use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // WorkspaceId newtype
@@ -31,12 +32,10 @@ use std::error::Error;
 
 /// Opaque identifier scoping all storage operations to a single tenant.
 ///
-/// Thin newtype over `u64` for now; widening to UUID happens when the schema
-/// confirms the primary-key representation (forward to Task 7). The invariant
-/// — that all ops within a transaction are implicitly scoped to this id — is
-/// already locked by this type.
+/// UUID-backed newtype (A-16, Task 7). The invariant — that all ops within a
+/// transaction are implicitly scoped to this id — is locked by this type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WorkspaceId(pub u64);
+pub struct WorkspaceId(pub Uuid);
 
 // ---------------------------------------------------------------------------
 // Opaque keyed record

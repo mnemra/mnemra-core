@@ -22,11 +22,11 @@
 //!
 //! # Schema
 //!
-//! Task 6 creates a single table:
+//! Task 6 creates a single table (A-16: workspace_id widened to UUID at Task 7):
 //!
 //! ```sql
 //! CREATE TABLE IF NOT EXISTS records (
-//!     workspace_id BIGINT NOT NULL,
+//!     workspace_id UUID    NOT NULL,
 //!     key          TEXT    NOT NULL,
 //!     value        BYTEA   NOT NULL,
 //!     PRIMARY KEY (workspace_id, key)
@@ -84,10 +84,11 @@ impl PostgresStorage {
         let pool = Arc::clone(&engine.pool);
 
         // Bootstrap the records table (idempotent).
+        // A-16: workspace_id widened from BIGINT to UUID.
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS records (
-                workspace_id BIGINT NOT NULL,
+                workspace_id UUID    NOT NULL,
                 key          TEXT    NOT NULL,
                 value        BYTEA   NOT NULL,
                 PRIMARY KEY (workspace_id, key)
@@ -147,7 +148,7 @@ impl Transaction for PostgresTransaction {
             return Ok(Some(r.clone()));
         }
 
-        let ws_id = self.workspace.0 as i64;
+        let ws_id = self.workspace.0; // A-16: UUID, no cast needed
         let row: Option<(Vec<u8>,)> =
             sqlx::query_as("SELECT value FROM records WHERE workspace_id = $1 AND key = $2")
                 .bind(ws_id)
@@ -163,7 +164,7 @@ impl Transaction for PostgresTransaction {
     }
 
     async fn list(&mut self) -> Result<Vec<Record>, Box<dyn Error + Send + Sync>> {
-        let ws_id = self.workspace.0 as i64;
+        let ws_id = self.workspace.0; // A-16: UUID, no cast needed
 
         // Fetch committed rows for this workspace.
         let rows: Vec<(String, Vec<u8>)> =
@@ -191,7 +192,7 @@ impl Transaction for PostgresTransaction {
             return Ok(());
         }
 
-        let ws_id = self.workspace.0 as i64;
+        let ws_id = self.workspace.0; // A-16: UUID, no cast needed
 
         // Open one real Postgres transaction, flush all staged writes, commit.
         let mut txn = self
