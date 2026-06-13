@@ -19,6 +19,24 @@
 //! **B — Workspace-scoped isolation:**
 //! - Cross-workspace read returns zero rows.
 //! - Cross-workspace write does not mutate the target workspace's rows.
+//!
+//! # Known residual risks
+//!
+//! **A-10 — zombie postmaster on test panic:**
+//! See `postgres_engine.rs` module-level doc for the full analysis.  The same
+//! residual risk applies here: SIGKILL or async-drop failure can leave orphaned
+//! postmaster processes.  Accepted at Gate A.
+//!
+//! **A-11 — cross-binary archive-extraction race:**
+//! `STARTUP_LOCK` here and the one in `postgres_engine.rs` are independent
+//! per-binary mutexes.  Under `cargo test --workspace` (sequential binary
+//! scheduling by default) they do not race.  If parallel binary execution is
+//! enabled, the no-dep fix is consolidating both Postgres test binaries into one.
+//! Current CI posture (`cargo test --workspace`) is safe.  Deferred to a
+//! follow-up task.
+//!
+//! **A-12 — temp data-dir leak on SIGKILL:**
+//! Same posture as `postgres_engine.rs`.  Accepted at Gate A.
 
 mod common;
 

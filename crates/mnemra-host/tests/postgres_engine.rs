@@ -8,6 +8,37 @@
 //!
 //! A `std::sync::Mutex` serialises engine startup within this test binary so
 //! that concurrent archive extraction and pgvector download do not race.
+//!
+//! # Known residual risks
+//!
+//! **A-10 — zombie postmaster on test panic:**
+//! `postgresql_embedded` uses `Drop` for postmaster cleanup.  Rust runs `Drop`
+//! during normal panic unwinding, but the async-stop path in the drop impl is
+//! not guaranteed to complete before the runtime exits.  On SIGKILL / OOM the
+//! process is killed without any Drop execution, leaving a postmaster zombie.
+//! In CI (ephemeral runners) the impact is negligible.  In local development,
+//! repeated SIGKILL interruptions can exhaust ephemeral ports.
+//! Full fix requires a dep-free watchdog or an OS-level `prctl(PR_SET_PDEATHSIG)`
+//! wrapper — neither is achievable without new deps.  Residual risk accepted at
+//! Gate A; tracked for revisit when local-dev ergonomics are prioritised.
+//!
+//! **A-11 — cross-binary archive-extraction race:**
+//! `STARTUP_LOCK` is a per-binary `Mutex` — it serialises startup within this
+//! binary, but does not coordinate with `storage_contract_postgres.rs`, which is
+//! a separate test binary with its own lock.  `cargo test --workspace` (plain)
+//! schedules test binaries sequentially unless the host is configured otherwise,
+//! so the race does not fire under the standard CI command.  If parallel binary
+//! execution is ever enabled (e.g. nextest or `--jobs`), both binaries would race
+//! on `~/.theseus` extraction.  The correct no-dep fix is consolidating both
+//! Postgres test binaries into one (so one `STARTUP_LOCK` covers all PG tests).
+//! Deferred to a follow-up task; the current CI posture is safe.
+//!
+//! **A-12 — temp data-dir leak on SIGKILL:**
+//! `SettingsBuilder::new().temporary(true)` auto-cleans the data dir on
+//! `PostgreSQL` drop, but SIGKILL bypasses Drop entirely.  On CI (ephemeral
+//! runners) leaked dirs are cleaned with the runner.  Local repeated SIGKILL
+//! interruptions accumulate dirs under the system temp path.  Low-priority at V0;
+//! tracked for a housekeeping follow-up when local-dev ergonomics are prioritised.
 
 use mnemra_host::storage::postgres::{PostgresStorage, engine::EmbeddedEngine};
 use sqlx::Row;
