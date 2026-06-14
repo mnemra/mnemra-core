@@ -186,6 +186,119 @@ pub(crate) const V0_MIGRATIONS: &[Migration] = &[
             )
         ",
     },
+    // Task 15 (R-0015-b): user identity records.
+    // Users are global (not per-workspace) — agents + sessions reference them.
+    // display_name nullable: may not be set on first registration.
+    Migration {
+        version: 8,
+        name: "create_users",
+        sql: "
+            CREATE TABLE IF NOT EXISTS users (
+                id           UUID        NOT NULL DEFAULT gen_random_uuid(),
+                username     TEXT        NOT NULL,
+                display_name TEXT,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT users_pkey        PRIMARY KEY (id),
+                CONSTRAINT users_username_uq UNIQUE      (username)
+            )
+        ",
+    },
+    Migration {
+        version: 9,
+        name: "users_username_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS users_username_idx
+                ON users (username)
+        ",
+    },
+    // Task 15 (R-0015-c): agent registrations tied to user-workspace pairs.
+    // agent_id is canonical (UUIDv5 of workspace_id + user_id + agent_name) —
+    // identity derivation is deterministic and verified at registration.
+    // A unique constraint on (workspace_id, user_id, agent_name) enforces
+    // mismatch detection: a re-registration with a different derived id is rejected.
+    Migration {
+        version: 10,
+        name: "create_agents",
+        sql: "
+            CREATE TABLE IF NOT EXISTS agents (
+                id           UUID        NOT NULL,
+                workspace_id UUID        NOT NULL,
+                user_id      UUID        NOT NULL,
+                agent_name   TEXT        NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT agents_pkey         PRIMARY KEY (id),
+                CONSTRAINT agents_ws_user_name UNIQUE      (workspace_id, user_id, agent_name)
+            )
+        ",
+    },
+    Migration {
+        version: 11,
+        name: "agents_workspace_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS agents_workspace_idx
+                ON agents (workspace_id)
+        ",
+    },
+    // Task 15 (R-0015-e): per-MCP-connection session state.
+    // Session context is the source of WorkspaceCtx construction (R-0006-b / Task 23).
+    // At V0 the MCP server (Task 23) does not exist; the table models the state shape.
+    // ended_at nullable: NULL while the session is active.
+    Migration {
+        version: 12,
+        name: "create_sessions",
+        sql: "
+            CREATE TABLE IF NOT EXISTS sessions (
+                id           UUID        NOT NULL DEFAULT gen_random_uuid(),
+                workspace_id UUID        NOT NULL,
+                user_id      UUID        NOT NULL,
+                agent_id     UUID        NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                ended_at     TIMESTAMPTZ,
+                CONSTRAINT sessions_pkey PRIMARY KEY (id)
+            )
+        ",
+    },
+    Migration {
+        version: 13,
+        name: "sessions_workspace_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS sessions_workspace_idx
+                ON sessions (workspace_id)
+        ",
+    },
+    Migration {
+        version: 14,
+        name: "sessions_agent_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS sessions_agent_idx
+                ON sessions (agent_id)
+        ",
+    },
+    // Task 15 (R-0015-g): project registry.
+    // Project identity is a prerequisite for plugin scoping (R-0015-g).
+    // No plugin is scoped to a project before that project's record exists.
+    Migration {
+        version: 15,
+        name: "create_projects",
+        sql: "
+            CREATE TABLE IF NOT EXISTS projects (
+                id           UUID        NOT NULL DEFAULT gen_random_uuid(),
+                workspace_id UUID        NOT NULL,
+                name         TEXT        NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT projects_pkey        PRIMARY KEY (id),
+                CONSTRAINT projects_ws_name_uq  UNIQUE      (workspace_id, name)
+            )
+        ",
+    },
+    Migration {
+        version: 16,
+        name: "projects_workspace_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS projects_workspace_idx
+                ON projects (workspace_id)
+        ",
+    },
 ];
 
 // ---------------------------------------------------------------------------
