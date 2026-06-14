@@ -1,10 +1,13 @@
 //! Startup file-permission check.
 //!
-//! # R-0005-f
+//! # R-0005-f / R-0014-d
 //!
 //! "On host startup, the system SHALL check that the admin-token file and the
 //! signing-verification-material file are both mode 600 and not world-readable;
-//! if either check fails, the host SHALL refuse to start."
+//! if either check fails, the host SHALL refuse to start." (R-0005-f)
+//!
+//! "The LLM-API-key SHALL be stored in a file at mode 600; the startup
+//! file-mode invariant check SHALL cover the LLM-key file as well." (R-0014-d)
 //!
 //! This module provides the synchronous `check()` function called during host
 //! startup, before any plugin is loaded. A non-Ok return MUST cause the host
@@ -46,9 +49,14 @@ impl std::error::Error for FileModeError {}
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Check that BOTH `token_path` and `signing_material_path` are mode 600.
+/// Check that ALL THREE secret files are mode 600.
 ///
-/// Returns `Err(FileModeError)` if EITHER file:
+/// Covers:
+///   1. The admin-token file (`token_path`) — R-0005-f
+///   2. The signing-material file (`signing_material_path`) — R-0005-f
+///   3. The LLM-key file (`llm_key_path`) — R-0014-d
+///
+/// Returns `Err(FileModeError)` if ANY file:
 ///   - has any bit set in the world-permission mask (`0o007`), OR
 ///   - has a mode that is not exactly `0o600`.
 ///
@@ -58,11 +66,20 @@ impl std::error::Error for FileModeError {}
 ///
 /// UID/GID ownership is NOT checked at V0 (advisory only per the spec).
 ///
-/// Called on host startup before any plugin is loaded (R-0005-f). If this
-/// returns `Err`, the host MUST refuse to start.
-pub fn check(token_path: &Path, signing_material_path: &Path) -> Result<(), FileModeError> {
+/// Called on host startup before any plugin is loaded or any embedding call
+/// is made (R-0005-f, R-0014-d). If this returns `Err`, the host MUST refuse
+/// to start.
+///
+/// There is ONE `check()` — no partial 2-arg form remains (SF2: complete
+/// mediation over all secret files).
+pub fn check(
+    token_path: &Path,
+    signing_material_path: &Path,
+    llm_key_path: &Path,
+) -> Result<(), FileModeError> {
     check_single(token_path)?;
     check_single(signing_material_path)?;
+    check_single(llm_key_path)?;
     Ok(())
 }
 

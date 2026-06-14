@@ -1,5 +1,20 @@
 //! Signing-chain invariant tests — RED phase (Task 16 of TDD pair 16/17).
 //!
+//! # Task 18 amendment (R-0014-d)
+//!
+//! `startup::file_mode_check::check()` is extended by Task 18 from a 2-arg form
+//! `check(token, signing_material)` to a 3-arg form
+//! `check(token, signing_material, llm_key)`.
+//!
+//! Every call to `check_file_mode` in this file has been updated to pass a
+//! mode-600 `llm_key` fixture as the third argument. All existing assertions
+//! are preserved verbatim — the update is additive. A world-readable admin-token
+//! or signing-material still produces Err; a fully-600 set still produces Ok.
+//!
+//! The rationale for extending `check()` rather than adding a separate
+//! `check_all()` is documented in `llm_key_allowlist.rs` (Task 18 red phase):
+//! a partial 2-arg authority is a fails-open-by-omission footgun (SF2 class).
+//!
 //! # Purpose
 //!
 //! These tests pin the signing-chain security invariants that Task 17 must
@@ -708,16 +723,18 @@ fn embedded_root_material_is_a_compile_time_constant() {
 /// Green: `check(token_path, signing_material_path)` returns `Ok(())`.
 #[test]
 fn startup_file_mode_check_passes_for_mode_600() {
-    // R-0005-f: both files at mode 600 → check() returns Ok.
+    // R-0005-f: all three files at mode 600 → check() returns Ok.
+    // (Task 18 extended check() to 3 args covering token + signing + llm_key.)
     let dir = TempDir::new().unwrap();
     let token_path = create_file_with_mode(&dir, "admin_token", 0o600);
     let signing_material_path = create_file_with_mode(&dir, "root_verification.pub", 0o600);
+    let llm_key_path = create_file_with_mode(&dir, "llm_key", 0o600);
 
-    let result = check_file_mode(&token_path, &signing_material_path);
+    let result = check_file_mode(&token_path, &signing_material_path, &llm_key_path);
 
     assert!(
         result.is_ok(),
-        "startup file-mode check must pass when both files are mode 600 (R-0005-f); \
+        "startup file-mode check must pass when all three files are mode 600 (R-0005-f); \
          got Err: {result:?}"
     );
 }
@@ -732,11 +749,13 @@ fn startup_file_mode_check_passes_for_mode_600() {
 #[test]
 fn startup_check_fails_if_admin_token_is_world_readable() {
     // R-0005-f: admin-token at mode 644 → check() returns Err (host refuses start).
+    // (Task 18 extended check() to 3 args; llm_key is mode 600 here — isolates admin-token failure.)
     let dir = TempDir::new().unwrap();
     let token_path = create_file_with_mode(&dir, "admin_token", 0o644); // world-readable
     let signing_material_path = create_file_with_mode(&dir, "root_verification.pub", 0o600);
+    let llm_key_path = create_file_with_mode(&dir, "llm_key", 0o600);
 
-    let result = check_file_mode(&token_path, &signing_material_path);
+    let result = check_file_mode(&token_path, &signing_material_path, &llm_key_path);
 
     assert!(
         result.is_err(),
@@ -759,11 +778,13 @@ fn startup_check_fails_if_admin_token_is_world_readable() {
 #[test]
 fn startup_check_fails_if_signing_material_is_world_readable() {
     // R-0005-f: signing-material at mode 644 → check() returns Err (host refuses start).
+    // (Task 18 extended check() to 3 args; llm_key is mode 600 here — isolates signing-material failure.)
     let dir = TempDir::new().unwrap();
     let token_path = create_file_with_mode(&dir, "admin_token", 0o600);
     let signing_material_path = create_file_with_mode(&dir, "root_verification.pub", 0o644); // world-readable
+    let llm_key_path = create_file_with_mode(&dir, "llm_key", 0o600);
 
-    let result = check_file_mode(&token_path, &signing_material_path);
+    let result = check_file_mode(&token_path, &signing_material_path, &llm_key_path);
 
     assert!(
         result.is_err(),
@@ -779,16 +800,19 @@ fn startup_check_fails_if_signing_material_is_world_readable() {
 /// The worst case: neither file has been secured. The host must refuse to start.
 #[test]
 fn startup_check_fails_if_both_files_are_world_readable() {
-    // R-0005-f: both files world-readable → check() returns Err.
+    // R-0005-f: admin-token AND signing-material world-readable → check() returns Err.
+    // (Task 18 extended check() to 3 args; llm_key is mode 600 here — tests pre-Task-18 files.)
     let dir = TempDir::new().unwrap();
     let token_path = create_file_with_mode(&dir, "admin_token", 0o644);
     let signing_material_path = create_file_with_mode(&dir, "root_verification.pub", 0o644);
+    let llm_key_path = create_file_with_mode(&dir, "llm_key", 0o600);
 
-    let result = check_file_mode(&token_path, &signing_material_path);
+    let result = check_file_mode(&token_path, &signing_material_path, &llm_key_path);
 
     assert!(
         result.is_err(),
-        "startup file-mode check must FAIL when both files are world-readable (R-0005-f)"
+        "startup file-mode check must FAIL when both admin-token and signing-material \
+         are world-readable (R-0005-f)"
     );
 }
 
