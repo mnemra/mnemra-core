@@ -34,6 +34,7 @@ toml = "0.8"
 # Task 9: projection/worker.rs uses tokio::spawn + JoinHandle in library code.
 # Features: rt (spawn), sync (Mutex in DrainHandle).
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
+tracing = { workspace = true }
 uuid = { version = "1.23.3", features = ["v4", "v5"] }
 
 [dev-dependencies]
