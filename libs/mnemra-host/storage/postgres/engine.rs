@@ -413,6 +413,10 @@ impl EmbeddedEngine {
 
         // setup() downloads (first run) or reuses cached Postgres binaries from
         // ~/.theseus/postgresql/.
+        tracing::debug!(
+            version = EMBEDDED_PG_VERSION,
+            "postgres engine setup: download or cache reuse"
+        );
         server
             .setup()
             .await
@@ -442,10 +446,10 @@ impl EmbeddedEngine {
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
-        let elapsed_ms = t0.elapsed().as_millis();
+        let elapsed_ms = t0.elapsed().as_millis() as u64;
         // A-09: emit startup timing so cold-runner regressions are visible.
-        // Migrates to `log.emit` / structured OTel when Task 25 observability lands.
-        eprintln!("engine_startup_ms={elapsed_ms}");
+        // Migrates to structured OTel emission when Task 25 observability lands.
+        tracing::info!(engine_startup_ms = elapsed_ms, "postgres engine started");
 
         // Install the pgvector_compiled precompiled extension package.
         // portal-corp provides the precompiled .so + .control + .sql files.
@@ -480,6 +484,11 @@ impl EmbeddedEngine {
         }
 
         // Create the application database as the bootstrap superuser.
+        tracing::debug!(
+            db = APP_DB,
+            role = APP_ROLE,
+            "creating application database and role"
+        );
         server
             .create_database(APP_DB)
             .await
