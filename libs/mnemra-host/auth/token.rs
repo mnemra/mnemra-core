@@ -288,19 +288,23 @@ pub fn verify(token: &AdminToken, stored_hash: &TokenHash) -> bool {
 pub async fn rotate(
     pool: &PgPool,
     old_token_id: Uuid,
-    workspace_id: Uuid,
-    scopes: Vec<String>,
 ) -> Result<(AdminToken, TokenRotatedEvent), RotateError> {
-    // Fetch the old row to confirm it exists and to build the event.
-    let old_row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM admin_tokens WHERE id = $1")
-        .bind(old_token_id)
-        .fetch_optional(pool)
-        .await?;
+    // Fetch the old row to confirm it exists and to derive workspace_id + scopes.
+    // This SELECT is intentionally outside the transaction: admin_tokens.workspace_id
+    // and scopes are immutable after row creation (only rotated_at is ever UPDATEd),
+    // so there is no TOCTOU risk from reading them before the transaction opens.
+    let old_row: Option<(Uuid, Vec<String>)> =
+        sqlx::query_as("SELECT workspace_id, scopes FROM admin_tokens WHERE id = $1")
+            .bind(old_token_id)
+            .fetch_optional(pool)
+            .await?;
 
-    let _ = old_row.ok_or(RotateError::TokenNotFound(old_token_id))?;
+    let (workspace_id, scopes) = old_row.ok_or(RotateError::TokenNotFound(old_token_id))?;
 
     // Construct the rotation event BEFORE the DELETE (R-0008-g ordering).
-    // The event carries the old token's id and workspace_id as its payload.
+    // The event carries the old token's id and workspace_id as its payload,
+    // both sourced from the old row (strengthens R-0008-g: event genuinely
+    // reflects the rotated token's identity, not any caller-supplied value).
     let event = TokenRotatedEvent {
         token_id: old_token_id,
         workspace_id,
