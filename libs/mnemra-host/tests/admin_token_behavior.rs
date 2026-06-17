@@ -421,9 +421,7 @@ async fn revocation_lookup_by_old_hash_returns_none() {
     .expect("INSERT failed");
 
     // Rotate: old row deleted, new row inserted.
-    rotate(pool, old_id, workspace_id, scopes.clone())
-        .await
-        .expect("rotate must succeed");
+    rotate(pool, old_id).await.expect("rotate must succeed");
 
     // Old hash must be gone.
     let result = lookup_by_hash(&token_hash, pool)
@@ -467,9 +465,7 @@ async fn rotation_new_token_is_live() {
     .await
     .expect("INSERT failed");
 
-    let (new_token, _event) = rotate(pool, old_id, workspace_id, scopes.clone())
-        .await
-        .expect("rotate must succeed");
+    let (new_token, _event) = rotate(pool, old_id).await.expect("rotate must succeed");
 
     let new_hash = hash(&new_token);
     let row = lookup_by_hash(&new_hash, pool)
@@ -520,9 +516,7 @@ async fn rotation_event_token_id_matches_old_id() {
     .await
     .expect("INSERT failed");
 
-    let (_new_token, event) = rotate(pool, old_id, workspace_id, scopes.clone())
-        .await
-        .expect("rotate must succeed");
+    let (_new_token, event) = rotate(pool, old_id).await.expect("rotate must succeed");
 
     assert_eq!(
         event.token_id, old_id,
@@ -569,9 +563,7 @@ async fn no_grace_period_after_rotation() {
     .expect("INSERT failed");
 
     // Rotate — no sleep before or after.
-    rotate(pool, old_id, workspace_id, scopes.clone())
-        .await
-        .expect("rotate must succeed");
+    rotate(pool, old_id).await.expect("rotate must succeed");
 
     // Immediate lookup — NO sleep between rotate() return and this call.
     let result = lookup_by_hash(&token_hash, pool)
@@ -582,6 +574,132 @@ async fn no_grace_period_after_rotation() {
         result.is_none(),
         "R-0009-i: lookup_by_hash(&old_hash) must return None IMMEDIATELY after rotate — \
          no grace period, old row deleted in the same transaction"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// F-13 red-phase — rotate() tenant + scope preservation
+// ---------------------------------------------------------------------------
+
+/// Assert `rotate(pool, old_id)` preserves the old token's `scopes`, preventing escalation.
+///
+/// # F-13 (red phase)
+///
+/// Under the old 4-arg signature, a caller could supply `["admin"]` as the scopes
+/// argument regardless of what the old token held — a privilege-escalation primitive.
+/// The 2-arg signature makes escalation inexpressible at the call site; this test
+/// pins the runtime guarantee: after rotation the new token's scopes equal the old
+/// row's scopes, not any caller-supplied value.
+///
+/// This test FAILS TO COMPILE against the current 4-arg impl — that compile failure
+/// is the correct red state. Forge's green phase changes the impl to the 2-arg sig.
+#[tokio::test]
+async fn rotation_preserves_scopes_no_escalation() {
+    // Given: an old token created with read_observer scope (not admin).
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+
+    let pool = engine.pool.as_ref();
+    // Use a non-admin scope to make the escalation distinction observable.
+    let old_scopes = vec!["read_observer".to_owned()];
+
+    let token = generate();
+    let token_hash = hash(&token);
+
+    let (old_id,): (Uuid,) = sqlx::query_as(
+        "INSERT INTO admin_tokens (token_hash, workspace_id, scopes)
+         VALUES ($1, $2, $3)
+         RETURNING id",
+    )
+    .bind(token_hash.as_bytes())
+    .bind(DEFAULT_WORKSPACE_ID)
+    .bind(&old_scopes)
+    .fetch_one(pool)
+    .await
+    .expect("INSERT failed");
+
+    // When: rotate with 2-arg signature (derives workspace_id + scopes from old row).
+    let (new_token, _event) = rotate(pool, old_id).await.expect("rotate must succeed");
+
+    // Then: the new token's scopes equal the old row's scopes (read_observer), not admin.
+    // Under the old 4-arg signature a caller could pass ["admin"] here; the 2-arg
+    // signature makes escalation inexpressible — this assertion pins that the scopes
+    // are preserved from the old row and cannot be elevated by a caller parameter.
+    let new_hash = hash(&new_token);
+    let row = lookup_by_hash(&new_hash, pool)
+        .await
+        .expect("lookup_by_hash must not error")
+        .expect("F-13: new token must be live after rotate");
+
+    assert_eq!(
+        row.scopes, old_scopes,
+        "F-13: new token scopes must equal old token scopes (read_observer, not admin); \
+         rotate() must derive scopes from the old row, not from caller params"
+    );
+}
+
+/// Assert `rotate(pool, old_id)` preserves the old token's `workspace_id`, preventing cross-tenant mint.
+///
+/// # F-13 (red phase)
+///
+/// The old token is inserted into a workspace that is distinct from `DEFAULT_WORKSPACE_ID`.
+/// After rotation, the new token must carry that same workspace_id — proving the impl
+/// reads from the old row, not from any caller-supplied parameter.
+///
+/// `admin_tokens.workspace_id` has no FK constraint to the `workspaces` table (verified
+/// against migration 7 DDL), so a second-workspace token can be seeded via a direct INSERT
+/// using an arbitrary UUID without needing to create a workspaces row. This allows the test
+/// to prove cross-tenant preservation as a runtime guarantee rather than relying on
+/// type-enforcement alone.
+///
+/// This test FAILS TO COMPILE against the current 4-arg impl — that compile failure
+/// is the correct red state. Forge's green phase changes the impl to the 2-arg sig.
+#[tokio::test]
+async fn rotation_preserves_workspace_id() {
+    // Given: an old token in a workspace DISTINCT from DEFAULT_WORKSPACE_ID.
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+
+    let pool = engine.pool.as_ref();
+    let scopes = vec!["admin".to_owned()];
+
+    // A deterministic non-default workspace UUID (UUID v5 of "tenant-b" in DNS namespace).
+    // Chosen to be stable across runs and visually distinct from DEFAULT_WORKSPACE_ID.
+    // No workspaces row is required — admin_tokens.workspace_id has no FK constraint.
+    let tenant_b_workspace_id: Uuid = uuid::uuid!("d4e6f2a8-1c3b-5e9d-8f7a-2b4c6e0d1f3a");
+
+    let token = generate();
+    let token_hash = hash(&token);
+
+    let (old_id,): (Uuid,) = sqlx::query_as(
+        "INSERT INTO admin_tokens (token_hash, workspace_id, scopes)
+         VALUES ($1, $2, $3)
+         RETURNING id",
+    )
+    .bind(token_hash.as_bytes())
+    .bind(tenant_b_workspace_id)
+    .bind(&scopes)
+    .fetch_one(pool)
+    .await
+    .expect("INSERT failed");
+
+    // When: rotate with 2-arg signature (derives workspace_id from old row).
+    let (new_token, _event) = rotate(pool, old_id).await.expect("rotate must succeed");
+
+    // Then: the new token's workspace_id equals tenant_b, not DEFAULT_WORKSPACE_ID.
+    // If the impl echoed a caller parameter (or defaulted to DEFAULT_WORKSPACE_ID),
+    // this assertion would fail — proving the impl reads from the old row's workspace.
+    let new_hash = hash(&new_token);
+    let row = lookup_by_hash(&new_hash, pool)
+        .await
+        .expect("lookup_by_hash must not error")
+        .expect("F-13: new token must be live after rotate");
+
+    assert_eq!(
+        row.workspace_id, tenant_b_workspace_id,
+        "F-13: new token workspace_id must equal old token workspace_id (tenant_b); \
+         rotate() must derive workspace_id from the old row, not from caller params — \
+         a token in workspace A cannot be rotated into workspace B"
     );
 }
 

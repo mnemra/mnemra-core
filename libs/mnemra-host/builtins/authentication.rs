@@ -171,8 +171,10 @@ impl From<sqlx::Error> for BootstrapError {
 /// # Default scopes
 ///
 /// The bootstrap path grants `["admin"]` — the full-access bootstrap scope.
-/// Additional scopes are not configurable at V0; the rotation path allows
-/// scope adjustment via `token::rotate(scopes)`.
+/// Additional scopes are not configurable at V0; the rotation path preserves
+/// the rotated token's scopes exactly — scope adjustment is not a V0 capability
+/// (spec:205) and would be a distinct future Admin-gated operation, not a
+/// rotation parameter.
 pub async fn bootstrap(
     pool: &PgPool,
     workspace_id: Uuid,
