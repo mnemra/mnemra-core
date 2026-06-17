@@ -5,9 +5,12 @@
 //! so `clap` is not added (avoids ~500ms compile cost; see `cmd/init.rs`).
 
 mod cmd;
+mod logging;
 
 #[tokio::main]
 async fn main() {
+    // V0 logging foundation. OTel export + redaction + emission semantics land in Task 25 (R-0004).
+    logging::init_logging();
     let args: Vec<String> = std::env::args().collect();
 
     let result = match args.get(1).map(String::as_str) {

@@ -74,6 +74,7 @@ impl RefreshWorker {
     pub fn start(drain: DrainHandle, pool: PgPool) -> Self {
         let handle = tokio::spawn(async move {
             while let Some(view_name) = drain.recv().await {
+                tracing::debug!(view = %view_name, "refresh worker: dispatching REFRESH MATERIALIZED VIEW CONCURRENTLY");
                 // REFRESH MATERIALIZED VIEW CONCURRENTLY must not run inside a
                 // transaction — use pool.execute directly (autocommit).
                 //
@@ -85,9 +86,7 @@ impl RefreshWorker {
                 if let Err(e) = sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&pool).await {
                     // Log and continue — a refresh failure must not crash the
                     // worker or fail the originating write.
-                    eprintln!(
-                        "refresh worker: REFRESH MATERIALIZED VIEW CONCURRENTLY {view_name} failed: {e}"
-                    );
+                    tracing::warn!(view = %view_name, error = %e, "REFRESH MATERIALIZED VIEW CONCURRENTLY failed");
                 }
             }
         });
