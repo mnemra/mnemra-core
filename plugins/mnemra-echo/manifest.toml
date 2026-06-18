@@ -1,0 +1,95 @@
+# mnemra-echo plugin manifest — V0 reference/fixture plugin.
+#
+# Schema authority: docs/src/adrs/P-0003-plugin-manifest.md
+# Spec requirements: R-0003-a, R-0003-d, R-0003-g, R-0002-a, R-0005-c
+#
+# This is the signed reference/fixture plugin that substitutes for the `tasks`
+# plugin in V0 substrate scenarios (Scenarios 2/3/7/13/15). See plan Reading
+# note 2. The fixture exercises the artifact.* host-fns, the WHERE-clause path,
+# signing, pooling, and resource limits as substrate scaffolding — not as a
+# capability family.
+
+[plugin]
+name           = "mnemra-echo"
+version        = "0.0.1"
+schema_version = 1
+core           = true
+
+[verbs]
+# Verb names follow the "<plugin>.<verb>" convention (P-0003).
+# These substitute for the plan's scenario-named task.*/echo.* verbs at V0
+# (plan Reading note 2: scenario substitution ratified at plan-exit gate).
+exposed = [
+    "echo.create",
+    "echo.get",
+    "echo.list",
+    "echo.update",
+    "echo.delete",
+    "echo.audit",
+]
+
+[content_types]
+# echo_fixture is the V0 fixture content type. Its per-artifact-type table,
+# history shadow, and expression indexes are created by init() via the Task 9
+# machinery (schema/init.rs FIXTURE_CONTENT_TYPES = &["echo_fixture"]).
+# The table name IS the type name: create_artifact_table("echo_fixture") creates
+# a table named `echo_fixture` (artifact_table.rs type_name → table name).
+# AC4: consistency confirmed — this declaration matches the existing registration.
+echo_fixture = { table = "echo_fixture", schema_doc = "docs/schemas/echo_fixture.md" }
+
+[state_scopes]
+# Per-run state KV namespace for echo plugin fixture operations.
+"echo_run_state" = { description = "per-echo-run state KV (fixture)" }
+
+[host_fns]
+# Required host functions. The runtime compiles this into a per-instance
+# allowlist; undeclared calls fail at the WIT boundary (R-0003-b).
+#
+# workspace_id does NOT appear as a standalone parameter on any write-path
+# entry here — host derives workspace context from WorkspaceCtx at ingress
+# (R-0003-d). The calling convention in wit/host.wit uses the `workspace-ctx`
+# record; the manifest governs access control (which fns the plugin may call),
+# not the calling convention itself.
+#
+# artifact.delete is included below because this fixture plugin opts in
+# (R-0003-g): the plan's Test Expectations (line 449) require that the fixture
+# exercises artifact.create/get/list/update/delete and the WHERE-clause path.
+# The opt-in is explicit and documented here. A production plugin that does not
+# need delete MUST omit "artifact.delete" from this list.
+required = [
+    # Artifact CRUD (universal content.emit shape — P-0003)
+    "artifact.create",
+    "artifact.get",
+    "artifact.list",
+    "artifact.update",
+    "artifact.delete",    # opt-in per R-0003-g — fixture exercises full CRUD
+    # Observability
+    "metrics.record",
+    "log.emit",
+    # Domain events
+    "event.emit",
+    # Projection (read-model updates)
+    "projection.emit",
+]
+# Optional: not declared by this fixture; add only if needed.
+optional = []
+
+[signature]
+# PLACEHOLDER — populated at build time by the mnemra signing chain per
+# P-0005-v0-signing-chain. At V0, no real root key exists; the signing ceremony
+# (Task 26) populates this section with the real root public key and signature
+# over the canonical manifest body (everything minus [signature]).
+#
+# Per the LOCKED fixture-signing mechanism (dispatch envelope §LOCKED):
+#   - This is a documented build-time-populated placeholder.
+#   - The canonical body (everything above this section) is the stable content.
+#   - This committed signature does NOT verify against the embedded ROOT at V0.
+#   - Tasks 20/21 load-pipeline tests sign IN-MEMORY with a freshly generated
+#     keypair; the embedded ROOT/sig_bytes here are NOT the trust anchor there.
+#   - Task 26 (post-stop): the build-time signer replaces these with real values.
+#
+# R-0002-a, R-0005-c
+algorithm  = "ed25519"
+public_key = "ROOT"     # placeholder — replaced by Task 26 build-time signer
+sig_bytes  = "PLACEHOLDER_SIG"   # placeholder — replaced by Task 26 build-time signer
+signed_at  = "1970-01-01T00:00:00Z"   # placeholder — replaced by Task 26 build-time signer
