@@ -21,6 +21,9 @@ pub mod storage;
 // Task 17: host startup invariant checks — file-mode gate before plugin load (R-0005-f).
 // Task 18: extended to cover LLM-key file as well (R-0014-d).
 pub mod startup;
+// Task 21: plugin runtime — manifest load pipeline, allowlists, wasmtime limits,
+// epoch-tick supervisor, and instance pool (R-0003-b/c/f, R-0007, R-0010-d, R-0016-a/b).
+pub mod plugin;
 
 /// Start the mnemra host runtime.
 ///
