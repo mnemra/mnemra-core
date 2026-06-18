@@ -34,6 +34,13 @@ toml = "0.8"
 # Task 9: projection/worker.rs uses tokio::spawn + JoinHandle in library code.
 # Features: rt (spawn), sync (Mutex in DrainHandle).
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
+# Task 21: Wasmtime WASM runtime — fuel metering, epoch interruption, memory limits.
+# R-0007-i: version PINNED (exact, no open caret) — major/minor upgrade requires
+# explicit plan AC.
+wasmtime = { version = "=45.0.2", features = ["cranelift", "component-model"] }
+# Task 21: serde + serde_derive for manifest TOML deserialization.
+# Replaces manual toml::Value traversal with typed structs (cleaner + exhaustive).
+serde = { version = "1.0", features = ["derive"] }
 tracing = { workspace = true }
 uuid = { version = "1.23.3", features = ["v4", "v5"] }
 

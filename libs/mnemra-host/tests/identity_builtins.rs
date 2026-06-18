@@ -109,26 +109,51 @@ async fn builtin_init_order_fails_without_schema_init() {
 
 /// R-0002-b: Builtins execute as host code, not inside the Wasmtime sandbox.
 ///
-/// This is enforced structurally: `mnemra-host` has no `wasmtime` dependency.
-/// We assert it here by inspecting the crate's Cargo.toml at the source level.
-/// A file-read test is the lightweight proof — the compiler would have caught
-/// it, but this makes the invariant visible to `cargo test` output.
+/// # Enforcement model (Task 21 update)
+///
+/// Task 21 added `wasmtime` to `mnemra-host` for the plugin runtime (`plugin/`
+/// module). The crate-level Cargo.toml dep-check that existed before Task 21
+/// is no longer meaningful — `wasmtime` is intentionally present. The durable
+/// guard is a directory-scoped source scan: assert that NO file under
+/// `libs/mnemra-host/builtins/` contains a `wasmtime` usage (`use wasmtime` or
+/// `wasmtime::` path). This fires if a future change smuggles `wasmtime::Store`
+/// or any Wasmtime runtime type into a builtin, which would violate R-0002-b.
+///
+/// The scan uses `use wasmtime` and `wasmtime::` as markers — comment-only
+/// mentions are accepted (the match is on import + qualified path usage).
 #[test]
-fn builtins_are_host_code_not_sandboxed_no_wasmtime_dep() {
+fn builtins_are_host_code_not_sandboxed_r0002b() {
     // R-0002-b: builtins SHALL NOT execute inside the Wasmtime plugin sandbox.
     //
-    // Proof by construction: the mnemra-host crate Cargo.toml contains no
-    // `wasmtime` dependency. Any builtin function is therefore host code.
-    // This test makes the structural assertion visible in CI output.
-    let cargo_toml = std::fs::read_to_string(
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("Cargo.toml"),
-    )
-    .expect("Cargo.toml must be readable");
+    // Proof by construction: scan every .rs file under builtins/ and assert
+    // none contains a wasmtime import or qualified path reference. This is a
+    // durable guard — it passes today (zero references) and fails the moment
+    // a builtin module imports or uses any Wasmtime runtime type.
+    let builtins_dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins");
+
+    let mut violations: Vec<String> = Vec::new();
+
+    for entry in std::fs::read_dir(&builtins_dir).expect("builtins/ directory must be readable") {
+        let entry = entry.expect("builtins/ entry must be readable");
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+
+        // Match import statements and qualified path usage.
+        // Comment-only mentions are not a violation; these patterns hit real usage.
+        if source.contains("use wasmtime") || source.contains("wasmtime::") {
+            violations.push(path.display().to_string());
+        }
+    }
 
     assert!(
-        !cargo_toml.contains("wasmtime"),
-        "mnemra-host Cargo.toml must not contain a wasmtime dependency — \
-        builtins are host code (R-0002-b); found wasmtime reference in Cargo.toml"
+        violations.is_empty(),
+        "R-0002-b violation: builtins must not reference the Wasmtime runtime. \
+        Found wasmtime usage in: {violations:?}. \
+        Builtins are host code (R-0002-b); Wasmtime belongs in plugin/ only."
     );
 }
 
