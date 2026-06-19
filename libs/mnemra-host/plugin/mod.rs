@@ -31,3 +31,5 @@ pub mod manifest;
 pub mod output;
 pub mod pool;
 pub mod runtime;
+// Task 22: trap-to-kill-and-replace recovery (R-0007-e/f/h, R-0016-c).
+pub mod trap_recovery;

@@ -21,14 +21,27 @@
 //!   `/health` HTTP route is deferred to Task 23 (MCP server not yet in scope);
 //!   `HealthState` is the queryable mechanism the host can read.
 //!
-//! # R-0007-h: crash semantics
+//! # R-0007-h: crash semantics + confirm-restart (#1690-a)
 //!
 //! "Not silently restarted" means the crash is always logged and health-state
 //! changes before any restart is attempted. The restart policy (1/min, backoff)
 //! is defence-in-depth; the primary signal is the degraded health state.
+//!
+//! A supervised restart does NOT flip health back to `Ok` optimistically. Health
+//! returns to `Ok` only after the restarted thread CONFIRMS a post-restart tick
+//! (`tick_confirmed`). Until then `is_healthy()` / `can_invoke()` stay `false`,
+//! and invocations are refused — the restart must be confirmed ticking, not merely
+//! attempted (#1690-a).
+//!
+//! # Lock-poison fail-safe (#1690-b)
+//!
+//! Every access to the health-state mutex recovers from poisoning fail-safe: a
+//! poisoned lock degrades to `Degraded` (refuse invocations) rather than panicking
+//! the host with `.expect("...poisoned")`. No reachable `.expect()` on a poisoned
+//! health lock remains in this module.
 
 use std::sync::{
-    Arc, Mutex,
+    Arc, Condvar, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant};
@@ -65,6 +78,81 @@ pub enum HealthState {
 }
 
 // ---------------------------------------------------------------------------
+// Restart gate — deterministic confirm-restart (#1690-a)
+// ---------------------------------------------------------------------------
+
+/// A gate a restarted tick thread waits on before its first tick.
+///
+/// When `engaged` is `true`, a freshly-restarted tick thread blocks at the gate
+/// and does NOT tick / set `tick_confirmed` / flip health to `Ok` until
+/// `release()` is called. This makes the "no flip to Ok before a confirmed tick"
+/// assertion deterministic (no sleep race): the test engages the gate via
+/// `inject_death_for_test`, observes non-Ok immediately after `try_restart`, then
+/// releases the gate via `await_tick_confirmation_for_test`.
+///
+/// In production the gate is never engaged, so a real restart confirms its tick
+/// after the first natural 10 ms tick with no added latency.
+struct RestartGate {
+    engaged: Mutex<bool>,
+    cvar: Condvar,
+}
+
+impl RestartGate {
+    fn new() -> Self {
+        Self {
+            engaged: Mutex::new(false),
+            cvar: Condvar::new(),
+        }
+    }
+
+    /// Engage the gate — the next restarted thread will block until `release`.
+    fn engage(&self) {
+        let mut g = self.engaged.lock().unwrap_or_else(|e| e.into_inner());
+        *g = true;
+    }
+
+    /// Release the gate, waking a blocked thread.
+    fn release(&self) {
+        let mut g = self.engaged.lock().unwrap_or_else(|e| e.into_inner());
+        *g = false;
+        self.cvar.notify_all();
+    }
+
+    /// Block the calling (tick) thread while the gate is engaged.
+    fn wait_until_released(&self) {
+        let mut g = self.engaged.lock().unwrap_or_else(|e| e.into_inner());
+        while *g {
+            g = self.cvar.wait(g).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Health-lock helpers — fail-safe poison recovery (#1690-b)
+// ---------------------------------------------------------------------------
+
+/// Read the health state, recovering from a poisoned lock fail-safe.
+///
+/// A poisoned health mutex is a fail-safe condition: report `Degraded` (refuse
+/// invocations) rather than panicking. This replaces the prior
+/// `.expect("...poisoned")` at every read site (#1690-b).
+fn read_health(state: &Mutex<HealthState>) -> HealthState {
+    match state.lock() {
+        Ok(guard) => *guard,
+        Err(_poisoned) => HealthState::Degraded,
+    }
+}
+
+/// Write the health state, recovering from a poisoned lock fail-safe.
+///
+/// Recovers the inner guard from a poisoned lock (`into_inner`) so a single prior
+/// panic does not wedge the supervisor; the write still lands.
+fn write_health(state: &Mutex<HealthState>, value: HealthState) {
+    let mut guard = state.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = value;
+}
+
+// ---------------------------------------------------------------------------
 // EpochTickThread
 // ---------------------------------------------------------------------------
 
@@ -83,6 +171,13 @@ pub struct EpochTickThread {
     stop: Arc<AtomicBool>,
     /// Engine handle — the supervisor needs it for restart attempts.
     engine: Engine,
+    /// Set `true` once a post-restart tick has been CONFIRMED by the live thread
+    /// (R-0007-h, #1690-a). Cleared at the start of every restart. Health does NOT
+    /// return to `Ok` until this is `true`.
+    tick_confirmed: Arc<AtomicBool>,
+    /// Gate a restarted thread waits on before its first tick (deterministic
+    /// confirm-restart for tests; never engaged in production).
+    restart_gate: Arc<RestartGate>,
 }
 
 impl EpochTickThread {
@@ -93,21 +188,35 @@ impl EpochTickThread {
     pub fn start(engine: Engine) -> Self {
         let state = Arc::new(Mutex::new(HealthState::Ok));
         let stop = Arc::new(AtomicBool::new(false));
+        // The initial thread is "already confirmed": it starts Ok and ticking.
+        let tick_confirmed = Arc::new(AtomicBool::new(true));
+        let restart_gate = Arc::new(RestartGate::new());
 
         let handle = Self {
             state: Arc::clone(&state),
             stop: Arc::clone(&stop),
             engine: engine.clone(),
+            tick_confirmed: Arc::clone(&tick_confirmed),
+            restart_gate: Arc::clone(&restart_gate),
         };
 
-        spawn_tick_thread(engine, Arc::clone(&state), Arc::clone(&stop));
+        spawn_tick_thread(
+            engine,
+            Arc::clone(&state),
+            Arc::clone(&stop),
+            Arc::clone(&tick_confirmed),
+            Arc::clone(&restart_gate),
+        );
 
         handle
     }
 
     /// Query the current health state of the tick thread.
+    ///
+    /// Fail-safe on a poisoned lock: returns `Degraded` rather than panicking
+    /// (#1690-b).
     pub fn health_state(&self) -> HealthState {
-        *self.state.lock().expect("epoch health state lock poisoned")
+        read_health(&self.state)
     }
 
     /// Returns `true` iff the tick thread is running and epoch interruption
@@ -121,6 +230,12 @@ impl EpochTickThread {
     ///
     /// This is intentionally NOT called automatically — the caller controls
     /// when restarts are attempted (R-0007-h: one restart/min with backoff).
+    ///
+    /// # Confirm-restart (#1690-a)
+    ///
+    /// Health is NOT flipped to `Ok` here. `tick_confirmed` is cleared and a new
+    /// thread is spawned; that thread flips health to `Ok` only AFTER it confirms
+    /// a post-restart tick. Until then `is_healthy()` / `can_invoke()` stay false.
     pub fn try_restart(&self, last_restart: &mut Option<Instant>) -> bool {
         if self.is_healthy() {
             return false; // Already running; nothing to do.
@@ -136,12 +251,10 @@ impl EpochTickThread {
 
         tracing::warn!("epoch_tick_thread: attempting supervised restart (R-0007-h)");
 
-        // Transition health state back to Ok optimistically; the thread will
-        // set it to Degraded again if it immediately panics.
-        {
-            let mut guard = self.state.lock().expect("health state lock poisoned");
-            *guard = HealthState::Ok;
-        }
+        // Confirm-restart: clear the confirmed flag and leave health Degraded. The
+        // new thread will set Ok only after a confirmed post-restart tick (#1690-a).
+        self.tick_confirmed.store(false, Ordering::SeqCst);
+        write_health(&self.state, HealthState::Degraded);
 
         let stop = Arc::clone(&self.stop);
         stop.store(false, Ordering::SeqCst);
@@ -150,10 +263,91 @@ impl EpochTickThread {
             self.engine.clone(),
             Arc::clone(&self.state),
             Arc::clone(&self.stop),
+            Arc::clone(&self.tick_confirmed),
+            Arc::clone(&self.restart_gate),
         );
 
         *last_restart = Some(Instant::now());
         true
+    }
+
+    // -----------------------------------------------------------------------
+    // R-0007-h confirm-restart observation (always-compiled #[doc(hidden)] pub)
+    // -----------------------------------------------------------------------
+    //
+    // These hooks are NOT gated behind `#[cfg(test)]`: an integration-test crate
+    // links the library compiled WITHOUT `--test`, so cfg(test) items would be
+    // invisible. They are `#[doc(hidden)] pub` so they do not appear in public
+    // docs and are not part of the supported surface. A feature flag is avoided —
+    // it would force `--features` through every build/test invocation. The
+    // prod-surface smell is dispositioned by the security review.
+
+    /// Returns `true` iff invocations may proceed: the tick thread is healthy and
+    /// a post-restart tick has been confirmed (R-0007-h).
+    #[doc(hidden)]
+    pub fn can_invoke(&self) -> bool {
+        self.is_healthy() && self.tick_confirmed.load(Ordering::SeqCst)
+    }
+
+    /// Returns `true` iff a post-restart tick has been confirmed by the live
+    /// thread since the last restart (R-0007-h, #1690-a). Immediately after
+    /// `try_restart` and before the new thread ticks, this is `false`.
+    #[doc(hidden)]
+    pub fn tick_confirmed_since_restart(&self) -> bool {
+        self.tick_confirmed.load(Ordering::SeqCst)
+    }
+
+    /// Test hook: simulate a tick-thread death.
+    ///
+    /// Stops the current tick thread, transitions health to `Degraded`, clears the
+    /// confirmed flag, and engages the restart gate so the NEXT restart's thread
+    /// blocks before its first tick (deterministic confirm-restart). Real deaths
+    /// are panics inside the tick loop, not reachable from outside the crate.
+    #[doc(hidden)]
+    pub fn inject_death_for_test(&self) {
+        // Stop the running thread so it cannot keep ticking past the injected death.
+        self.stop.store(true, Ordering::SeqCst);
+        self.tick_confirmed.store(false, Ordering::SeqCst);
+        write_health(&self.state, HealthState::Degraded);
+        // Engage the gate: the restarted thread will wait before its first tick.
+        self.restart_gate.engage();
+    }
+
+    /// Test hook: release the restart gate and block until the restarted thread
+    /// confirms a post-restart tick.
+    ///
+    /// Releases the gate engaged by `inject_death_for_test`, then blocks until the
+    /// restarted thread has set `tick_confirmed` (and thus flipped health to `Ok`).
+    /// Deterministic — uses the confirmed flag, not a fixed sleep.
+    #[doc(hidden)]
+    pub fn await_tick_confirmation_for_test(&self) {
+        self.restart_gate.release();
+        // Spin-wait on the confirmed flag. The restarted thread sets it within one
+        // tick interval (10 ms) of release; bound the wait generously to avoid a
+        // hang if something is wrong, but it confirms near-instantly in practice.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !self.tick_confirmed.load(Ordering::SeqCst) {
+            if Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    /// Test hook: poison the internal health-state mutex.
+    ///
+    /// Forces the mutex into a poisoned state by panicking while holding the lock
+    /// on a scratch thread. Used to prove `health_state()` degrades fail-safe on a
+    /// poisoned lock rather than panicking (#1690-b).
+    #[doc(hidden)]
+    pub fn poison_health_lock_for_test(&self) {
+        let state = Arc::clone(&self.state);
+        let _ = std::thread::spawn(move || {
+            let _guard = state.lock().unwrap_or_else(|e| e.into_inner());
+            // Panic while holding the lock — this poisons the mutex.
+            panic!("intentional poison of health-state lock (test hook)");
+        })
+        .join();
     }
 }
 
@@ -161,6 +355,8 @@ impl Drop for EpochTickThread {
     fn drop(&mut self) {
         // Signal the tick loop to exit.
         self.stop.store(true, Ordering::SeqCst);
+        // Release the gate so a thread blocked at it can exit cleanly on Drop.
+        self.restart_gate.release();
     }
 }
 
@@ -170,24 +366,34 @@ impl Drop for EpochTickThread {
 
 /// Spawn the background tick thread.
 ///
-/// The thread runs a tight loop: sleep `TICK_INTERVAL`, increment the engine
-/// epoch, check the stop flag. On panic the thread sets health state to
-/// `Degraded` and emits a tracing error event.
-fn spawn_tick_thread(engine: Engine, state: Arc<Mutex<HealthState>>, stop: Arc<AtomicBool>) {
-    // Capture `deadline` for the doc comment; actual usage is via EPOCH_DEADLINE.
-    let _ = EPOCH_DEADLINE; // ensure the constant is referenced in this module.
+/// The thread first waits at the restart gate (no-op unless engaged), then enters
+/// a tight loop: sleep `TICK_INTERVAL`, increment the engine epoch, and on its
+/// FIRST post-gate tick set `tick_confirmed` + flip health to `Ok` (confirm-restart,
+/// #1690-a). On panic the thread sets health state to `Degraded`, clears the
+/// confirmed flag, and emits a tracing error event.
+fn spawn_tick_thread(
+    engine: Engine,
+    state: Arc<Mutex<HealthState>>,
+    stop: Arc<AtomicBool>,
+    tick_confirmed: Arc<AtomicBool>,
+    restart_gate: Arc<RestartGate>,
+) {
+    // Reference the deadline constant so this module's limit documentation stays
+    // wired to the constant.
+    let _ = EPOCH_DEADLINE;
 
-    std::thread::Builder::new()
+    // Keep a handle to the confirmed flag + state for the spawn-failure path; the
+    // closure takes its own clones.
+    let fail_confirmed = Arc::clone(&tick_confirmed);
+    let fail_state = Arc::clone(&state);
+
+    let spawn_result = std::thread::Builder::new()
         .name("mnemra-epoch-tick".to_owned())
         .spawn(move || {
-            // The panic hook is set before entering the loop. On panic, the
-            // standard `take_hook` fires, then Rust's default handler unwinds
-            // and the thread exits — we detect this via the JoinHandle::join in
-            // a monitoring wrapper below. However, for simplicity at V0 we use
-            // a catch_unwind to detect panics inside the loop and transition
-            // health state without a monitoring wrapper.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                tick_loop(&engine, &stop);
+                // Wait at the gate (production: never engaged → immediate return).
+                restart_gate.wait_until_released();
+                tick_loop(&engine, &stop, &state, &tick_confirmed);
             }));
 
             if let Err(panic_payload) = result {
@@ -195,11 +401,7 @@ fn spawn_tick_thread(engine: Engine, state: Arc<Mutex<HealthState>>, stop: Arc<A
                 let msg = panic_payload
                     .downcast_ref::<&str>()
                     .map(|s| s.to_string())
-                    .or_else(|| {
-                        panic_payload
-                            .downcast_ref::<String>()
-                            .cloned()
-                    })
+                    .or_else(|| panic_payload.downcast_ref::<String>().cloned())
                     .unwrap_or_else(|| "(opaque panic payload)".to_owned());
 
                 tracing::error!(
@@ -208,21 +410,47 @@ fn spawn_tick_thread(engine: Engine, state: Arc<Mutex<HealthState>>, stop: Arc<A
                     "epoch tick thread panicked — plugin invocations refused until restart (R-0007-h)"
                 );
 
-                let mut guard = state.lock().expect("health state lock on panic path");
-                *guard = HealthState::Degraded;
+                // Fail-safe write (recovers from a poisoned lock, #1690-b).
+                tick_confirmed.store(false, Ordering::SeqCst);
+                write_health(&state, HealthState::Degraded);
             }
             // Normal exit (stop flag set via Drop) — no health-state change.
-        })
-        .expect("failed to spawn mnemra-epoch-tick thread");
+        });
+
+    if let Err(e) = spawn_result {
+        // Spawning the supervisor thread failed — fail-safe to Degraded rather
+        // than panicking the host (#1690-b spirit: reliability controls fail closed).
+        tracing::error!(
+            event = "epoch_tick_thread_spawn_failed",
+            error = %e,
+            "failed to spawn mnemra-epoch-tick thread — health degraded (R-0007-h)"
+        );
+        fail_confirmed.store(false, Ordering::SeqCst);
+        write_health(&fail_state, HealthState::Degraded);
+    }
 }
 
-/// The tick loop: sleep, increment, repeat until stop.
-fn tick_loop(engine: &Engine, stop: &AtomicBool) {
+/// The tick loop: sleep, increment, confirm on first tick, repeat until stop.
+fn tick_loop(
+    engine: &Engine,
+    stop: &AtomicBool,
+    state: &Mutex<HealthState>,
+    tick_confirmed: &AtomicBool,
+) {
+    let mut confirmed = false;
     loop {
         std::thread::sleep(TICK_INTERVAL);
         if stop.load(Ordering::Relaxed) {
             break;
         }
         engine.increment_epoch();
+
+        // Confirm-restart (#1690-a): on the first real post-gate tick, mark the
+        // restart confirmed and return health to Ok. Idempotent thereafter.
+        if !confirmed {
+            tick_confirmed.store(true, Ordering::SeqCst);
+            write_health(state, HealthState::Ok);
+            confirmed = true;
+        }
     }
 }
