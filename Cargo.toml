@@ -16,6 +16,10 @@ authors = ["Peter Manahan"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
+# Task 23: official MCP server SDK (rmcp). Pinned at 1.7; no http/streamable-http
+# feature (R-0010-e). Server runtime uses server+macros+transport-io; the client
+# feature is added only as a dev-dependency for in-process test transports.
+rmcp = { version = "1.7", features = ["server", "macros", "transport-io"], default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 wit-bindgen = "0.57"

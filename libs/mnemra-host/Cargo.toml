@@ -18,6 +18,9 @@ test-hooks = []
 
 [dependencies]
 async-trait = "0.1.89"
+# Task 23: MCP server SDK — server+macros+transport-io features (no http/streamable-http;
+# R-0010-e). runtime dep so the ServerHandler impl can be compiled into the host.
+rmcp = { workspace = true }
 base64 = "0.22.1"
 blake3 = "1.8.5"
 chrono = { version = "0.4.45", features = ["serde"] }
@@ -53,6 +56,13 @@ uuid = { version = "1.23.3", features = ["v4", "v5"] }
 
 [dev-dependencies]
 anyhow = "1.0.102"
+# Task 23: rmcp client feature for in-process test transport (serve_client, Peer::call_tool).
+# The runtime rmcp dep above uses server+macros+transport-io only (R-0010-e compliance);
+# the client feature is dev-only so it does not activate in production builds.
+rmcp = { workspace = true, features = ["client"] }
+# Task 23: serde_json for mcp_feature_guard.rs (cargo metadata parse) and
+# test argument construction.
+serde_json = "1.0"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 quote = "1.0.45"
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
