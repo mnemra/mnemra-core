@@ -496,9 +496,8 @@ async fn control_plane_verbs_absent_from_tools_list() {
     init(&engine, "vector").await.expect("init should succeed");
     let pool = engine.pool.as_ref();
 
-    let workspace_id = DEFAULT_WORKSPACE_ID;
-    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
-
+    // No token needed: tools/list is unauthenticated (R-0010-g only checks the
+    // structural content of the advertised tool set, not auth behavior on list).
     let server = MnemraMcpServer::new(pool.clone());
 
     let (server_transport, client_transport) = duplex(4096);
