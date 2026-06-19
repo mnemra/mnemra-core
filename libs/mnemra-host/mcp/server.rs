@@ -56,7 +56,7 @@ use crate::plugin::manifest::parse_manifest;
 /// advertisement does NOT need a verified runtime; it needs only the
 /// `[verbs].exposed` list, which is safe to extract from TOML alone.
 const ECHO_MANIFEST_TOML: &[u8] =
-    include_bytes!("../../../../../plugins/mnemra-echo/manifest.toml");
+    include_bytes!("../../../plugins/mnemra-echo/manifest.toml");
 
 // ---------------------------------------------------------------------------
 // MnemraMcpServer
