@@ -9,6 +9,13 @@ description = "mnemra runtime host — startup and lifecycle coordination"
 [lib]
 path = "./mnemra_host.rs"
 
+# Coordination token for task #1702 / Task 23 MCP server security gate.
+# Declaration only — no source is gated behind this feature in the default build.
+# Green phase (Forge) will add #[cfg(feature = "test-hooks")] to the 5
+# EpochTickThread test-seam methods and gate resource_limits.rs tests.
+[features]
+test-hooks = []
+
 [dependencies]
 async-trait = "0.1.89"
 base64 = "0.22.1"
@@ -51,4 +58,5 @@ quote = "1.0.45"
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
 tempfile = "3.27.0"
 tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
+trybuild = "1.0.116"
 wit-parser = "0.247"
