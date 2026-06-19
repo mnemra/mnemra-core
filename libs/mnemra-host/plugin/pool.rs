@@ -34,10 +34,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use wasmtime::Engine;
+use wasmtime::{Engine, Instance, Module, Store};
 
 use crate::plugin::epoch_thread::{EpochTickThread, HealthState};
-use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, build_engine};
+use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, PluginResourceLimiter, build_engine};
 use crate::plugin::runtime::PluginRuntime;
 
 // ---------------------------------------------------------------------------
@@ -67,6 +67,64 @@ pub struct PluginSlot {
 }
 
 // ---------------------------------------------------------------------------
+// LiveSlot — a Task-22 live, trappable instance slot
+// ---------------------------------------------------------------------------
+
+/// A live, pre-instantiated, trappable plugin instance held by the pool
+/// (R-0016-a/b, R-0007-e/f).
+///
+/// Unlike the Task-21 `PluginSlot` (a manifest handle reserved for Task-23 store
+/// wiring), a `LiveSlot` holds an ACTUAL Wasmtime `Store` + `Instance` ready to
+/// run a verb. This is what makes kill-and-replace GENUINE: the breaching
+/// invocation runs on the live instance taken from a slot, and that store (now
+/// trapped/poisoned) is dropped while a fresh instance is instantiated back into
+/// the slot synchronously (R-0016-c).
+///
+/// At Task 22 the population path is `register_module` (from a compiled
+/// `wasmtime::Module`); production artifact→Module population is Task 23.
+struct LiveSlot {
+    /// The live store for this slot's instance. `None` only transiently while an
+    /// invocation has taken the instance out and before the replacement lands.
+    store: Store<PluginResourceLimiter>,
+    /// The live instance bound to `store`.
+    instance: Instance,
+}
+
+/// The live, registered module + identity for a plugin, plus its live slots.
+///
+/// Replaces nothing — it sits alongside the Task-21 `PluginEntry`, which remains
+/// for the manifest-handle `register` path. `LiveModuleEntry` is the Task-22
+/// trappable population path.
+struct LiveModuleEntry {
+    plugin_name: String,
+    plugin_version: String,
+    module: Arc<Module>,
+    /// Live slots. Each is `Some` when populated and `None` only transiently
+    /// during a take→repopulate cycle. `slot_count` counts the `Some` entries.
+    slots: Vec<Option<LiveSlot>>,
+}
+
+/// A live invocation borrowed out of the pool: the slot's store + instance moved
+/// out for the duration of the call, plus the identity and slot index needed to
+/// emit the event and repopulate the slot afterward.
+///
+/// The `store` + `instance` are the GENUINE live entry taken from the slot — the
+/// slot is left empty (`None`) until `repopulate_slot` instantiates a fresh one.
+/// On a trap the store is poisoned; dropping this struct kills it.
+pub struct LiveInvocation {
+    /// The live store taken from the slot — the caller applies the budget here.
+    pub store: Store<PluginResourceLimiter>,
+    /// The live instance to call the verb on.
+    pub instance: Instance,
+    /// The plugin identity (for the emitted event).
+    pub plugin_id: String,
+    /// The plugin version (for the emitted event).
+    pub plugin_version: String,
+    /// The slot index the live entry was taken from (for repopulation).
+    pub slot_index: usize,
+}
+
+// ---------------------------------------------------------------------------
 // PluginPool
 // ---------------------------------------------------------------------------
 
@@ -80,8 +138,11 @@ pub struct PluginPool {
     engine: Engine,
     /// The supervised epoch-tick thread. Must be healthy before any invocation.
     epoch_thread: EpochTickThread,
-    /// Per-plugin-name slot pools.
+    /// Per-plugin-name slot pools (Task-21 manifest-handle path).
     slots: Mutex<Vec<PluginEntry>>,
+    /// Per-plugin-name LIVE module entries (Task-22 trappable path). Each holds a
+    /// compiled `Module` + POOL_MIN live instances usable by `invoke_with_recovery`.
+    live_modules: Mutex<Vec<LiveModuleEntry>>,
 }
 
 // Fields are written during `register` and will be read when Task 23 wires
@@ -106,6 +167,7 @@ impl PluginPool {
             engine,
             epoch_thread,
             slots: Mutex::new(Vec::new()),
+            live_modules: Mutex::new(Vec::new()),
         })
     }
 
@@ -161,5 +223,143 @@ impl PluginPool {
     /// Returns the epoch deadline constant for configuring Stores.
     pub fn epoch_deadline() -> u64 {
         EPOCH_DEADLINE
+    }
+
+    // -----------------------------------------------------------------------
+    // Task-22 live-module path (trappable instances + kill-and-replace)
+    // -----------------------------------------------------------------------
+
+    /// Register a compiled `wasmtime::Module` as a live, trappable plugin and
+    /// populate `POOL_MIN` live instances (R-0016-a, R-0007-e/f).
+    ///
+    /// Each live slot is a pre-instantiated `Store` + `Instance` ready to run a
+    /// verb. Unlike `register` (the Task-21 manifest-handle path), these slots are
+    /// genuinely trappable: a resource-limit breach during a verb call kills the
+    /// live instance and a fresh one is instantiated synchronously (R-0016-c).
+    ///
+    /// Production wiring of `artifact bytes → Module` is Task 23; this path is the
+    /// Task-22 `Module → pool → invoke → trap → replace` seam.
+    pub fn register_module(
+        &self,
+        plugin_name: &str,
+        plugin_version: &str,
+        module: &Module,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let module = Arc::new(module.clone());
+
+        // Pre-instantiate POOL_MIN live slots. A failure to instantiate the
+        // fixture is a registration error, surfaced to the caller (fail-closed).
+        let mut slots: Vec<Option<LiveSlot>> = Vec::with_capacity(POOL_MIN);
+        for _ in 0..POOL_MIN {
+            let slot = self.instantiate_live_slot(&module)?;
+            slots.push(Some(slot));
+        }
+
+        let mut live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        live.push(LiveModuleEntry {
+            plugin_name: plugin_name.to_owned(),
+            plugin_version: plugin_version.to_owned(),
+            module,
+            slots,
+        });
+
+        Ok(())
+    }
+
+    /// The number of currently-populated live slots for `plugin_name`.
+    ///
+    /// Used to assert pool-size preservation across a kill-and-replace (R-0016-c):
+    /// because the replacement is synchronous, the count is equal before and after
+    /// a breaching invocation that returns an error.
+    pub fn slot_count(&self, plugin_name: &str) -> usize {
+        let live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        live.iter()
+            .find(|e| e.plugin_name == plugin_name)
+            .map(|e| e.slots.iter().filter(|s| s.is_some()).count())
+            .unwrap_or(0)
+    }
+
+    /// Instantiate a fresh live slot for `module` on this pool's engine.
+    ///
+    /// Builds a `Store` whose data IS the `PluginResourceLimiter` (memory ceiling)
+    /// and instantiates the module with no imports (the Task-22 fixtures import
+    /// nothing). Budget (fuel/epoch) is applied per-invocation, not here.
+    fn instantiate_live_slot(
+        &self,
+        module: &Module,
+    ) -> Result<LiveSlot, Box<dyn std::error::Error>> {
+        let mut store = Store::new(&self.engine, PluginResourceLimiter);
+        store.limiter(|limiter| limiter as &mut dyn wasmtime::ResourceLimiter);
+        let instance = Instance::new(&mut store, module, &[])?;
+        Ok(LiveSlot { store, instance })
+    }
+
+    /// Take the live instance out of the first populated slot for `plugin_name`
+    /// for an invocation (R-0016-c kill-and-replace step 1).
+    ///
+    /// The slot is left EMPTY (`None`) — the caller runs the verb on the returned
+    /// `LiveInvocation`, then calls `repopulate_slot` to instantiate a fresh
+    /// instance back into the slot before returning to its own caller. Returns
+    /// `None` if the plugin is not registered or has no populated slots.
+    pub fn take_live_invocation(&self, plugin_name: &str) -> Option<LiveInvocation> {
+        let mut live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = live.iter_mut().find(|e| e.plugin_name == plugin_name)?;
+
+        // Find the first populated slot index.
+        let slot_index = entry.slots.iter().position(|s| s.is_some())?;
+        // `take` the live entry out — the slot is now genuinely empty (killed
+        // pending replacement). `.get_mut` is used (not indexing) but the index
+        // came from `position` so it is in-bounds; still, be defensive.
+        let live_slot = entry.slots.get_mut(slot_index).and_then(Option::take)?;
+
+        Some(LiveInvocation {
+            store: live_slot.store,
+            instance: live_slot.instance,
+            plugin_id: entry.plugin_name.clone(),
+            plugin_version: entry.plugin_version.clone(),
+            slot_index,
+        })
+    }
+
+    /// Instantiate a fresh live instance back into `slot_index` for `plugin_name`
+    /// (R-0016-c kill-and-replace step 2 — synchronous replacement).
+    ///
+    /// Called after a verb invocation (whether it trapped or returned) to restore
+    /// the slot to a live, ready state. The old (possibly trapped) store was moved
+    /// into the `LiveInvocation` and is dropped by the caller — this method creates
+    /// its replacement so the pool size is preserved.
+    ///
+    /// Fail-closed: if re-instantiation fails (it should not for a module that
+    /// already instantiated at registration), the slot is left empty and the
+    /// failure is logged; the pool does not panic.
+    pub fn repopulate_slot(&self, plugin_name: &str, slot_index: usize) {
+        // Resolve the module under the lock, then instantiate, then store back.
+        let module = {
+            let live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+            match live.iter().find(|e| e.plugin_name == plugin_name) {
+                Some(entry) => Arc::clone(&entry.module),
+                None => return,
+            }
+        };
+
+        let fresh = match self.instantiate_live_slot(&module) {
+            Ok(slot) => slot,
+            Err(e) => {
+                tracing::error!(
+                    event = "plugin_slot_replacement_failed",
+                    plugin_id = %plugin_name,
+                    error = %e,
+                    "failed to re-instantiate plugin slot after kill — slot left empty (fail-closed)"
+                );
+                return;
+            }
+        };
+
+        let mut live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(entry) = live.iter_mut().find(|e| e.plugin_name == plugin_name)
+            && let Some(slot) = entry.slots.get_mut(slot_index)
+        {
+            *slot = Some(fresh);
+        }
     }
 }
