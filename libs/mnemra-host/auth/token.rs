@@ -347,6 +347,35 @@ pub async fn rotate(
     Ok((new_token, event))
 }
 
+/// Hash a presented raw token string to a `TokenHash` without constructing an `AdminToken`.
+///
+/// # Auth-wiring gap (Task 23)
+///
+/// `AdminToken`'s inner field is private; there is no public path to construct
+/// one from a caller-supplied string. The MCP DF-auth-check receives a raw
+/// token string from `_meta.token` and needs to hash it for a DB lookup without
+/// an `AdminToken` in hand.
+///
+/// This function decodes the base64url string and hashes the raw bytes exactly
+/// as `hash(&AdminToken)` would. Returns `None` if the string is not valid
+/// base64url or does not decode to exactly 32 bytes — the caller MUST treat
+/// `None` as an auth failure.
+///
+/// # Security note (R-0004-h)
+///
+/// The token string MUST NOT appear in any log, metric, event, or error
+/// message. Pass `token_str` into this function; do not format it elsewhere.
+pub fn hash_presented(token_str: &str) -> Option<TokenHash> {
+    let decoded = URL_SAFE_NO_PAD.decode(token_str).ok()?;
+    if decoded.len() != 32 {
+        return None;
+    }
+    let mut buf = [0u8; 32];
+    buf.copy_from_slice(&decoded);
+    let hash_output = Blake3Hasher::new().update(&buf).finalize();
+    Some(TokenHash(*hash_output.as_bytes()))
+}
+
 /// Look up a token row by its BLAKE3 hash.
 ///
 /// Returns `Ok(None)` if not found. After rotation, a lookup by the old token's
