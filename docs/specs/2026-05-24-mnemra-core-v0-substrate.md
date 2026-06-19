@@ -431,8 +431,11 @@ Documented in [P-0003](../src/adrs/P-0003-plugin-manifest.md). The `[signature]`
 | Authentication failure | Distinguished code (not -32600 / -32601 / -32602) | Not conflated with parse/method/params errors |
 | Verb not found | `-32601` (method not found) | MCP-standard |
 | Parameter invalid | `-32602` (invalid params) | MCP-standard |
-| Plugin execution timeout | Custom code | Returned on epoch/fuel limit |
+| Plugin execution timeout (`plugin_execution_timeout`) | Custom code | Returned on epoch-deadline limit breach |
+| Plugin resource exhausted (`plugin_resource_exhausted`) | Custom code | Returned on fuel-exhaustion limit breach (distinct from timeout: a compute-budget breach, not a wall-clock timeout) |
 | Permission denied | Custom code | Returned on role check failure |
+
+*(Amended 2026-06-19: §434 split the single plugin-execution error code into distinct epoch (`plugin_execution_timeout`) and fuel (`plugin_resource_exhausted`) caller codes; maintainer-approved, ratifies the Task-22 trap-recovery behavior.)*
 
 ### Health endpoint
 
