@@ -1,0 +1,5 @@
+error[E0599]: no associated function or constant named `inject_death_for_test` found for struct `EpochTickThread` in the current scope
+  --> tests/ui/no_test_seams/inject_death_reachable.rs:15:52
+   |
+15 |     let _: fn(&EpochTickThread) = EpochTickThread::inject_death_for_test;
+   |                                                    ^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `EpochTickThread`

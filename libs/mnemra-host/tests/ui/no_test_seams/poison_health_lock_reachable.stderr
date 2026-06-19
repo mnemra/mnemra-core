@@ -1,0 +1,5 @@
+error[E0599]: no associated function or constant named `poison_health_lock_for_test` found for struct `EpochTickThread` in the current scope
+  --> tests/ui/no_test_seams/poison_health_lock_reachable.rs:10:52
+   |
+10 |     let _: fn(&EpochTickThread) = EpochTickThread::poison_health_lock_for_test;
+   |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `EpochTickThread`

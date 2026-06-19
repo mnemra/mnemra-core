@@ -1,0 +1,5 @@
+error[E0599]: no associated function or constant named `tick_confirmed_since_restart` found for struct `EpochTickThread` in the current scope
+  --> tests/ui/no_test_seams/tick_confirmed_since_restart_reachable.rs:10:60
+   |
+10 |     let _: fn(&EpochTickThread) -> bool = EpochTickThread::tick_confirmed_since_restart;
+   |                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `EpochTickThread`

@@ -1,0 +1,5 @@
+error[E0599]: no associated function or constant named `can_invoke` found for struct `EpochTickThread` in the current scope
+  --> tests/ui/no_test_seams/can_invoke_epoch_seam_reachable.rs:13:60
+   |
+13 |     let _: fn(&EpochTickThread) -> bool = EpochTickThread::can_invoke;
+   |                                                            ^^^^^^^^^^ associated function or constant not found in `EpochTickThread`

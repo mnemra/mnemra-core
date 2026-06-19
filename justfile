@@ -103,6 +103,18 @@ verify-test:
         exit 1
     fi
 
+# Verify: test-hooks feature — runs resource_limits.rs seam tests (gated behind test-hooks).
+# This is a CI gate so untrusted-path seam coverage is always exercised.
+verify-test-hooks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if cargo test -p mnemra-host --features test-hooks 2>&1; then
+        echo "GATE test-hooks PASS"
+    else
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+
 # Verify: coverage (emit number; no threshold gate at scaffold stage)
 verify-coverage:
     #!/usr/bin/env bash
@@ -136,4 +148,4 @@ verify-smoke:
 # CI entry point — runs every verify-* recipe in order.
 # First failure stops and exits non-zero.
 # This is the sole CI entry point (R-0018-c, R-0018-f).
-ci: verify-type verify-lint verify-test verify-coverage verify-build verify-smoke
+ci: verify-type verify-lint verify-test verify-test-hooks verify-coverage verify-build verify-smoke
