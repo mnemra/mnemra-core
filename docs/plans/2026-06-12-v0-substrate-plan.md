@@ -521,12 +521,16 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 ### Task 23: MCP server — stdio transport, auth-check, dispatch, error codes
 
-**Files:** `libs/mnemra-host/mcp/server.rs` (to-be-created), `libs/mnemra-host/mcp/dispatch.rs` (to-be-created), `libs/mnemra-host/mcp/errors.rs` (to-be-created)
+> Implementation approach per **P-0012** (plugin-runtime + MCP-SDK ADR).
+
+**Files:** `libs/mnemra-host/mcp/server.rs` (to-be-created) — the **`rmcp` `ServerHandler` integration** (official MCP Rust SDK over stdio), NOT a hand-rolled JSON-RPC transport; `libs/mnemra-host/mcp/dispatch.rs` (to-be-created) — mnemra's `DF-auth-check` + `WorkspaceCtx` construction + per-verb capability check, sitting **on top** of rmcp; `libs/mnemra-host/mcp/errors.rs` (to-be-created) — error-code mapping logic, on top of rmcp
 **Type:** backend
 **Depends on:** Task 14, Task 17, Task 22
 **Size:** L
 
-**What:** Implement the single MCP server (spec 2025-06-18, stdio transport): per-request `DF-auth-check` before any routing, namespaced verb dispatch (`<plugin>.<verb>`), the per-verb capability check, `WorkspaceCtx` construction at the single dispatch-path site after token validation, and distinguishable JSON-RPC error codes. Control-plane operations are NOT exposed as MCP verbs.
+**What:** Implement the single MCP server (spec 2025-06-18, stdio transport) built on the **official `rmcp` SDK over stdio (`transport-io`)**, NOT a hand-rolled MCP/JSON-RPC layer (per **P-0012**). mnemra's logic — per-request `DF-auth-check` before any routing, namespaced verb dispatch (`<plugin>.<verb>`), the per-verb capability check, `WorkspaceCtx` construction at the single dispatch-path site after token validation, and distinguishable JSON-RPC error codes — sits on top of rmcp's `ServerHandler`. Control-plane operations are NOT exposed as MCP verbs.
+
+**Dependency expectation:** Introduces `rmcp` v1.7 (Apache-2.0 — Green-tier, auto-proceed) with features `server` + `macros` + `transport-io`. It **explicitly does NOT enable any HTTP / streamable-http transport feature** — this is how `R-0010-e` ("Streamable-HTTP NOT activated at V0") is satisfied at the HOW level. Pin `rmcp` in `Cargo.toml` (no wildcard) and record it in the `verify-build` SBOM per the same pin/provenance discipline as Wasmtime (Task 26, `R-0007-i`).
 
 **Acceptance Criteria:**
 - [ ] A single MCP server runs MCP spec 2025-06-18 over stdio; all verbs from all loaded plugins are served from it; verbs are namespaced `<plugin>.<verb>` (`R-0010-a`, `R-0010-b`).
@@ -537,6 +541,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 - [ ] Control-plane operations are NOT exposed as MCP verbs; agent-facing CRUD routes through MCP only (`R-0010-g`).
 
 **Test Expectations:**
+- The framing-level test exercises **rmcp's MCP stdio handshake / `tools/list` / `tools/call` surface** (the SDK's real wire), not a hand-rolled JSON-RPC wire; the three scenarios below run through that surface.
 - Scenario: MCP verb dispatches under WorkspaceCtx — valid token → `WorkspaceCtx` constructed → `artifact.create` host-fn → WHERE-scoped insert → ULID returned → per-verb metric emitted.
 - Scenario: Admin token mismatch — bogus token → distinguishable auth-failure code, no `WorkspaceCtx`, no host-fn invoked, no data accessed.
 - Scenario: Read-observer denied write — re-validated end-to-end over MCP.
