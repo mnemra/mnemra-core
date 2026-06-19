@@ -106,6 +106,8 @@ impl RestartGate {
     }
 
     /// Engage the gate — the next restarted thread will block until `release`.
+    /// Only used by the `inject_death_for_test` seam; gated with it.
+    #[cfg(feature = "test-hooks")]
     fn engage(&self) {
         let mut g = self.engaged.lock().unwrap_or_else(|e| e.into_inner());
         *g = true;
@@ -272,18 +274,20 @@ impl EpochTickThread {
     }
 
     // -----------------------------------------------------------------------
-    // R-0007-h confirm-restart observation (always-compiled #[doc(hidden)] pub)
+    // R-0007-h confirm-restart observation (gated behind `test-hooks` feature)
     // -----------------------------------------------------------------------
     //
     // These hooks are NOT gated behind `#[cfg(test)]`: an integration-test crate
     // links the library compiled WITHOUT `--test`, so cfg(test) items would be
-    // invisible. They are `#[doc(hidden)] pub` so they do not appear in public
-    // docs and are not part of the supported surface. A feature flag is avoided —
-    // it would force `--features` through every build/test invocation. The
-    // prod-surface smell is dispositioned by the security review.
+    // invisible. They are gated behind `#[cfg(feature = "test-hooks")]` — a
+    // non-default cargo feature — so the default build and the production binary
+    // cannot reach them. Once Task 23 wires untrusted MCP dispatch into the same
+    // process, these in-process-callable poison/kill methods must not coexist
+    // with an untrusted path on the default surface (task #1702, Warden condition 1).
 
     /// Returns `true` iff invocations may proceed: the tick thread is healthy and
     /// a post-restart tick has been confirmed (R-0007-h).
+    #[cfg(feature = "test-hooks")]
     #[doc(hidden)]
     pub fn can_invoke(&self) -> bool {
         self.is_healthy() && self.tick_confirmed.load(Ordering::SeqCst)
@@ -292,6 +296,7 @@ impl EpochTickThread {
     /// Returns `true` iff a post-restart tick has been confirmed by the live
     /// thread since the last restart (R-0007-h, #1690-a). Immediately after
     /// `try_restart` and before the new thread ticks, this is `false`.
+    #[cfg(feature = "test-hooks")]
     #[doc(hidden)]
     pub fn tick_confirmed_since_restart(&self) -> bool {
         self.tick_confirmed.load(Ordering::SeqCst)
@@ -303,6 +308,7 @@ impl EpochTickThread {
     /// confirmed flag, and engages the restart gate so the NEXT restart's thread
     /// blocks before its first tick (deterministic confirm-restart). Real deaths
     /// are panics inside the tick loop, not reachable from outside the crate.
+    #[cfg(feature = "test-hooks")]
     #[doc(hidden)]
     pub fn inject_death_for_test(&self) {
         // Stop the running thread so it cannot keep ticking past the injected death.
@@ -319,6 +325,7 @@ impl EpochTickThread {
     /// Releases the gate engaged by `inject_death_for_test`, then blocks until the
     /// restarted thread has set `tick_confirmed` (and thus flipped health to `Ok`).
     /// Deterministic — uses the confirmed flag, not a fixed sleep.
+    #[cfg(feature = "test-hooks")]
     #[doc(hidden)]
     pub fn await_tick_confirmation_for_test(&self) {
         self.restart_gate.release();
@@ -339,6 +346,7 @@ impl EpochTickThread {
     /// Forces the mutex into a poisoned state by panicking while holding the lock
     /// on a scratch thread. Used to prove `health_state()` degrades fail-safe on a
     /// poisoned lock rather than panicking (#1690-b).
+    #[cfg(feature = "test-hooks")]
     #[doc(hidden)]
     pub fn poison_health_lock_for_test(&self) {
         let state = Arc::clone(&self.state);

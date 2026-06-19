@@ -47,8 +47,11 @@
 //! store running out of fuel first) fails the test LOUDLY — fail-shut on fixture
 //! correctness (the Task-22 analog of "fixtures must pass verify first").
 
+#[cfg(feature = "test-hooks")]
 use mnemra_host::plugin::epoch_thread::{EpochTickThread, HealthState};
-use mnemra_host::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, build_engine};
+#[cfg(feature = "test-hooks")]
+use mnemra_host::plugin::limits::build_engine;
+use mnemra_host::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT};
 use mnemra_host::plugin::pool::PluginPool;
 use mnemra_host::plugin::trap_recovery::{LimitType, PluginExecError, ResourceBudget};
 
@@ -471,6 +474,7 @@ fn trap_does_not_panic_host_and_pool_serves_again() {
 /// Then `is_healthy()` / `can_invoke()` returns `false` until a post-restart tick
 ///   is CONFIRMED observed — NOT optimistically flipped to Ok before the new
 ///   thread is confirmed ticking. Health becomes Ok only after the confirmed tick.
+#[cfg(feature = "test-hooks")]
 #[test]
 fn supervised_restart_confirms_tick_before_reporting_healthy() {
     let engine = build_engine().expect("engine must build");
@@ -547,6 +551,7 @@ fn supervised_restart_confirms_tick_before_reporting_healthy() {
 /// Then it returns a value (degraded, fail-safe) and does NOT panic — replacing
 ///   the current `.expect("...poisoned")` which aborts the host on a poisoned
 ///   lock.
+#[cfg(feature = "test-hooks")]
 #[test]
 fn health_state_does_not_panic_on_poisoned_lock() {
     let engine = build_engine().expect("engine must build");

@@ -1,0 +1,5 @@
+error[E0599]: no associated function or constant named `await_tick_confirmation_for_test` found for struct `EpochTickThread` in the current scope
+  --> tests/ui/no_test_seams/await_tick_confirmation_reachable.rs:10:52
+   |
+10 |     let _: fn(&EpochTickThread) = EpochTickThread::await_tick_confirmation_for_test;
+   |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `EpochTickThread`
