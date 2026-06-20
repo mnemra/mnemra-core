@@ -11,12 +11,14 @@
 //!
 //! # R-ID mapping
 //!
-//! | Test function                                      | R-ID(s)                  |
-//! |----------------------------------------------------|--------------------------|
-//! | valid_admin_token_echo_create_returns_ok           | R-0010-a/b/c/d, R-0006-b |
-//! | bogus_token_returns_distinguishable_auth_failure   | R-0010-c/f               |
-//! | read_observer_write_denied_permission_error        | R-0010-d/f, R-0009-e     |
-//! | control_plane_verbs_absent_from_tools_list         | R-0010-g                 |
+//! | Test function                                                | R-ID(s)                  |
+//! |--------------------------------------------------------------|--------------------------|
+//! | valid_admin_token_echo_create_returns_ok                     | R-0010-a/b/c/d, R-0006-b |
+//! | bogus_token_returns_distinguishable_auth_failure             | R-0010-c/f               |
+//! | read_observer_write_denied_permission_error                  | R-0010-d/f, R-0009-e     |
+//! | control_plane_verbs_absent_from_tools_list                   | R-0010-g                 |
+//! | read_observer_non_read_verb_denied_permission_error (RED)    | R-0009-d/e               |
+//! | read_observer_get_verb_not_denied (regression guard)         | R-0009-d                 |
 //!
 //! # RED-phase design
 //!
@@ -569,6 +571,226 @@ async fn control_plane_verbs_absent_from_tools_list() {
          Advertised tools: {:?}",
         tool_names
     );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 5 (RED): ReadObserver + non-read verb tail → permission-denied
+//   is_write_verb fail-closed (#1728 slice 1)
+// ===========================================================================
+
+/// R-0009-d/e — ReadObserver dispatching a verb whose tail is not a known read
+/// must receive PERMISSION_DENIED_CODE (fail-closed).
+///
+/// # The defect being closed
+///
+/// `mcp/dispatch.rs:is_write_verb` currently uses an EXPLICIT WRITE ALLOWLIST
+/// (`create | update | delete`).  Every OTHER tail — including `audit` — falls
+/// through to `PluginReadVerb`, granting ReadObserver access.  This is a
+/// fail-OPEN default that violates R-0009-d.
+///
+/// The fix (Forge's green phase) inverts the logic to a fail-CLOSED READ
+/// ALLOWLIST: only `get` and `list` are classified as reads; everything else
+/// — including unknown tails such as `audit` — is treated as a write and
+/// denied to ReadObserver.
+///
+/// # Given / When / Then
+///
+/// GIVEN a valid read_observer-scoped token seeded in admin_tokens
+/// WHEN the client sends a `tools/call` request for `echo.audit`
+///   (tail = "audit", NOT in {get, list})
+/// THEN the MCP handler returns a JSON-RPC error with PERMISSION_DENIED_CODE —
+///   the same code `read_observer_write_denied_permission_error` asserts for
+///   `echo.create` — and NOT an Ok response.
+///
+/// # Right-reason red
+///
+/// Against CURRENT code: `is_write_verb("echo.audit")` returns false (tail
+/// "audit" is not in {create, update, delete}), so `echo.audit` is classified
+/// as `PluginReadVerb` and ReadObserver is permitted.  The test's
+/// `assert_eq!(code, PERMISSION_DENIED_CODE)` therefore FAILS today for the
+/// correct behavioral reason: the permission check PASSES when it should DENY.
+///
+/// After Forge's green phase: `is_write_verb` returns true for "audit" (not in
+/// read allowlist {get, list}), ReadObserver is denied, and this test passes.
+///
+/// # verify: []
+///
+/// The dispatch envelope carries `verify: []` by design.  This test fails
+/// against current code (right-reason red); `verify: []` is correct because
+/// the recipe runs only after the green phase lands.
+#[tokio::test]
+async fn read_observer_non_read_verb_denied_permission_error() {
+    // R-0009-d/e: ReadObserver + non-read verb tail → PERMISSION_DENIED_CODE.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone());
+
+    let (server_transport, client_transport) = duplex(4096);
+
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — read_observer presents a valid token and calls echo.audit.
+    // echo.audit is in the manifest's exposed list (tail = "audit") but its
+    // tail is NOT in the read allowlist {get, list} — it MUST be denied.
+    let mut params = CallToolRequestParams::new("echo.audit");
+    params.meta = Some(token_meta(token.as_str()));
+    // No arguments needed: the permission check runs before dispatch.
+
+    let result = client.call_tool(params).await;
+
+    // THEN — must be a JSON-RPC error with PERMISSION_DENIED_CODE.
+    // (Mirrors read_observer_write_denied_permission_error shape exactly.)
+    let err = result.expect_err(
+        "R-0009-d/e: read_observer on echo.audit (non-read tail) must return Err, not Ok; \
+         current is_write_verb fails open — this is the right-reason red",
+    );
+
+    match err {
+        rmcp::ServiceError::McpError(ref error_data) => {
+            // Assert PERMISSION_DENIED_CODE — not merely any error (R-0009-d/e).
+            assert_eq!(
+                error_data.code, PERMISSION_DENIED_CODE,
+                "R-0009-d/e: ReadObserver on non-read verb echo.audit must return \
+                 PERMISSION_DENIED_CODE ({:?}), got {:?}",
+                PERMISSION_DENIED_CODE, error_data.code
+            );
+
+            // Assert it is NOT the auth-failure code — token is valid (R-0010-f).
+            assert_ne!(
+                error_data.code, AUTH_FAILURE_CODE,
+                "R-0009-d/e: echo.audit denial must be a permission error, not an \
+                 auth failure — the token is valid; only the role capability is wrong"
+            );
+        }
+        other => panic!(
+            "R-0009-d/e: expected ServiceError::McpError for echo.audit denial, got {:?}",
+            other
+        ),
+    }
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 6 (regression guard): ReadObserver + read verb → NOT denied
+//   Pins the read-allowlist boundary so Forge's fix cannot over-deny.
+// ===========================================================================
+
+/// R-0009-d — ReadObserver dispatching `echo.get` (a known read verb) must NOT
+/// receive PERMISSION_DENIED_CODE.
+///
+/// # Guard intent
+///
+/// The fail-closed fix inverts `is_write_verb` to an explicit read allowlist
+/// ({get, list} → read; everything else → write).  This guard pins the
+/// boundary so the inversion cannot accidentally deny legitimate read verbs.
+///
+/// # Given / When / Then
+///
+/// GIVEN a valid read_observer-scoped token
+/// WHEN the client sends a `tools/call` request for `echo.get`
+///   (tail = "get", in the read allowlist)
+/// THEN the result does NOT carry PERMISSION_DENIED_CODE —
+///   the permission check passes and the call reaches dispatch.
+///
+/// # Why NOT assert is_ok()
+///
+/// `echo.get` with no prior `echo.create` may legitimately return a not-found
+/// or internal error from the plugin layer — that is a post-permission dispatch
+/// outcome, not a permission failure.  We assert only that the code is NOT
+/// PERMISSION_DENIED_CODE, which is the invariant R-0009-d guarantees for a
+/// read verb.  This test PASSES today (get is currently allowed) and MUST
+/// continue to pass after the green phase.
+///
+/// # verify: []
+///
+/// This guard passes today and after the fix.  The `verify: []` envelope
+/// reflects that the PRIMARY red (#5) fails; this guard is the boundary pin.
+#[tokio::test]
+async fn read_observer_get_verb_not_denied() {
+    // R-0009-d: ReadObserver + echo.get → permission check passes (not denied).
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone());
+
+    let (server_transport, client_transport) = duplex(4096);
+
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — read_observer presents a valid token and calls echo.get.
+    // echo.get tail = "get" is in the read allowlist; ReadObserver MUST be permitted.
+    let mut params = CallToolRequestParams::new("echo.get");
+    params.meta = Some(token_meta(token.as_str()));
+    // No artifact ID argument: any dispatch-layer error is post-permission and fine.
+
+    let result = client.call_tool(params).await;
+
+    // THEN — the result must NOT be PERMISSION_DENIED_CODE.
+    // Any other outcome (Ok, not-found error, internal error) is acceptable here
+    // because it means the permission check PASSED and dispatch was attempted.
+    match &result {
+        Err(rmcp::ServiceError::McpError(error_data)) => {
+            assert_ne!(
+                error_data.code, PERMISSION_DENIED_CODE,
+                "R-0009-d: ReadObserver on echo.get (read verb) MUST NOT receive \
+                 PERMISSION_DENIED_CODE; got {:?}. \
+                 The fail-closed fix must not over-deny the read allowlist.",
+                error_data.code
+            );
+            // Also guard: not an auth failure (token is valid).
+            assert_ne!(
+                error_data.code, AUTH_FAILURE_CODE,
+                "R-0009-d: ReadObserver echo.get must not return auth failure; \
+                 the token is valid"
+            );
+        }
+        Ok(_) | Err(_) => {
+            // Ok (dispatch succeeded) or a non-McpError transport error:
+            // both mean the permission check passed.  Guard holds.
+        }
+    }
 
     let _ = client.cancel().await;
     let _ = server_handle.await;
