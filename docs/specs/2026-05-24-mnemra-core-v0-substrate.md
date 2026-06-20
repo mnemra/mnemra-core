@@ -185,6 +185,16 @@ RFC-2119 keywords used throughout. `SHALL`/`MUST` = mandatory. `SHALL NOT`/`MUST
 - R-0018-e: The binary SHALL be built with Rust; non-Rust paths SHALL be adopted only where no viable in-stack path exists.
 - R-0018-f: The project SHALL provide a `Justfile` anchored to [G-0006](../../../../DEFAULTS.md) with the following fixed recipe names: `verify-test`, `verify-lint`, `verify-type`, `verify-coverage`, `verify-build`, `verify-smoke`, and `ci`. `just ci` SHALL be the sole CI entry point; it SHALL invoke all `verify-*` recipes. Each `verify-*` recipe SHALL emit `GATE <name> <PASS|FAIL>` on stdout. No `verify-*` recipe SHALL have `--fix` side effects. The `verify-build` recipe SHALL produce the signed binary with the embedded root verification material (per R-0005-d). The `verify-lint` recipe SHALL include the WHERE-clause lint check from R-0018-d.
 
+### R-0019 — Plugin invocation / export ABI (anchors [P-0013](../src/adrs/P-0013-plugin-invocation-model.md))
+
+*(Added 2026-06-20 per [P-0013](../src/adrs/P-0013-plugin-invocation-model.md) — "Plugin Invocation Model (typed per-verb exports)"; maintainer-approved scoped amendment. P-0013 records the locked invocation ABI: the WIT world declares a typed `content` interface every content plugin exports, and the host invokes the exact typed export per authenticated verb. This requirement pins the **export / invocation** side of the host↔guest boundary; R-0012 ("Host-fn ABI structural invariants") covers the **import** (host-fn) side. P-0013 fills the export gap R-0012 left.)*
+
+- R-0019-a: The plugin invocation ABI SHALL be typed per-verb exports. The WIT world SHALL declare a typed universal `content` interface — `create`, `get`, `list`, `update`, `delete` — that every content plugin exports; the host SHALL invoke the exact typed export corresponding to an authenticated verb. The universal `run(input: string) -> string` string-dispatch export SHALL NOT exist on the V0 surface (it is RETIRED). *(The requirement is stated for every content plugin so it is forward-applicable to any content plugin, not only V0's `core: true` class; at V0 the substrate loads only `core: true` plugins per R-0005-g, so the V0-loadable population this applies to is the `core: true` content plugins.)*
+- R-0019-b: The host↔guest boundary SHALL be typed in both directions: the import (host-fn) side per R-0012-f ("all host-fn parameters and return types SHALL be defined as WIT component types") and the export (invocation) side per R-0019-a. No string-based **verb-dispatch** path — a single export that parses its string input to select which verb to run — SHALL exist on the V0 surface. (This prohibits string-based *verb resolution*; it does NOT prohibit JSON-as-string *payloads*: `type json = string` for frontmatter/body crosses the typed boundary on both directions, per the WIT `json` type and R-0012-a.)
+- R-0019-c: At V0 the typed `content` interface SHALL be a **fixed** interface resolved statically (plain `wit_bindgen` against the fixed interface); there SHALL be no runtime export registry and no load-time dynamic verb→export resolution. The plugin manifest's declared `verbs` list (per R-0010-d) SHALL function as the **pre-dispatch capability gate** checked before dispatch, NOT as a runtime export registry; verb→export resolution is static.
+- R-0019-d: Domain / non-CRUD verbs (e.g., `echo.audit`) are deferred past V0; their export ABI SHALL be typed too when designed (no string hatch). A manifest-declared verb with no matching typed export SHALL be non-dispatchable at V0 and SHALL return a structured error; this non-dispatchable path SHALL NOT alter the pre-dispatch permission path (the `echo.audit` denial is pre-dispatch and is unaffected — the existing permission tests are not changed by the absence of a typed export).
+- R-0019-e: The export ABI SHALL be observable on the contract: a built content plugin component SHALL export the typed `content` interface (`create`/`get`/`list`/`update`/`delete`) and SHALL NOT export a `run`-shaped string-dispatch function; an MCP request for a manifest-declared verb with a corresponding typed export SHALL dispatch to that typed export; an MCP request for a manifest-declared verb with no corresponding typed export SHALL return the R-0019-d structured non-dispatchable error and SHALL leave the pre-dispatch permission outcome unchanged.
+
 ## Out of Scope
 
 The following are explicitly outside the `0.1.0` substrate increment scope. An implementing developer SHALL NOT build these in the `0.1.0` increment.
@@ -193,6 +203,7 @@ The following are explicitly outside the `0.1.0` substrate increment scope. An i
 - **HSM-backed or runtime-fetch signing key custody** — deferred to `{{P-SigningKeyCustodyHardening}}` (Tier-C ADR, not yet authored); activated by the multi-deployment trip-wire in [P-0005](../src/adrs/P-0005-v0-signing-chain.md).
 - **Increment-to-plugin mapping ratification** — the assignment of `0.2.0`–`0.14.0` capability families to the four `core: true` plugins is proposed in [P-0002](../src/adrs/P-0002-core-plugin-partition.md) and flagged for maintainer ratification before the `0.2.0` dispatch; it is not a deliverable of this `0.1.0` spec.
 - **Capability family implementations** (`0.2.0` task management through `0.14.0` content-corpus migration) — the substrate provides the ABI, storage, auth, and runtime; actual plugin code for capability families is out of scope for `0.1.0`.
+- **Domain / non-CRUD verb export ABI and the dynamic-resolution mechanism** (per [P-0013](../src/adrs/P-0013-plugin-invocation-model.md)) — V0 ships the fixed typed `content` CRUD export interface only (R-0019). Domain / non-CRUD verbs (e.g., `echo.audit`) and the load-time dynamic verb→export resolution mechanism they would need (a runtime registry mapping a manifest verb-name to a typed export handle — a *different* mechanism from V0's static fixed-interface `wit_bindgen`) are deferred past V0; the deferred ABI will be typed too when designed (no string hatch). *(Named tripwire, `P-Defer`: the first domain / non-CRUD verb that must dispatch at the V0 surface — a required verb the fixed `content` CRUD interface cannot express — fires the design of the deferred export ABI and its dynamic-resolution mechanism. A preference for generality is not a firing condition.)*
 - **Migration mechanics** (Tier-B ADRs: `{{P-MigrationID}}`, `{{P-FKPreservation}}`, `{{P-BackupRestore}}`, `{{P-CutoverDualWrite}}`) — deferred to migration-increment briefs; the migration handler builtin's execution logic is not in `0.1.0` scope.
 - **Tier-C operational hardening** (`{{P-PostgresExtDeploy}}`, `{{P-MCPWriteSemantics}}`, `{{P-SigningKeyCustodyHardening}}`, `{{P-AdminCLIDiscipline}}`) — deferred per [P-0005](../src/adrs/P-0005-v0-signing-chain.md) `P-Defer` principle.
 - **Cross-tier `{{P-ProjectionRebuild}}` detailed semantics** — cross-substrate rebuild ordering and refresh-queue dependency tracking is a follow-up Frame extension when the first cross-substrate projection lands.
@@ -228,6 +239,12 @@ The following are explicitly outside the `0.1.0` substrate increment scope. An i
 **Given** an MCP client connected over stdio presenting a valid admin token associated with `workspace_id = W1`  
 **When** the client sends a JSON-RPC request for verb `task.create` with valid arguments  
 **Then** `P-builtin-auth` validates the token; a `WorkspaceCtx { workspace_id: W1, role: Admin, token_id: T1 }` is constructed at a single construction site; the `WorkspaceCtx` is passed as the first parameter to the `artifact.create` host-fn; the host derives `workspace_id` from the context and performs `INSERT INTO tasks (...) WHERE workspace_id = W1`; the response carries the new artifact's ULID; a per-verb metric record is emitted to the OTel/stdout surface for verb `"task.create"`, outcome `"ok"`, and measured `duration_ms` (not written to an in-app hypertable — re-derived per [observability baseline](../src/architecture/overview.md#observability)).
+
+### Scenario: MCP verb dispatches to a typed content export — happy path
+
+**Given** a `tasks` plugin built as a component that exports the typed `content` interface (`create`/`get`/`list`/`update`/`delete`) and exports no `run`-shaped string-dispatch function, with `task.create` declared in its manifest `verbs` list, and an MCP client connected over stdio presenting a valid admin token for `workspace_id = W1`  
+**When** the client sends a JSON-RPC request for verb `task.create` with valid arguments  
+**Then** after `DF-auth-check` and the per-verb capability check against the manifest `verbs` list (R-0010-d), the host invokes the **typed `content.create` export** on a pooled `tasks` instance — resolved statically against the fixed `content` interface, with no runtime export-registry lookup (R-0019-a, R-0019-c) — passing the typed arguments across the WIT boundary and receiving a typed return; no string-based verb-dispatch path is traversed (R-0019-b); the response carries the new artifact's ULID. *(Companion: a manifest-declared verb with no matching typed export returns the R-0019-d structured non-dispatchable error and leaves the pre-dispatch permission outcome unchanged — covered by R-0019-e, not a separate scenario at V0 since no such verb ships.)*
 
 ### Scenario: Observability emits during a dogfood session — happy path
 
@@ -414,6 +431,21 @@ The plugin-facing host-fn ABI. All host-fns take `WorkspaceCtx` as the first par
 | `sampling.request` | `prompt: str, context_ids: [str]` | `completion: str` | Content IDs only in prompt args, not bodies |
 | `secrets.get` | `key: str` | `value: str` | Read-only; no write path |
 
+### Plugin export / invocation ABI
+
+The plugin-side export ABI the host invokes per authenticated verb (the **export** direction; the Host-fn ABI above is the **import** direction). Per [P-0013](../src/adrs/P-0013-plugin-invocation-model.md) and R-0019: a fixed typed `content` interface every content plugin exports (at V0 the substrate loads only `core: true` plugins per R-0005-g); resolved statically (plain `wit_bindgen`, no runtime registry). The retired `run(input: string) -> string` export is shown for contrast only — it SHALL NOT exist on the V0 surface.
+
+| Export | Parameters | Return | Notes |
+|--------|------------|--------|-------|
+| `content.create` | `type: str, frontmatter: JSON, body: str?` | `id: str` | Host invokes per authenticated `*.create` verb |
+| `content.get` | `id: str` | `option<...>` | Single artifact by id; `option` for not-found |
+| `content.list` | `type: str, filters: JSON` | `list<...>` | Workspace-scoped via `WorkspaceCtx` |
+| `content.update` | `id: str, frontmatter_patch: JSON, body: str?` | `()` | Patch, not replace |
+| `content.delete` | `id: str` | `()` | Destructive; gated per manifest |
+| ~~`run`~~ | ~~`input: str`~~ | ~~`str`~~ | RETIRED (R-0019-a) — string-dispatch export; no string-based verb resolution at V0 |
+
+*(Concrete typed WIT signatures for the `content` interface are a plan-tier artifact, authored with the implementation; this contract pins the interface shape and the export direction. The MCP-verb → `content`-method mapping rule is not yet pinned and is a forthcoming plan/implementation concern, not fixed by this spec — R-0019-c.)*
+
 ### Plugin manifest TOML schema (schema_version: 1)
 
 Documented in [P-0003](../src/adrs/P-0003-plugin-manifest.md). The `[signature]` section is populated at build time by the signing chain. The runtime verifies the signature synchronously at load time.
@@ -474,10 +506,10 @@ Documented in [P-0003](../src/adrs/P-0003-plugin-manifest.md). The `[signature]`
 
 Fields `/verify` consumes from this spec:
 
-- **requirements** — the RFC-2119 requirement list (R-IDs R-0001 through R-0018), including SHALL NOT / MUST NOT prohibitions
-- **scenarios** — the Given/When/Then set (15 scenarios: 5 happy path + 5 edge case + 5 failure path). Edge cases: cross-workspace ABI prevention (build-time test), read-observer role denial, build-host key-on-disk trip-wire, admin CLI schema-driven generation, token rotation event ordering. Failure paths: signing verification failure, resource limit epoch breach, admin token mismatch 401, epoch-tick thread death, plugin fuel exhaustion breach.
-- **out-of-scope** — the explicit prohibition boundary (21 items)
+- **requirements** — the RFC-2119 requirement list (R-IDs R-0001 through R-0019), including SHALL NOT / MUST NOT prohibitions
+- **scenarios** — the Given/When/Then set (16 scenarios: 6 happy path + 5 edge case + 5 failure path). Edge cases: cross-workspace ABI prevention (build-time test), read-observer role denial, build-host key-on-disk trip-wire, admin CLI schema-driven generation, token rotation event ordering. Failure paths: signing verification failure, resource limit epoch breach, admin token mismatch 401, epoch-tick thread death, plugin fuel exhaustion breach.
+- **out-of-scope** — the explicit prohibition boundary (20 items)
 - **data_model** — schema tables (artifact rows, admin_tokens, events, metrics) for `/verify` to validate against the running system
-- **api_contract** — host-fn ABI signatures and MCP transport shape
+- **api_contract** — host-fn ABI signatures (import direction), the typed `content` export / invocation ABI (export direction, R-0019), and MCP transport shape
 
 Per-task acceptance criteria, test expectations, and dependency declarations are **plan-tier** artifacts and live with the committed-tier plan document (authored separately when this feature moves from `designed` → `committed`). They are NOT in scope for `/verify`-at-spec-stage.
