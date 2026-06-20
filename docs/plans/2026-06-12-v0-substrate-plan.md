@@ -42,12 +42,12 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Add the fixed `verify-*` recipe set and the single `ci` entry point to the `justfile`, each emitting `GATE <name> <PASS|FAIL>` on stdout, wired to pass against the (currently near-empty) workspace. This operationally *defines* "green on main" for every later task, so it lands first.
 
 **Acceptance Criteria:**
-- [ ] `justfile` declares recipes `verify-test`, `verify-lint`, `verify-type`, `verify-coverage`, `verify-build`, `verify-smoke`, and `ci` (`R-0018-f`).
-- [ ] `just ci` is the sole CI entry point and invokes every `verify-*` recipe (`R-0018-f`).
+- [x] `justfile` declares recipes `verify-test`, `verify-lint`, `verify-type`, `verify-coverage`, `verify-build`, `verify-smoke`, and `ci` (`R-0018-f`).
+- [x] `just ci` is the sole CI entry point and invokes every `verify-*` recipe (`R-0018-f`).
 - [ ] Each `verify-*` recipe emits `GATE <name> <PASS|FAIL>` on stdout (`R-0018-f`).
-- [ ] No `verify-*` recipe has `--fix` side effects (`R-0018-f`).
-- [ ] `verify-lint` reserves a slot for the WHERE-clause lint check (wired in Task 12) (`R-0018-f`, forward to `R-0018-d`).
-- [ ] CI runs on worktree branches; main is protected from direct pushes (`R-0018-c`).
+- [x] No `verify-*` recipe has `--fix` side effects (`R-0018-f`).
+- [x] `verify-lint` reserves a slot for the WHERE-clause lint check (wired in Task 12) (`R-0018-f`, forward to `R-0018-d`).
+- [x] CI runs on worktree branches; main is protected from direct pushes (`R-0018-c`).
 
 **Test Expectations:**
 - `just ci` exits 0 on the empty/scaffold workspace and prints a `GATE … PASS` line per recipe.
@@ -65,9 +65,9 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Establish the runtime crate structure (host library crate(s) + the `mnemra` binary as a thin entry), replacing the existence-test spike `main.rs` with a real startup skeleton. Follow the workspace Rust layout convention (cmd / libs / plugins). No business logic — just the compiling skeleton subsequent layers fill.
 
 **Acceptance Criteria:**
-- [ ] A host library crate exists and is a workspace member; `cmd/mnemra` depends on it.
-- [ ] The `mnemra` binary builds (`just verify-build` green) and exposes a startup entry that later tasks extend (`R-0018-e` Rust-default).
-- [ ] The Wasmtime spike's existence-test assertions are removed or migrated into the plugin-runtime test surface (no orphan spike asserts in `main`).
+- [x] A host library crate exists and is a workspace member; `cmd/mnemra` depends on it.
+- [x] The `mnemra` binary builds (`just verify-build` green) and exposes a startup entry that later tasks extend (`R-0018-e` Rust-default).
+- [x] The Wasmtime spike's existence-test assertions are removed or migrated into the plugin-runtime test surface (no orphan spike asserts in `main`).
 
 **Test Expectations:**
 - Workspace compiles; `cargo test` runs (zero or skeleton tests) green.
@@ -85,11 +85,11 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Author failing tests + WIT-shape assertions that pin the host-fn ABI structural invariants: every host-fn takes `WorkspaceCtx` first; no write-path host-fn exposes `workspace_id` as a parameter; all params/returns are WIT component types; `@stable`/`@unstable`/`@deprecated` annotations are present and behaviourally distinct.
 
 **Acceptance Criteria (red — these tests MUST exist and fail before Task 4):**
-- [ ] A build-time/test assertion proves no WIT-generated write-path function accepts `workspace_id` as a parameter (`R-0012-d`, `R-0003-d`, Scenario: Cross-workspace SQL leak — compile-time ABI prevention).
-- [ ] Tests assert each required host-fn signature matches the API Contract table: `artifact.create`, `artifact.update`, `artifact.get`, `artifact.list`, `artifact.delete`, `metrics.record`, `log.emit`, `event.emit`, `projection.emit` (`R-0012-a`).
-- [ ] Tests assert opt-in surfaces `sampling.request`, `secrets.get` exist as optional and `artifact.delete` is opt-in (`R-0012-a`, `R-0012-b`, `R-0012-c`, `R-0003-g`).
+- [x] A build-time/test assertion proves no WIT-generated write-path function accepts `workspace_id` as a parameter (`R-0012-d`, `R-0003-d`, Scenario: Cross-workspace SQL leak — compile-time ABI prevention).
+- [x] Tests assert each required host-fn signature matches the API Contract table: `artifact.create`, `artifact.update`, `artifact.get`, `artifact.list`, `artifact.delete`, `metrics.record`, `log.emit`, `event.emit`, `projection.emit` (`R-0012-a`).
+- [x] Tests assert opt-in surfaces `sampling.request`, `secrets.get` exist as optional and `artifact.delete` is opt-in (`R-0012-a`, `R-0012-b`, `R-0012-c`, `R-0003-g`).
 - [ ] Tests assert `@unstable` invocation emits a deprecation log warning and `@deprecated` invocation returns a structured error (`R-0012-e`).
-- [ ] Tests assert all host-fn params/returns are WIT component types; no raw byte buffer with dynamic dispatch (`R-0012-f`).
+- [x] Tests assert all host-fn params/returns are WIT component types; no raw byte buffer with dynamic dispatch (`R-0012-f`).
 - [ ] `sampling.request` accepts `context_ids: [str]`, never artifact bodies; host forwards `context_ids` as opaque refs and does NOT resolve IDs to bodies (`R-0012-b`).
 
 **Test Expectations:**
@@ -107,9 +107,9 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Define the real host-fn WIT interface (superseding the toy `echo` ABI for the host surface) and the Rust binding skeleton so the Task 3 contract tests pass. Bodies may be unimplemented stubs that compile and satisfy the type contract; behaviour lands as later layers wire in.
 
 **Acceptance Criteria:**
-- [ ] All Task 3 (RED) contract tests pass (`R-0012-a/b/c/d/e/f`, `R-0003-d/g`).
-- [ ] The required host-fn set is declared in WIT with `WorkspaceCtx`-first calling convention (host-derived, not WIT-exposed on write paths) (`R-0012-a`, `R-0012-d`).
-- [ ] Each host-fn carries an `@stable` or `@unstable` annotation in the WIT (`R-0012-e`).
+- [x] All Task 3 (RED) contract tests pass (`R-0012-a/b/c/d/e/f`, `R-0003-d/g`).
+- [x] The required host-fn set is declared in WIT with `WorkspaceCtx`-first calling convention (host-derived, not WIT-exposed on write paths) (`R-0012-a`, `R-0012-d`).
+- [x] Each host-fn carries an `@stable` or `@unstable` annotation in the WIT (`R-0012-e`).
 
 **Test Expectations:**
 - Round-trip: the contract suite from Task 3 goes green.
@@ -127,10 +127,10 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Define the engine-agnostic, swappable `Storage` trait exposing a unit-of-work / transaction boundary, plus an in-memory test adapter. Author the design-time two-adapter contract test binding the two co-equal invariants (single-transaction atomic multi-write; workspace-scoped isolation). Postgres adapter lands in Task 6.
 
 **Acceptance Criteria:**
-- [ ] `Storage` is engine-agnostic and exposes a unit-of-work/transaction boundary (commit-or-rollback as a whole), not per-write autocommit (`P-0010` D5).
-- [ ] An in-memory adapter implements `Storage` for the test/layering seam (`P-0010` D5).
-- [ ] The two-adapter contract test asserts (a) atomic multi-write commits or rolls back as a unit, and (b) operations in one workspace context cannot read/mutate another workspace's rows (`P-0010` D5 two co-equal invariants).
-- [ ] The trait *expresses* atomic multi-write (the supersession surface) without exercising real keyed supersession (V0.1+) (`R-0001-g`, data model V0.1+ columns).
+- [x] `Storage` is engine-agnostic and exposes a unit-of-work/transaction boundary (commit-or-rollback as a whole), not per-write autocommit (`P-0010` D5).
+- [x] An in-memory adapter implements `Storage` for the test/layering seam (`P-0010` D5).
+- [x] The two-adapter contract test asserts (a) atomic multi-write commits or rolls back as a unit, and (b) operations in one workspace context cannot read/mutate another workspace's rows (`P-0010` D5 two co-equal invariants).
+- [x] The trait *expresses* atomic multi-write (the supersession surface) without exercising real keyed supersession (V0.1+) (`R-0001-g`, data model V0.1+ columns).
 
 **Test Expectations:**
 - Contract test runs against the in-memory adapter now and against the Postgres adapter (Task 6) — same suite, two adapters.
@@ -148,9 +148,9 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Bring up the embedded Postgres engine (`postgresql_embedded`) with bundled/compiled `pgvector` (`pgvector_compiled`), and implement the Postgres `Storage` adapter so the Task 5 two-adapter contract test passes against real Postgres. No external server, no OS-installed extensions.
 
 **Acceptance Criteria:**
-- [ ] The embedded Postgres engine starts in-process; `pgvector` is bundled/compiled, not OS-installed (`P-0010` V0-engine, Constraints, `R-0013-a`).
-- [ ] The Postgres adapter passes the Task 5 two-adapter contract suite (atomicity + isolation) (`P-0010` D5).
-- [ ] The application DB role holds neither `BYPASSRLS` nor superuser (`P-0010` multi-tenancy preconditions; forward-context for V0.1+ RLS, enforced application-layer at V0).
+- [x] The embedded Postgres engine starts in-process; `pgvector` is bundled/compiled, not OS-installed (`P-0010` V0-engine, Constraints, `R-0013-a`).
+- [x] The Postgres adapter passes the Task 5 two-adapter contract suite (atomicity + isolation) (`P-0010` D5).
+- [x] The application DB role holds neither `BYPASSRLS` nor superuser (`P-0010` multi-tenancy preconditions; forward-context for V0.1+ RLS, enforced application-layer at V0).
 - [ ] No new dependency outside the license-tier model is added without review (`Constraints`: license-tier; Wasmtime/engine pins per `R-0007-i`).
 
 **Test Expectations:**
@@ -171,11 +171,11 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement `mnemra init` first-run bootstrap: enable bundled `pgvector`, create all substrate tables + indexes, create the `default` workspace, partition storage into content (`DS-pg-content`) + state-config (`DS-pg-state`) regular tables, create least-privilege DB roles, and emit an `overall: "ok"` health event. Forward-only, idempotent against empty and populated DBs.
 
 **Acceptance Criteria:**
-- [ ] `mnemra init` enables `pgvector` against the embedded engine; if `CREATE EXTENSION pgvector` errors, init returns a structured error naming the missing extension and does NOT proceed (`R-0013-a`).
-- [ ] `mnemra init` creates substrate tables + indexes, creates the `default` workspace, and emits a health event returning `overall: "ok"` (`R-0013-a`, `R-0015-a`, `R-0015-h`, Scenario: Single-node V0 substrate initialization).
-- [ ] After init, `\d+` lists **no** metrics/events hypertable and `\dx` does **not** list `timescaledb` (`R-0004-c`, `R-0013-a`, Scenario: Observability emits during a dogfood session).
+- [x] `mnemra init` enables `pgvector` against the embedded engine; if `CREATE EXTENSION pgvector` errors, init returns a structured error naming the missing extension and does NOT proceed (`R-0013-a`).
+- [x] `mnemra init` creates substrate tables + indexes, creates the `default` workspace, and emits a health event returning `overall: "ok"` (`R-0013-a`, `R-0015-a`, `R-0015-h`, Scenario: Single-node V0 substrate initialization).
+- [x] After init, `\d+` lists **no** metrics/events hypertable and `\dx` does **not** list `timescaledb` (`R-0004-c`, `R-0013-a`, Scenario: Observability emits during a dogfood session).
 - [ ] Storage substrate is partitioned into content + state-config, both regular Postgres tables (`R-0013-b`, `R-0013-c`).
-- [ ] Least-privilege DB roles are created: host-fns, migration, backup, health-probe (`R-0013-e`).
+- [x] Least-privilege DB roles are created: host-fns, migration, backup, health-probe (`R-0013-e`).
 - [ ] All migrations are forward-only and work against empty and populated DBs; no destructive migration runs without a verified pre-migration backup (`R-0013-d`).
 - [ ] `pgvector` enabled in schema init; V0.1+ vector/full-text columns are non-breaking `ADD COLUMN` (no vector/tsvector columns created at V0) (`R-0001-g`, data model V0.1+ additions).
 
@@ -198,8 +198,8 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **Acceptance Criteria (red):**
 - [ ] Tests assert the artifact-table column set: `id` (ULID/TEXT PK), `workspace_id` (UUID NOT NULL, indexed), `type`, `frontmatter` (JSONB), `body` (nullable), `frontmatter_version`, `migrated_from`, `migrated_at`, `created_at`, `updated_at` (`R-0001-a`, data model).
 - [ ] Tests assert `migrated_from`, `migrated_at`, `frontmatter_version` are NOT inside the `frontmatter` JSONB (dedicated system columns) (`R-0001-b`).
-- [ ] Tests assert `CHECK (frontmatter ? 'id')` and `CHECK (frontmatter ? 'frontmatter_version')` reject violating inserts (`R-0001-c`).
-- [ ] Tests assert per-artifact-type tables (not a polymorphic single table) and expression indexes on `(frontmatter->>'status')`, `(frontmatter->>'priority')`, `(frontmatter->>'project_id')`, `(frontmatter->>'parent_id')` (`R-0001-d`, data model).
+- [x] Tests assert `CHECK (frontmatter ? 'id')` and `CHECK (frontmatter ? 'frontmatter_version')` reject violating inserts (`R-0001-c`).
+- [x] Tests assert per-artifact-type tables (not a polymorphic single table) and expression indexes on `(frontmatter->>'status')`, `(frontmatter->>'priority')`, `(frontmatter->>'project_id')`, `(frontmatter->>'parent_id')` (`R-0001-d`, data model).
 
 **Test Expectations:**
 - Red-phase: `verify` empty by design until Task 9 lands the schema generator. Rationale recorded.
@@ -216,9 +216,9 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement the per-artifact-type table generation machinery (columns, CHECK constraints, expression indexes), the trigger-based `<artifact>_history` shadow table (UPDATE + DELETE history rows), and the host-owned materialized-projection refresh queue + background drain worker. Exercised against the fixture content-type.
 
 **Acceptance Criteria:**
-- [ ] All Task 8 (RED) schema tests pass (`R-0001-a/b/c/d`).
-- [ ] On UPDATE, the `<artifact>_history` shadow table preserves the prior `frontmatter` byte-for-byte; on `artifact.delete`, a history row with `operation = 'DELETE'`, `old_frontmatter`, `old_body` is written before the DELETE executes (`R-0001-e`, data model history table).
-- [ ] Materialized projection views refresh via a host-owned queue on host-fn write completion using `REFRESH MATERIALIZED VIEW CONCURRENTLY`; a background worker drains the queue (`R-0001-f`).
+- [x] All Task 8 (RED) schema tests pass (`R-0001-a/b/c/d`).
+- [x] On UPDATE, the `<artifact>_history` shadow table preserves the prior `frontmatter` byte-for-byte; on `artifact.delete`, a history row with `operation = 'DELETE'`, `old_frontmatter`, `old_body` is written before the DELETE executes (`R-0001-e`, data model history table).
+- [x] Materialized projection views refresh via a host-owned queue on host-fn write completion using `REFRESH MATERIALIZED VIEW CONCURRENTLY`; a background worker drains the queue (`R-0001-f`).
 
 **Test Expectations:**
 - Round-trip: UPDATE writes a byte-exact history row; DELETE writes a `'DELETE'` history row before removing the artifact.
@@ -237,13 +237,13 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Failing tests pinning the admin-token cryptographic shape, hashed storage, constant-time comparison, NOT-NULL workspace claim, file-mode invariant, and rotation/revocation semantics.
 
 **Acceptance Criteria (red):**
-- [ ] Tests assert the token is 32 bytes CSPRNG, base64url-encoded (43 chars, no padding), no structural content in the bytes (`R-0008-a`). No hardcoded token literals in tests; generate per-run.
+- [x] Tests assert the token is 32 bytes CSPRNG, base64url-encoded (43 chars, no padding), no structural content in the bytes (`R-0008-a`). No hardcoded token literals in tests; generate per-run.
 - [ ] Tests assert `BLAKE3(token_bytes)` is stored in `admin_tokens.token_hash`; raw bytes never stored; lookup is constant-time (`R-0008-b`).
-- [ ] Tests assert the `admin_tokens` schema: `id UUID PK, token_hash BYTEA NOT NULL UNIQUE, workspace_id UUID NOT NULL, scopes TEXT[] NOT NULL, created_at TIMESTAMPTZ NOT NULL, rotated_at TIMESTAMPTZ` (`R-0008-c`, data model).
-- [ ] Tests assert a NULL `workspace_id` token row is a schema violation; absence of a workspace claim is a hard auth failure, not a default (`R-0008-d`).
+- [x] Tests assert the `admin_tokens` schema: `id UUID PK, token_hash BYTEA NOT NULL UNIQUE, workspace_id UUID NOT NULL, scopes TEXT[] NOT NULL, created_at TIMESTAMPTZ NOT NULL, rotated_at TIMESTAMPTZ` (`R-0008-c`, data model).
+- [x] Tests assert a NULL `workspace_id` token row is a schema violation; absence of a workspace claim is a hard auth failure, not a default (`R-0008-d`).
 - [ ] Tests assert the token file is written mode 600, owner = host UID, at `~/.config/mnemra/token`, overridable via `MNEMRA_TOKEN_FILE`; startup mode-check resolves the same override (`R-0008-e`).
-- [ ] Tests assert revocation = row deletion + new generation (no block-list); rotation emits a `token_rotated` event carrying the rotated `token_id` BEFORE the old row is deleted; old-hash lookups then return zero rows with no grace period (`R-0008-f`, `R-0008-g`, `R-0009-i`, Scenario: Token rotation event ordering).
-- [ ] Tests assert no second signing key is introduced for admin-token minting (`R-0008-h`).
+- [x] Tests assert revocation = row deletion + new generation (no block-list); rotation emits a `token_rotated` event carrying the rotated `token_id` BEFORE the old row is deleted; old-hash lookups then return zero rows with no grace period (`R-0008-f`, `R-0008-g`, `R-0009-i`, Scenario: Token rotation event ordering).
+- [x] Tests assert no second signing key is introduced for admin-token minting (`R-0008-h`).
 
 **Test Expectations:**
 - Red-phase: `verify` empty by design until Task 11. Rationale recorded.
@@ -260,7 +260,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement admin-token generation/hashing/comparison/rotation and the `authentication` builtin (static admin-token bootstrap path; RFC 9728 protected-resource-metadata config surface available, full OIDC AS integration V0.1+).
 
 **Acceptance Criteria:**
-- [ ] All Task 10 (RED) admin-token tests pass (`R-0008-a/b/c/d/e/f/g/h`, `R-0009-i`).
+- [x] All Task 10 (RED) admin-token tests pass (`R-0008-a/b/c/d/e/f/g/h`, `R-0009-i`).
 - [ ] The `authentication` builtin implements the static admin-token bootstrap per P-0008/P-0009; per-deployment OIDC AS configuration via RFC 9728 is available at the V0 substrate (full OIDC AS integration is V0.1+) (`R-0015-d`).
 
 **Test Expectations:**
@@ -280,12 +280,12 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Failing tests pinning the `WorkspaceCtx` structural invariants (single construction site, private field + accessor, first-typed-parameter, test-only constructor) AND the read-path WHERE-clause lint (`syn` AST parse; planted violation must return non-zero and name the offending function). The lint's red phase needs host-fn source to scan, so it lands with/just after the first host-fn (Task 4) — before host-fns proliferate.
 
 **Acceptance Criteria (red):**
-- [ ] Tests assert every host-fn takes `WorkspaceCtx` as its first typed parameter; a host-fn issuing a DB query without a `WorkspaceCtx` is not expressible (`R-0006-a`).
-- [ ] Tests assert `WorkspaceCtx` is constructed at a single location after token validation; no alternative production construction path (`R-0006-b`).
-- [ ] Tests assert `workspace_id` is a private field (`workspace_id: Uuid`) with a public accessor `workspace_id(&self) -> Uuid`; direct field access is private (`R-0006-c`).
-- [ ] Tests assert `WorkspaceCtx` carries `workspace_id: Uuid`, `role: Role`, `token_id: Uuid` (`R-0009-b`, data model).
-- [ ] Tests assert the test-only constructor is `#[cfg(test)]`-gated and not callable in production paths (`R-0006-f`).
-- [ ] The lint (`cargo test --test lint_workspace_clause`, `syn` AST) asserts 100% read-path WHERE-clause `workspace_id = ctx.workspace_id` coverage; a planted read-path host-fn without the clause MUST return non-zero and name the offending function (`R-0006-d`, `R-0018-d`).
+- [x] Tests assert every host-fn takes `WorkspaceCtx` as its first typed parameter; a host-fn issuing a DB query without a `WorkspaceCtx` is not expressible (`R-0006-a`).
+- [x] Tests assert `WorkspaceCtx` is constructed at a single location after token validation; no alternative production construction path (`R-0006-b`).
+- [x] Tests assert `workspace_id` is a private field (`workspace_id: Uuid`) with a public accessor `workspace_id(&self) -> Uuid`; direct field access is private (`R-0006-c`).
+- [x] Tests assert `WorkspaceCtx` carries `workspace_id: Uuid`, `role: Role`, `token_id: Uuid` (`R-0009-b`, data model).
+- [x] Tests assert the test-only constructor is `#[cfg(test)]`-gated and not callable in production paths (`R-0006-f`).
+- [x] The lint (`cargo test --test lint_workspace_clause`, `syn` AST) asserts 100% read-path WHERE-clause `workspace_id = ctx.workspace_id` coverage; a planted read-path host-fn without the clause MUST return non-zero and name the offending function (`R-0006-d`, `R-0018-d`).
 
 **Test Expectations:**
 - Red-phase: `verify` empty by design until Task 13. Rationale recorded.
@@ -303,13 +303,13 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement `WorkspaceCtx` (private field + accessor, single construction site, test-only constructor), the `Role` enum (`Admin` / `ReadObserver`), `WorkspaceCtx`-threading on all host-fns (builtins use the same threading — no internal bypass), and wire the WHERE-clause lint into `verify-lint` so CI fails on violation.
 
 **Acceptance Criteria:**
-- [ ] All Task 12 (RED) `WorkspaceCtx` + lint tests pass (`R-0006-a/b/c/f`, `R-0009-b`, `R-0018-d`).
+- [x] All Task 12 (RED) `WorkspaceCtx` + lint tests pass (`R-0006-a/b/c/f`, `R-0009-b`, `R-0018-d`).
 - [ ] All read-path host-fns include `workspace_id = ctx.workspace_id` as a WHERE-clause condition derived from the argument, not a post-read filter (`R-0006-d`).
 - [ ] Builtin components use the same `WorkspaceCtx` threading; no "internal" DB-query bypass without a `WorkspaceCtx` (`R-0006-e`).
-- [ ] The `Role` enum is the binary `Admin` / `ReadObserver`; no other roles (`R-0009-a`).
-- [ ] `Role` is derived from `admin_tokens.scopes` (`"admin"` / `"read_observer"`) at `WorkspaceCtx` construction (`R-0009-f`).
+- [x] The `Role` enum is the binary `Admin` / `ReadObserver`; no other roles (`R-0009-a`).
+- [x] `Role` is derived from `admin_tokens.scopes` (`"admin"` / `"read_observer"`) at `WorkspaceCtx` construction (`R-0009-f`).
 - [ ] The RLS column-shape (`workspace_id NOT NULL` on every artifact table) ships; RLS `CREATE POLICY` objects are NOT activated at V0 (`R-0006-g`, `R-0009-g`).
-- [ ] `verify-lint` runs the WHERE-clause lint and fails the build on a missing read-path clause (`R-0018-d`, `R-0018-f`).
+- [x] `verify-lint` runs the WHERE-clause lint and fails the build on a missing read-path clause (`R-0018-d`, `R-0018-f`).
 
 **Test Expectations:**
 - The lint goes green on the real host-fns and red on the planted violation.
@@ -330,7 +330,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 - [ ] `Admin` authorizes all MCP verb categories, all CLI control-plane operations, and admin session management (`R-0009-c`).
 - [ ] `ReadObserver` authorizes only read-path MCP verbs (`artifact.get`, `artifact.list`, projection queries); write verbs + CLI control-plane + workspace lifecycle are denied at the host-fn boundary with a structured permission error (`R-0009-d`, `R-0009-e`, Scenario: Read-observer token denied write access).
 - [ ] The permission matrix is enforced at the application layer only; no `CREATE POLICY` activated at V0 (`R-0009-g`).
-- [ ] The `permissions` builtin checks plugin verb access at the host layer before plugin dispatch (`R-0015-f`).
+- [x] The `permissions` builtin checks plugin verb access at the host layer before plugin dispatch (`R-0015-f`).
 
 **Test Expectations:**
 - `ReadObserver` + `*.create` → structured permission error; no artifact written; no cross-workspace exposure (Scenario: Read-observer token denied write access).
@@ -349,11 +349,11 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 **Acceptance Criteria:**
 - [ ] `workspaces` builtin manages workspace lifecycle (create/delete/list); the `default` workspace is created on first-run and always exists after init; solo deployment collapses tenancy to `default` (`R-0015-a`, `R-0015-h`).
-- [ ] `users` builtin manages user identity records referenced by agent + session state (`R-0015-b`).
-- [ ] `agents` builtin manages agent registration tied to user-workspace pairs; agent identity derivation is canonical at registration and produces a structured error on mismatch (not silent registration) (`R-0015-c`).
+- [x] `users` builtin manages user identity records referenced by agent + session state (`R-0015-b`).
+- [x] `agents` builtin manages agent registration tied to user-workspace pairs; agent identity derivation is canonical at registration and produces a structured error on mismatch (not silent registration) (`R-0015-c`).
 - [ ] `sessions` builtin manages per-MCP-connection session state; session context is the source of `WorkspaceCtx` construction (`R-0015-e`, `R-0006-b`).
 - [ ] `projects` builtin manages the project registry; project identity is a prerequisite for plugin scoping — no plugin is scoped to a project before that project's record exists (`R-0015-g`).
-- [ ] All seven builtins (workspaces, users, agents, authentication, sessions, permissions, projects) initialize before any plugin is loaded; no plugin invocation precedes builtin startup completion (`R-0002-b`, `R-0002-c`).
+- [x] All seven builtins (workspaces, users, agents, authentication, sessions, permissions, projects) initialize before any plugin is loaded; no plugin invocation precedes builtin startup completion (`R-0002-b`, `R-0002-c`).
 
 **Test Expectations:**
 - Builtin init-order test: a plugin-load attempt before builtin completion is rejected.
@@ -372,12 +372,12 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Failing tests pinning the signing-chain invariants: synchronous verify-on-load, structured rejection on failure, `core` status determined by signature provenance (not manifest-field trust), embedded verification material, and the startup file-mode invariant.
 
 **Acceptance Criteria (red):**
-- [ ] Tests assert signature verification is synchronous on load; no instance is created until `verify()` returns `Ok`; no verify-async / defer-to-background path exists (`R-0005-a`).
-- [ ] Tests assert a failed verification (malformed sig, unknown key, chain break) rejects the load with a structured error naming the plugin's `name` + `version`; no best-effort load (`R-0005-b`, Scenario: Signing verification failure).
-- [ ] Tests assert the root verification material is embedded at build time; no runtime key-fetch path (`R-0005-d`).
-- [ ] Tests assert `core` status is determined by signature provenance, NOT manifest-field trust: `core = true` is honored only when the signature chains to the mnemra root; `core = true` signed by any other key is rejected at load (`R-0005-h`, `R-0005-g`).
-- [ ] Tests assert at startup that the admin-token file and signing-verification-material file are both mode 600 / not world-readable; the host refuses to start if either check fails (`R-0005-f`).
-- [ ] Tests assert any plugin manifest with `core = false` is rejected at load (non-core install is V0.1+) (`R-0003-e`).
+- [x] Tests assert signature verification is synchronous on load; no instance is created until `verify()` returns `Ok`; no verify-async / defer-to-background path exists (`R-0005-a`).
+- [x] Tests assert a failed verification (malformed sig, unknown key, chain break) rejects the load with a structured error naming the plugin's `name` + `version`; no best-effort load (`R-0005-b`, Scenario: Signing verification failure).
+- [x] Tests assert the root verification material is embedded at build time; no runtime key-fetch path (`R-0005-d`).
+- [x] Tests assert `core` status is determined by signature provenance, NOT manifest-field trust: `core = true` is honored only when the signature chains to the mnemra root; `core = true` signed by any other key is rejected at load (`R-0005-h`, `R-0005-g`).
+- [x] Tests assert at startup that the admin-token file and signing-verification-material file are both mode 600 / not world-readable; the host refuses to start if either check fails (`R-0005-f`).
+- [x] Tests assert any plugin manifest with `core = false` is rejected at load (non-core install is V0.1+) (`R-0003-e`).
 
 **Test Expectations:**
 - Red-phase: `verify` empty by design until Task 17. Rationale recorded.
@@ -395,10 +395,10 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement synchronous signature verification (ed25519 per P-0003 manifest `[signature]`), embed the root verification material at build time, determine `core` by provenance, and enforce the startup file-mode invariant (token + signing material both mode 600). Signing-key custody (build-host filesystem mode 600, not on the deployment node) is a build-pipeline + ops invariant — see Task 26 (`verify-build`) and the **Spec gaps surfaced** note on R-0005-c.
 
 **Acceptance Criteria:**
-- [ ] All Task 16 (RED) signing tests pass (`R-0005-a/b/d/f/g/h`, `R-0003-e`).
-- [ ] `verify()` is synchronous; load is rejected before instance creation on failure (`R-0005-a`, `R-0005-b`).
-- [ ] `core` is honored only when the signature chains to the embedded mnemra root material; the binding is structural and not relaxed when V0.1+ non-core install opens (`R-0005-h`).
-- [ ] The host refuses to start if the token file or signing-material file is not mode 600 / is world-readable (`R-0005-f`).
+- [x] All Task 16 (RED) signing tests pass (`R-0005-a/b/d/f/g/h`, `R-0003-e`).
+- [x] `verify()` is synchronous; load is rejected before instance creation on failure (`R-0005-a`, `R-0005-b`).
+- [x] `core` is honored only when the signature chains to the embedded mnemra root material; the binding is structural and not relaxed when V0.1+ non-core install opens (`R-0005-h`).
+- [x] The host refuses to start if the token file or signing-material file is not mode 600 / is world-readable (`R-0005-f`).
 
 **Test Expectations:**
 - Scenario: Signing verification failure — invalid sig → structured error naming plugin, no instance, host continues startup, no verbs exposed for the rejected plugin.
@@ -418,10 +418,10 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement the per-deployment LLM-API-key config surface (deploy-time, mode-600 file, separate from the admin token) and the outbound hostname allowlist for embedding calls (block any hostname not on the list). TDD pair on the allowlist (security boundary); the key-config file is mechanical. The system hosts no model.
 
 **Acceptance Criteria:**
-- [ ] The LLM-API-key is per-deployment, deploy-time configurable, never hard-coded (`R-0014-a`).
+- [x] The LLM-API-key is per-deployment, deploy-time configurable, never hard-coded (`R-0014-a`).
 - [ ] Outbound embedding calls enforce a per-deployment hostname allowlist; a call to a non-allowlisted hostname is blocked (`R-0014-b`).
 - [ ] The system hosts no language model; it does not accept an API key for a hosted model endpoint (`R-0014-c`).
-- [ ] The LLM-API-key file is mode 600, separate from the admin-token file; the startup file-mode invariant check covers both files (`R-0014-d`, extends `R-0005-f`).
+- [x] The LLM-API-key file is mode 600, separate from the admin-token file; the startup file-mode invariant check covers both files (`R-0014-d`, extends `R-0005-f`).
 
 **Test Expectations:**
 - Allowlist: an outbound call to an off-list hostname is blocked; an on-list call proceeds (red/green pair).
@@ -442,7 +442,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 - [ ] The reference plugin ships `manifest.toml` declaring `schema_version = 1`, `core = true`, `name`, `version`, and the `[verbs]`, `[content_types]`, `[state_scopes]`, `[host_fns]`, `[signature]` sections (`R-0003-a`).
 - [ ] The manifest does NOT declare `workspace_id` as a parameter on any write-path host-fn (`R-0003-d`).
 - [ ] `artifact.delete` appears in `host_fns.required` only if the plugin opts in; it is not granted by default (`R-0003-g`).
-- [ ] The fixture content-type table is created via the Task 9 machinery (per-type table, CHECK constraints, expression indexes, history shadow) — exercising R-0001-d/e/f against a fixture, not a capability family (Reading note 3).
+- [x] The fixture content-type table is created via the Task 9 machinery (per-type table, CHECK constraints, expression indexes, history shadow) — exercising R-0001-d/e/f against a fixture, not a capability family (Reading note 3).
 - [ ] The plugin's `[signature]` is signed by the mnemra root on the build host (`R-0002-a`, `R-0005-c` build-pipeline).
 
 **Test Expectations:**
@@ -462,8 +462,8 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 **Acceptance Criteria (red):**
 - [ ] Tests assert the runtime compiles a per-instance host-fn allowlist from the signed manifest's `[host_fns]` before any instance is created; calls outside the allowlist fail at the WIT boundary, not at the host-fn body (`R-0003-b`).
-- [ ] Tests assert manifest loading branches on `schema_version`: `schema_version: 1` loads against a newer runtime; an unknown `schema_version` produces a structured load error (`R-0003-c`, `R-0017-b`).
-- [ ] Tests assert plugin output is validated against the WIT-declared schema; per-field size caps enforced; the parser fails shut on schema mismatch rather than truncating (`R-0003-f`).
+- [x] Tests assert manifest loading branches on `schema_version`: `schema_version: 1` loads against a newer runtime; an unknown `schema_version` produces a structured load error (`R-0003-c`, `R-0017-b`).
+- [x] Tests assert plugin output is validated against the WIT-declared schema; per-field size caps enforced; the parser fails shut on schema mismatch rather than truncating (`R-0003-f`).
 - [ ] Tests assert the MCP handler enforces a per-verb capability check against the manifest's declared `verbs` list before dispatching to the plugin runtime (`R-0010-d`).
 
 **Test Expectations:**
@@ -481,7 +481,7 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 **What:** Implement the plugin runtime: manifest load + `schema_version` branch, per-instance allowlist compilation, fail-shut output validation, the 3–5-instance-per-type pool (initialized before the MCP server accepts requests), and Wasmtime resource limits (fuel 10B, epoch 5s via `set_epoch_deadline(500)` + 10ms host epoch-tick thread, 64 MiB memory). Designate the four `core: true` plugin slots as structurally non-uninstallable.
 
 **Acceptance Criteria:**
-- [ ] All Task 20 (RED) load/allowlist tests pass (`R-0003-b/c/f`, `R-0010-d`, `R-0017-b`).
+- [x] All Task 20 (RED) load/allowlist tests pass (`R-0003-b/c/f`, `R-0010-d`, `R-0017-b`).
 - [ ] The plugin pool holds 3–5 instances per plugin type, initialized at host startup before the MCP server accepts requests; instances are tenant-stateless; no cross-call state held (`R-0016-a`, `R-0016-b`, `R-0007-d`).
 - [ ] Wasmtime fuel metering (`Store::set_fuel`, 10B ticks) AND epoch-interruption (`set_epoch_deadline(500)`, 5s, 10ms host epoch-tick thread) are BOTH active simultaneously; memory ceiling 64 MiB via `static_memory_maximum_size` or `ResourceLimiter` (`R-0007-a`, `R-0007-b`, `R-0007-c`, `R-0007-g`).
 - [ ] The host epoch-tick thread starts before any plugin is invoked, is supervised, is NOT restarted silently on crash; on crash it emits `epoch_tick_thread_died`, refuses new plugin invocations until restart is confirmed, attempts one supervised restart/min with backoff, and `/health` `overall` reflects `"degraded"` while dead (`R-0007-h`).
@@ -506,10 +506,10 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 
 **Acceptance Criteria:**
 - [ ] On any resource-limit violation (fuel exhaustion, epoch deadline, memory ceiling): catch the trap; emit a structured event with `(workspace_id, plugin_id, plugin_version, limit_type, limit_value)`; poison the pool slot and replace with a new instance; return a structured error for the current invocation (`R-0007-e`).
-- [ ] A Wasmtime trap is NOT propagated as a host-process panic; kill-and-replace is the recovery invariant (`R-0007-f`).
-- [ ] The replaced instance is added synchronously before the verb-invocation error is returned; the pool size does not decrease as a result of a kill (`R-0016-c`).
-- [ ] Epoch breach: event `plugin_limit_violation` with `limit_type: "epoch_deadline"`, `limit_value: 500`; caller receives `{ code: "plugin_execution_timeout", ... }`; host does not panic (Scenario: Resource limit breach).
-- [ ] Fuel exhaustion (independent of epoch): `limit_type: "fuel"`, `limit_value: 10000000000`; same kill-and-replace path; tested with a module that consumes fuel without triggering the epoch deadline (Scenario: Plugin fuel exhaustion mid-verb).
+- [x] A Wasmtime trap is NOT propagated as a host-process panic; kill-and-replace is the recovery invariant (`R-0007-f`).
+- [x] The replaced instance is added synchronously before the verb-invocation error is returned; the pool size does not decrease as a result of a kill (`R-0016-c`).
+- [x] Epoch breach: event `plugin_limit_violation` with `limit_type: "epoch_deadline"`, `limit_value: 500`; caller receives `{ code: "plugin_execution_timeout", ... }`; host does not panic (Scenario: Resource limit breach).
+- [x] Fuel exhaustion (independent of epoch): `limit_type: "fuel"`, `limit_value: 10000000000`; same kill-and-replace path; tested with a module that consumes fuel without triggering the epoch deadline (Scenario: Plugin fuel exhaustion mid-verb).
 
 **Test Expectations:**
 - Epoch breach (infinite-loop module) and fuel exhaustion (CPU-burn-no-sleep module) tested **independently**; both fire kill-and-replace; host never panics.
