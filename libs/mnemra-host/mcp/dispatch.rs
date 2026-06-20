@@ -32,20 +32,26 @@ use crate::builtins::permissions;
 use crate::mcp::errors::{AUTH_FAILURE_CODE, PERMISSION_DENIED_CODE};
 
 // ---------------------------------------------------------------------------
-// Write-verb set
+// Verb classification — fail-closed (R-0009-d, SF1, SF2)
 // ---------------------------------------------------------------------------
 
-/// Verb names that require write capability (ReadObserver is denied).
+/// Returns `true` if `verb_name` requires write capability (ReadObserver is
+/// denied), `false` only for the explicit read allowlist `{get, list}`.
 ///
-/// A plugin verb not in this set is treated as a read verb (`PluginReadVerb`),
-/// allowing ReadObserver access. At V0 the echo plugin verbs are: create,
-/// update, delete (write) and get, list, audit (read).
+/// Fail-closed: every tail NOT in the read allowlist is treated as a write
+/// verb. An unclassified or unknown tail therefore DENIES ReadObserver access
+/// rather than granting it. This is SF2 (enumerate the permitted set, deny the
+/// rest) from `skills/rust.md` `<control-code>`.
 ///
-/// The convention is "<plugin>.<verb>" where the tail after the last `.` is
-/// the action name.
+/// R-0009-d: ReadObserver authorises only read-path MCP verbs
+/// (`artifact.get`, `artifact.list`); write verbs and any unrecognised tail
+/// are denied at the host-fn boundary.
+///
+/// The convention is `"<plugin>.<verb>"` where the tail after the last `'.'`
+/// is the action name.
 fn is_write_verb(verb_name: &str) -> bool {
     let tail = verb_name.rsplit('.').next().unwrap_or(verb_name);
-    matches!(tail, "create" | "update" | "delete")
+    !matches!(tail, "get" | "list")
 }
 
 // ---------------------------------------------------------------------------
