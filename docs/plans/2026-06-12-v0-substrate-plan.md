@@ -1,8 +1,8 @@
 # Plan: Mnemra Core V0 Substrate (`0.1.0`)
 
-> **Spec:** `docs/specs/2026-05-24-mnemra-core-v0-substrate.md` (locked 2026-05-24 at SHA `23e7f83cf770631b7a4db567a1054145cd732a97`)
-> **Date:** 2026-06-12
-> **Status:** drafted
+> **Spec:** `docs/specs/2026-05-24-mnemra-core-v0-substrate.md` (locked 2026-05-24 at SHA `23e7f83cf770631b7a4db567a1054145cd732a97`; amended 2026-06-20 — R-0019 plugin invocation/export ABI anchoring P-0013, current SHA `fbf90b1dcc93865124306eb0cb8132820f67c584`)
+> **Date:** 2026-06-12 (status synced 2026-06-20)
+> **Status:** in-progress
 > **Target release:** `0.1.0`
 > **Plan-exit gate:** passed 2026-06-12 — maintainer approved; Task 19 reference/fixture-plugin substitution (evolved `mnemra-echo`) ratified
 
@@ -522,6 +522,8 @@ Tasks are grouped by layer (see **Sequencing**). TDD pairs are split into a red-
 ### Task 23: MCP server — stdio transport, auth-check, dispatch, error codes
 
 > Implementation approach per **P-0012** (plugin-runtime + MCP-SDK ADR).
+>
+> **Re-decomposed 2026-06-20 — see the detail plan `docs/plans/2026-06-20-task23-v0-execution-path-plan.md`.** The R-0019/P-0013 amendment (typed per-verb `content` exports; `run(string)` retired) changed the invocation ABI after this plan was drafted. The auth/routing/error front (this Task's ACs below) is merged; the full `artifact.create` execution path is now decomposed walking-skeleton-first into 13 tasks in the detail plan (storage-gating fork resolved → Branch 2: fenced in-memory stub, real `Storage`/Postgres swap deferred to that plan's T13). For execution, the detail plan governs Task 23; the ACs below remain for traceability and are settled by the full plan-reconciliation audit (pending).
 
 **Files:** `libs/mnemra-host/mcp/server.rs` (to-be-created) — the **`rmcp` `ServerHandler` integration** (official MCP Rust SDK over stdio), NOT a hand-rolled JSON-RPC transport; `libs/mnemra-host/mcp/dispatch.rs` (to-be-created) — mnemra's `DF-auth-check` + `WorkspaceCtx` construction + per-verb capability check, sitting **on top** of rmcp; `libs/mnemra-host/mcp/errors.rs` (to-be-created) — error-code mapping logic, on top of rmcp
 **Type:** backend
