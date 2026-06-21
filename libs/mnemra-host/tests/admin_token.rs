@@ -647,21 +647,14 @@ async fn admin_tokens_has_no_signing_key_column() {
 //   /// pre-encoded string instead of the decoded bytes (R-0008-b).
 //   pub fn hash(token: &AdminToken) -> TokenHash;
 //
-//   /// Constant-time comparison of a presented token against a stored hash.
-//   ///
-//   /// # Constant-time contract (R-0008-b)
-//   ///
-//   /// Implementation MUST use a constant-time equality primitive:
-//   ///   - `subtle::ConstantTimeEq` (crate `subtle`), OR
-//   ///   - `constant_time_eq::constant_time_eq` (crate `constant_time_eq`)
-//   ///
-//   /// Using `==` on byte slices or Strings is FORBIDDEN — the compiler may
-//   /// short-circuit on the first differing byte, enabling timing attacks.
-//   ///
-//   /// Timing cannot be measured in a unit test. This function's use of a
-//   /// named constant-time primitive is the inspectable contract; code review
-//   /// and clippy-deny(suspicious_arithmetic_impl) are the enforcement surface.
-//   pub fn verify(token: &AdminToken, stored_hash: &TokenHash) -> bool;
+//   // R-0008-b amendment (2026-06-21): the originally-specified constant-time
+//   // `verify(token, stored_hash) -> bool` function was REMOVED. Authentication
+//   // is a BLAKE3-hash lookup against the unique `token_hash` column via
+//   // `lookup_by_hash` (success = row found, failure = Ok(None) → 401); the admin
+//   // token is a 256-bit CSPRNG value compared via its BLAKE3 hash, so
+//   // comparison-timing attacks do not apply and no constant-time primitive is
+//   // required on this path. Constant-time comparison still applies on the
+//   // signing-chain verification path per P-0005, not here.
 //
 //   /// Rotate a token: emit `TokenRotatedEvent` BEFORE deleting the old row.
 //   ///

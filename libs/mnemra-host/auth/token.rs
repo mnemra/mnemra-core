@@ -9,9 +9,14 @@
 //! - **Hashing (R-0008-b):** BLAKE3(decoded_token_bytes) → 32-byte hash stored
 //!   as BYTEA. The raw token bytes are never stored.
 //!
-//! - **Constant-time comparison (R-0008-b):** `subtle::ConstantTimeEq` is the
-//!   named primitive used in `verify()`. Using `==` directly on byte slices is
-//!   explicitly avoided.
+//! - **Authentication (R-0008-b):** a presented token is authenticated by hashing
+//!   it (`hash_presented` → BLAKE3) and looking the row up by that hash against the
+//!   unique `admin_tokens.token_hash` column (`lookup_by_hash`). No constant-time
+//!   byte comparison is performed or needed on this path: the admin token is a
+//!   256-bit CSPRNG value (R-0008-a) and the match is a unique-index lookup on its
+//!   BLAKE3 hash, so comparison-timing attacks do not apply. Constant-time
+//!   comparison is still required where it does apply — the signing-chain
+//!   verification path per P-0005 (see `signing/verify.rs`), not here.
 //!
 //! - **No logging of token material:** `AdminToken` has a hand-written `Debug`
 //!   that emits only `AdminToken(<redacted>)`. No `Display` impl exists.
@@ -48,7 +53,6 @@ use blake3::Hasher as Blake3Hasher;
 use chrono::{DateTime, Utc};
 use rand::TryRng;
 use sqlx::PgPool;
-use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use std::fmt;
@@ -251,22 +255,6 @@ pub fn hash(token: &AdminToken) -> TokenHash {
     let decoded = token.decoded_bytes();
     let hash_output = Blake3Hasher::new().update(&decoded).finalize();
     TokenHash(*hash_output.as_bytes())
-}
-
-/// Constant-time comparison of a presented token against a stored hash (R-0008-b).
-///
-/// # Constant-time contract
-///
-/// Uses `subtle::ConstantTimeEq` — the comparison is NOT short-circuitable by
-/// the compiler. Using `==` on byte slices is explicitly forbidden here.
-///
-/// This function returns `true` if `BLAKE3(token.decoded_bytes()) == stored_hash.0`
-/// in constant time.
-pub fn verify(token: &AdminToken, stored_hash: &TokenHash) -> bool {
-    let candidate = hash(token);
-    // subtle::ConstantTimeEq::ct_eq returns Choice (0u8 or 1u8).
-    // .into() converts Choice to bool.
-    bool::from(candidate.0.as_ref().ct_eq(stored_hash.0.as_ref()))
 }
 
 /// Rotate a token: construct the rotation event from the old row, then execute
@@ -521,7 +509,7 @@ mod tests {
     use tempfile::tempdir;
 
     // -----------------------------------------------------------------------
-    // generate / hash / verify
+    // generate / hash
     // -----------------------------------------------------------------------
 
     #[test]
@@ -560,35 +548,12 @@ mod tests {
     }
 
     #[test]
-    fn verify_matches_own_hash() {
-        let token = generate();
-        let h = hash(&token);
-        assert!(
-            verify(&token, &h),
-            "verify must return true for a token matched against its own hash"
-        );
-    }
-
-    #[test]
-    fn verify_rejects_different_token() {
-        let token1 = generate();
-        let token2 = generate();
-        let h2 = hash(&token2);
-        assert!(
-            !verify(&token1, &h2),
-            "verify must return false for a token matched against a different hash"
-        );
-    }
-
-    #[test]
-    fn round_trip_hash_then_verify() {
+    fn hash_is_deterministic() {
         let token = generate();
         let h = hash(&token);
         let h2 = hash(&token);
         // Two hashes of the same token bytes must be identical.
         assert_eq!(h.0, h2.0, "hash must be deterministic");
-        assert!(verify(&token, &h));
-        assert!(verify(&token, &h2));
     }
 
     #[test]
