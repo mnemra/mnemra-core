@@ -4,7 +4,9 @@
 //!
 //! `create_artifact_table(pool, type_name)` — idempotently creates:
 //!
-//! - A table `<type_name>` with the full C1 column set (R-0001-a, R-0001-b).
+//! - A table `<type_name>` with the full C1 column set (R-0001-a, R-0001-b);
+//!   `frontmatter_version` is a `GENERATED ALWAYS … STORED` no-drift projection
+//!   of the JSONB `frontmatter_version` key (R-0001-b).
 //! - Two CHECK constraints: `frontmatter ? 'id'` and
 //!   `frontmatter ? 'frontmatter_version'` (R-0001-c).
 //! - A `workspace_id` B-tree index (primary access pattern, R-0001-a).
@@ -187,14 +189,18 @@ impl From<sqlx::Error> for ArtifactTableError {
 /// | `type`               | TEXT        | NOT NULL | artifact type discriminator |
 /// | `frontmatter`        | JSONB       | NOT NULL | structured metadata         |
 /// | `body`               | TEXT        | NULL     | optional free-text content  |
-/// | `frontmatter_version`| BIGINT      | NOT NULL | monotonic version counter   |
+/// | `frontmatter_version`| BIGINT      | GENERATED| projection of JSONB version |
 /// | `migrated_from`      | TEXT        | NULL     | migration provenance        |
 /// | `migrated_at`        | TIMESTAMPTZ | NULL     | migration timestamp         |
 /// | `created_at`         | TIMESTAMPTZ | NOT NULL | creation timestamp          |
 /// | `updated_at`         | TIMESTAMPTZ | NOT NULL | last-update timestamp       |
 ///
-/// `migrated_from`, `migrated_at`, and `frontmatter_version` are dedicated
-/// typed columns — not stored inside the `frontmatter` JSONB (R-0001-b).
+/// `migrated_from` and `migrated_at` are dedicated typed columns — not stored
+/// inside the `frontmatter` JSONB (R-0001-b). `frontmatter_version` lives
+/// authoritatively in the `frontmatter` JSONB (the interchange format is
+/// self-describing); the dedicated column is a `GENERATED ALWAYS … STORED`
+/// no-drift projection of `(frontmatter->>'frontmatter_version')::bigint`, so
+/// the typed value cannot diverge from the JSONB key (R-0001-b, R-0001-c).
 ///
 /// # CHECK constraints (R-0001-c)
 ///
@@ -230,7 +236,7 @@ pub async fn create_artifact_table(
             type                TEXT        NOT NULL,
             frontmatter         JSONB       NOT NULL,
             body                TEXT,
-            frontmatter_version BIGINT      NOT NULL,
+            frontmatter_version BIGINT      GENERATED ALWAYS AS ((frontmatter->>'frontmatter_version')::bigint) STORED,
             migrated_from       TEXT,
             migrated_at         TIMESTAMPTZ,
             created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -16,7 +16,7 @@ RFC-2119 keywords used throughout. `SHALL`/`MUST` = mandatory. `SHALL NOT`/`MUST
 ### R-0001 — Storage layout (anchors [P-0001](../src/adrs/P-0001-storage-layout.md))
 
 - R-0001-a: The system SHALL persist each logical artifact as a single content-substrate row using the C1 single-document layout: `id` (ULID), `workspace_id` (NOT NULL), `type`, `frontmatter` (JSONB), `body` (nullable text), `frontmatter_version`, `migrated_from` (system field), `migrated_at` (system field), `created_at`, `updated_at`.
-- R-0001-b: The system SHALL NOT store `migrated_from`, `migrated_at`, or `frontmatter_version` inside the `frontmatter` JSONB column; these are dedicated system columns.
+- R-0001-b: The system SHALL NOT store `migrated_from` or `migrated_at` inside the `frontmatter` JSONB column; these are dedicated system columns. `frontmatter_version` SHALL live authoritatively inside the `frontmatter` JSONB column (the interchange format is self-describing); the dedicated `frontmatter_version` column SHALL be a `GENERATED ALWAYS AS ((frontmatter->>'frontmatter_version')::bigint) STORED` no-drift projection of that JSONB key, so the typed column cannot diverge from the authoritative JSONB value.
 - R-0001-c: The system SHALL enforce `CHECK (frontmatter ? 'id')` and `CHECK (frontmatter ? 'frontmatter_version')` constraints at the schema level on all artifact tables.
 - R-0001-d: The system SHALL create per-artifact-type tables (not a polymorphic single table) for each plugin-owned content family; per-type expression indexes SHALL be declared at schema initialization for hot query fields (`status`, `priority`, `project_id`, `parent_id`).
 - R-0001-e: The system SHALL implement a trigger-based shadow table (`<artifact>_history`) for mutation history on each artifact table, populated on UPDATE; the shadow table SHALL preserve the prior row's frontmatter value byte-for-byte. On `artifact.delete`, the host SHALL write a history row with `operation = 'DELETE'`, `old_frontmatter` = the artifact's pre-deletion frontmatter value, and `old_body` = the artifact's pre-deletion body value, before executing the DELETE; this row is retained under the shadow table's standard retention schedule.
@@ -336,7 +336,7 @@ The following are explicitly outside the `0.1.0` substrate increment scope. An i
 | `type` | `TEXT` | `NOT NULL` | Artifact type constant for this table |
 | `frontmatter` | `JSONB` | `NOT NULL`, `CHECK (frontmatter ? 'id')`, `CHECK (frontmatter ? 'frontmatter_version')` | Source frontmatter stored literally; queryable structured fields |
 | `body` | `TEXT` | nullable | Narrative content |
-| `frontmatter_version` | `TEXT` | `NOT NULL` | System field; not in frontmatter JSONB |
+| `frontmatter_version` | `BIGINT` | `GENERATED ALWAYS AS ((frontmatter->>'frontmatter_version')::bigint) STORED` | No-drift projection; authoritative value lives in the `frontmatter` JSONB (interchange format is self-describing) |
 | `migrated_from` | `TEXT` | nullable | System field; not in frontmatter JSONB |
 | `migrated_at` | `TIMESTAMPTZ` | nullable | System field; not in frontmatter JSONB |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | |
