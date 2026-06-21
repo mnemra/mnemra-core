@@ -209,8 +209,11 @@ async fn content_schema_r0001a_workspace_id_indexed() {
 }
 
 // ---------------------------------------------------------------------------
-// R-0001-b — Dedicated system columns: migrated_from, migrated_at,
-//             frontmatter_version are NOT inside the frontmatter JSONB
+// R-0001-b — Dedicated system columns. `migrated_from` and `migrated_at` are
+//             dedicated columns absent from the frontmatter JSONB.
+//             `frontmatter_version` is a dedicated GENERATED column that
+//             projects the authoritative JSONB `frontmatter_version` key
+//             (self-describing interchange format; no-drift projection).
 // ---------------------------------------------------------------------------
 
 /// `migrated_from` must be a dedicated column, not stored inside `frontmatter`
@@ -273,6 +276,11 @@ async fn content_schema_r0001b_migrated_at_is_dedicated_column() {
 
 /// `frontmatter_version` must be a dedicated column (R-0001-b).
 ///
+/// Under the locked model it is a dedicated GENERATED column projecting the
+/// authoritative JSONB `frontmatter_version` key — its existence as a column is
+/// what this test pins (the no-drift / self-describing semantics are covered by
+/// `content_schema_r0001b_frontmatter_version_column_is_no_drift_projection`).
+///
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001b_frontmatter_version_is_dedicated_column() {
@@ -293,9 +301,200 @@ async fn content_schema_r0001b_frontmatter_version_is_dedicated_column() {
 
     assert!(
         row.is_some(),
-        "R-0001-b: 'frontmatter_version' must be a dedicated column (not JSONB-embedded) \
+        "R-0001-b: 'frontmatter_version' must be a dedicated (generated) column \
          on table '{}'; it is absent",
         FIXTURE_TYPE
+    );
+}
+
+/// The interchange format is self-describing: an artifact whose `frontmatter`
+/// JSONB carries `frontmatter_version` inserts successfully, and the value is
+/// queryable from the JSONB itself (R-0001-b, R-0001-c).
+///
+/// This pins the locked rationale — the JSONB is authoritative and carries the
+/// version, so the row is complete without any out-of-band column write.
+#[tokio::test]
+async fn content_schema_r0001b_frontmatter_carries_version_self_describing() {
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    // INSERT supplying ONLY the JSONB (no explicit frontmatter_version column);
+    // the JSONB is the interchange format and carries the version itself.
+    // AssertSqlSafe: FIXTURE_TYPE is a crate constant, not user input.
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {table} (id, workspace_id, type, frontmatter)
+         VALUES (
+             'TESTULID00000000010',
+             '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
+             'echo_fixture',
+             '{{\"id\": \"TESTULID00000000010\", \"frontmatter_version\": 7}}'
+         )",
+        table = FIXTURE_TYPE
+    )))
+    .execute(pool)
+    .await
+    .expect("R-0001-b: insert with self-describing frontmatter must succeed");
+
+    // The version is queryable from the JSONB (the interchange format carries it).
+    let from_jsonb: (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT (frontmatter->>'frontmatter_version')::bigint
+         FROM {table} WHERE id = 'TESTULID00000000010'",
+        table = FIXTURE_TYPE
+    )))
+    .fetch_one(pool)
+    .await
+    .expect("query frontmatter_version from JSONB");
+
+    assert_eq!(
+        from_jsonb.0, 7,
+        "R-0001-b: frontmatter_version must be carried by and queryable from the JSONB"
+    );
+}
+
+/// No-drift: the `frontmatter_version` column is a `GENERATED ALWAYS … STORED`
+/// projection of the JSONB key, so it cannot diverge from the JSONB (R-0001-b).
+///
+/// Two facts pin this:
+/// 1. After insert, the column equals `(frontmatter->>'frontmatter_version')::bigint`.
+/// 2. An attempt to write a conflicting column value is rejected by Postgres
+///    with SQLSTATE 428C9 (cannot insert a non-DEFAULT value into a generated
+///    column) — the column structurally cannot be set independently of the JSONB.
+#[tokio::test]
+async fn content_schema_r0001b_frontmatter_version_column_is_no_drift_projection() {
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    // Insert a row carrying version 5 in the JSONB.
+    // AssertSqlSafe: FIXTURE_TYPE is a crate constant, not user input.
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {table} (id, workspace_id, type, frontmatter)
+         VALUES (
+             'TESTULID00000000011',
+             '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
+             'echo_fixture',
+             '{{\"id\": \"TESTULID00000000011\", \"frontmatter_version\": 5}}'
+         )",
+        table = FIXTURE_TYPE
+    )))
+    .execute(pool)
+    .await
+    .expect("insert row with version 5");
+
+    // (1) The generated column tracks the JSONB value exactly.
+    let projected: (i64, i64) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT frontmatter_version, (frontmatter->>'frontmatter_version')::bigint
+         FROM {table} WHERE id = 'TESTULID00000000011'",
+        table = FIXTURE_TYPE
+    )))
+    .fetch_one(pool)
+    .await
+    .expect("query projected column and JSONB value");
+
+    assert_eq!(
+        projected.0, 5,
+        "R-0001-b: generated frontmatter_version column must equal the JSONB version"
+    );
+    assert_eq!(
+        projected.0, projected.1,
+        "R-0001-b: generated column must equal (frontmatter->>'frontmatter_version')::bigint"
+    );
+
+    // (2) An explicit write to the generated column is structurally rejected —
+    // the column cannot be set to a value that diverges from the JSONB.
+    let conflicting: Result<_, sqlx::Error> = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {table} (id, workspace_id, type, frontmatter, frontmatter_version)
+         VALUES (
+             'TESTULID00000000012',
+             '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
+             'echo_fixture',
+             '{{\"id\": \"TESTULID00000000012\", \"frontmatter_version\": 1}}',
+             999
+         )",
+        table = FIXTURE_TYPE
+    )))
+    .execute(pool)
+    .await;
+
+    let code = conflicting
+        .expect_err("R-0001-b: explicit write to generated column must be rejected")
+        .as_database_error()
+        .and_then(|e| e.code())
+        .map(|c| c.to_string());
+
+    assert_eq!(
+        code.as_deref(),
+        Some("428C9"),
+        "R-0001-b: explicit non-DEFAULT write to the GENERATED frontmatter_version \
+         column must fail with SQLSTATE 428C9 (generated-column write); got {:?}",
+        code
+    );
+}
+
+/// Fail-closed: a non-numeric `frontmatter_version` JSONB value (e.g. `"abc"`)
+/// is rejected at insert — the row never lands (R-0001-b projection is total).
+///
+/// SQLSTATE is `22P02` (invalid_text_representation), NOT the `23514` of a CHECK
+/// violation. This is structural, not a choice: a STORED generated column is
+/// evaluated BEFORE CHECK constraints, so the locked
+/// `(frontmatter->>'frontmatter_version')::bigint` cast throws on the
+/// non-numeric value before any CHECK can run (empirically confirmed against
+/// the embedded engine). The locked DDL expression is kept verbatim; a
+/// friendlier-error form (a regex-guarded CASE that projects NULL so the
+/// presence CHECK fires with 23514) is deferred to the input-validation
+/// hardening tracked in #1752. This test pins the fail-closed guarantee so a
+/// future DDL change cannot silently weaken it (e.g. let a malformed row land).
+#[tokio::test]
+async fn content_schema_r0001b_nonnumeric_version_is_rejected_fail_closed() {
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    // `frontmatter_version` is a non-numeric string; the generated ::bigint cast
+    // rejects it at insert. (No explicit frontmatter_version column — it is
+    // GENERATED.) AssertSqlSafe: FIXTURE_TYPE is a crate constant, not user input.
+    let result: Result<_, sqlx::Error> = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {table} (id, workspace_id, type, frontmatter)
+         VALUES (
+             'TESTULID00000000013',
+             '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
+             'echo_fixture',
+             '{{\"id\": \"TESTULID00000000013\", \"frontmatter_version\": \"abc\"}}'
+         )",
+        table = FIXTURE_TYPE
+    )))
+    .execute(pool)
+    .await;
+
+    let code = result
+        .expect_err("R-0001-b: non-numeric frontmatter_version must be rejected (fail-closed)")
+        .as_database_error()
+        .and_then(|e| e.code())
+        .map(|c| c.to_string());
+
+    assert_eq!(
+        code.as_deref(),
+        Some("22P02"),
+        "R-0001-b: non-numeric frontmatter_version must be rejected at insert with \
+         SQLSTATE 22P02 (the GENERATED ::bigint cast throws before any CHECK runs); \
+         got {:?}. A different code here means the fail-closed guarantee shifted — \
+         friendlier-error hardening is tracked in #1752, not a silent DDL change.",
+        code
+    );
+
+    // And the row must not have landed.
+    let landed: Option<(String,)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT id FROM {table} WHERE id = 'TESTULID00000000013'",
+        table = FIXTURE_TYPE
+    )))
+    .fetch_optional(pool)
+    .await
+    .expect("existence check after rejected insert");
+
+    assert!(
+        landed.is_none(),
+        "R-0001-b: a row with a non-numeric frontmatter_version must not be persisted"
     );
 }
 
@@ -320,15 +519,16 @@ async fn content_schema_r0001c_check_rejects_frontmatter_missing_id() {
     init(&engine, "vector").await.expect("init should succeed");
 
     // Frontmatter JSONB has `frontmatter_version` but NOT `id` — must be rejected.
+    // `frontmatter_version` is a GENERATED column (R-0001-b projection of the
+    // JSONB key), so it is not an explicit INSERT target.
     // AssertSqlSafe: FIXTURE_TYPE is a crate constant, not user input.
     let result: Result<_, sqlx::Error> = sqlx::query(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO {table} (id, workspace_id, type, frontmatter, frontmatter_version)
+        "INSERT INTO {table} (id, workspace_id, type, frontmatter)
          VALUES (
              'TESTULID00000000001',
              '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
              'echo_fixture',
-             '{{\"frontmatter_version\": 1}}',
-             1
+             '{{\"frontmatter_version\": 1}}'
          )",
         table = FIXTURE_TYPE
     )))
@@ -366,16 +566,22 @@ async fn content_schema_r0001c_check_rejects_frontmatter_missing_frontmatter_ver
     let engine = start_engine().await;
     init(&engine, "vector").await.expect("init should succeed");
 
-    // Frontmatter JSONB has `id` but NOT `frontmatter_version` — must be rejected.
+    // Frontmatter JSONB has `id` but NOT `frontmatter_version` — must be rejected
+    // by the CHECK (23514). The design relies on there being NO NOT NULL
+    // constraint on the generated `frontmatter_version` column: a missing key
+    // projects to NULL via the generated expression, so
+    // `CHECK (frontmatter ? 'frontmatter_version')` is the sole gate and rejects
+    // the row with 23514. (A NOT NULL here would introduce a second possible
+    // rejection — 23502 — for the same row; omitting it keeps the CHECK the only
+    // gate, which is what this test pins.)
     // AssertSqlSafe: FIXTURE_TYPE is a crate constant, not user input.
     let result: Result<_, sqlx::Error> = sqlx::query(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO {table} (id, workspace_id, type, frontmatter, frontmatter_version)
+        "INSERT INTO {table} (id, workspace_id, type, frontmatter)
          VALUES (
              'TESTULID00000000002',
              '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
              'echo_fixture',
-             '{{\"id\": \"TESTULID00000000002\"}}',
-             1
+             '{{\"id\": \"TESTULID00000000002\"}}'
          )",
         table = FIXTURE_TYPE
     )))

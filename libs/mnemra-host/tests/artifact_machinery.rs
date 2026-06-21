@@ -63,15 +63,19 @@ async fn start_engine() -> EmbeddedEngine {
 // ---------------------------------------------------------------------------
 
 /// Insert a single row into `echo_fixture` and return its id.
+///
+/// `frontmatter_version` is NOT an explicit column value: it is a
+/// `GENERATED ALWAYS … STORED` projection of the JSONB `frontmatter_version`
+/// key (R-0001-b), so the value flows from `frontmatter` and an explicit write
+/// would be rejected.
 async fn insert_fixture_row(pool: &sqlx::PgPool, id: &str, frontmatter: &str) {
     sqlx::query(sqlx::AssertSqlSafe(format!(
-        "INSERT INTO {FIXTURE_TYPE} (id, workspace_id, type, frontmatter, frontmatter_version)
+        "INSERT INTO {FIXTURE_TYPE} (id, workspace_id, type, frontmatter)
          VALUES (
              '{id}',
              '1b027423-a7e3-54ea-9e35-2e1a4afdf3d9',
              'echo_fixture',
-             '{frontmatter}',
-             1
+             '{frontmatter}'
          )"
     )))
     .execute(pool)
@@ -101,7 +105,6 @@ async fn r0001e_update_writes_byte_exact_history_row() {
     sqlx::query(sqlx::AssertSqlSafe(format!(
         "UPDATE {FIXTURE_TYPE}
          SET frontmatter = '{VALID_FRONTMATTER_UPDATED}'::jsonb,
-             frontmatter_version = 2,
              updated_at = now()
          WHERE id = '{artifact_id}'"
     )))
@@ -239,8 +242,7 @@ async fn r0001e_update_then_delete_produces_two_history_rows() {
     // UPDATE first.
     sqlx::query(sqlx::AssertSqlSafe(format!(
         "UPDATE {FIXTURE_TYPE}
-         SET frontmatter = '{VALID_FRONTMATTER_UPDATED}'::jsonb,
-             frontmatter_version = 2
+         SET frontmatter = '{VALID_FRONTMATTER_UPDATED}'::jsonb
          WHERE id = '{artifact_id}'"
     )))
     .execute(pool)
