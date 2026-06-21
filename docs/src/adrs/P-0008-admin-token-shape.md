@@ -71,7 +71,7 @@ Option C (in-process cache) is a performance optimization. At V0 dogfood request
 | Property | V0 value | Rationale |
 |---|---|---|
 | Token value | 32 bytes cryptographically random, base64url-encoded (43 characters, no padding) | 256-bit entropy; standard URL-safe alphabet; no structural content |
-| Storage form | `BLAKE3(token_bytes)` stored in `admin_tokens.token_hash` | Token bytes never stored; hash lookup provides constant-time comparison without storing the secret |
+| Storage form | `BLAKE3(token_bytes)` stored in `admin_tokens.token_hash` | Token bytes never stored; authenticated by unique-hash lookup. No constant-time primitive needed: a 256-bit CSPRNG token compared via its BLAKE3 hash has no applicable comparison-timing channel (R-0008-b) |
 | DB table | `admin_tokens(id UUID PK, token_hash BYTEA NOT NULL UNIQUE, workspace_id UUID NOT NULL, scopes TEXT[] NOT NULL, created_at TIMESTAMPTZ NOT NULL, rotated_at TIMESTAMPTZ)` | Minimal schema; scopes array feeds `{{P-RLSAdminToken}}` downstream |
 | Workspace claim | `workspace_id` column in the DB row; NOT NULL; absence is a hard auth failure | `P-builtin-auth`/E structural invariant: missing claim → reject, not default |
 | File custody | Token value written to filesystem at mode 600, owner = host process UID, on first-run generation | Mirrors the `DS-admin-token` trust-boundary model; file-mode invariant check at startup |
