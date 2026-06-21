@@ -92,7 +92,7 @@ RFC-2119 keywords used throughout. `SHALL`/`MUST` = mandatory. `SHALL NOT`/`MUST
 ### R-0008 — Admin token shape (anchors [P-0008](../src/adrs/P-0008-admin-token-shape.md))
 
 - R-0008-a: The admin token value SHALL be 32 bytes cryptographically random, base64url-encoded (43 characters without padding); no structural content SHALL be encoded in the token bytes.
-- R-0008-b: The system SHALL store `BLAKE3(token_bytes)` in `admin_tokens.token_hash`; the raw token bytes SHALL NOT be stored in the database; the hash lookup SHALL use constant-time comparison.
+- R-0008-b: The system SHALL store `BLAKE3(token_bytes)` in `admin_tokens.token_hash`; the raw token bytes SHALL NOT be stored in the database. Token authentication SHALL look the row up by `BLAKE3(presented_token_bytes)` against the unique `token_hash` column. Because the admin token is a 256-bit CSPRNG value (R-0008-a) compared via its BLAKE3 hash, comparison-timing attacks are not applicable and no constant-time comparison primitive is required on this path. (Constant-time comparison remains required where it does apply, e.g. the signing-chain verification path per P-0005.)
 - R-0008-c: The `admin_tokens` table SHALL have the schema: `id UUID PK, token_hash BYTEA NOT NULL UNIQUE, workspace_id UUID NOT NULL, scopes TEXT[] NOT NULL, created_at TIMESTAMPTZ NOT NULL, rotated_at TIMESTAMPTZ`.
 - R-0008-d: The `workspace_id` column in `admin_tokens` SHALL be NOT NULL; a token row with NULL `workspace_id` is a schema violation; absence of a workspace claim SHALL cause a hard auth failure, not a default to any workspace.
 - R-0008-e: The token value SHALL be written to the filesystem at mode 600, owner = host process UID, on first-run generation. The default token file path SHALL be `~/.config/mnemra/token`; it SHALL be overridable via the `MNEMRA_TOKEN_FILE` environment variable. The startup file-mode invariant check (R-0005-f) SHALL resolve the path through the same `MNEMRA_TOKEN_FILE` override.
@@ -365,7 +365,7 @@ Populated by trigger on UPDATE; projections do not read from history tables.
 | Field | Type | Constraints | Notes |
 |-------|------|-------------|-------|
 | `id` | `UUID` | `PRIMARY KEY` | token_id; used in WorkspaceCtx for write attribution |
-| `token_hash` | `BYTEA` | `NOT NULL UNIQUE` | `BLAKE3(token_bytes)`; constant-time comparison |
+| `token_hash` | `BYTEA` | `NOT NULL UNIQUE` | `BLAKE3(token_bytes)`; authenticated by unique-hash lookup |
 | `workspace_id` | `UUID` | `NOT NULL` | NOT NULL enforced; absence is a schema violation |
 | `scopes` | `TEXT[]` | `NOT NULL` | Valid values: `["admin"]`, `["read_observer"]` |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL` | |

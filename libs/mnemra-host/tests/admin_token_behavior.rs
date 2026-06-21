@@ -16,11 +16,8 @@
 //! | token_shape_length_and_alphabet            | R-0008-a             |
 //! | token_shape_two_calls_distinct             | R-0008-a             |
 //! | token_shape_entropy_n_calls_all_distinct   | R-0008-a (adversarial)|
-//! | verify_own_hash_true                       | R-0008-b             |
-//! | verify_different_token_false               | R-0008-b             |
-//! | verify_bogus_token_against_real_hash_false | R-0008-b (adversarial)|
-//! | round_trip_via_db                          | R-0008-c             |
-//! | bogus_hash_lookup_returns_none             | R-0008-f (Task-23 401 precursor, adversarial) |
+//! | round_trip_via_db                          | R-0008-b, R-0008-c (auth-by-hash success path) |
+//! | bogus_hash_lookup_returns_none             | R-0008-b, R-0008-f (auth-by-hash failure path / Task-23 401 precursor, adversarial) |
 //! | file_mode_600_and_content                  | R-0008-e             |
 //! | file_mode_check_rejects_644               | R-0008-e             |
 //! | revocation_lookup_by_old_hash_returns_none | R-0008-f             |
@@ -54,8 +51,7 @@
 //! `engine.pool` is.
 
 use mnemra_host::auth::token::{
-    TokenRow, check_token_file_mode, generate, hash, lookup_by_hash, rotate, verify,
-    write_token_file,
+    TokenRow, check_token_file_mode, generate, hash, lookup_by_hash, rotate, write_token_file,
 };
 use mnemra_host::schema::init::{DEFAULT_WORKSPACE_ID, init};
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
@@ -160,66 +156,21 @@ async fn token_shape_entropy_n_calls_all_distinct() {
 }
 
 // ---------------------------------------------------------------------------
-// R-0008-b — verify: constant-time API correctness
+// R-0008-b — authentication by unique-hash lookup
 // ---------------------------------------------------------------------------
-
-/// Assert `verify(token, hash(&token))` is `true`.
-///
-/// # R-0008-b
-///
-/// A freshly generated token must verify against its own hash. The constant-time
-/// primitive (`subtle::ConstantTimeEq`) cannot be timing-measured in a unit test;
-/// the behavioral contract is that the boolean result is correct.
-#[tokio::test]
-async fn verify_own_hash_true() {
-    // R-0008-b: verify must return true for a token matched against its own hash.
-    let token = generate();
-    let token_hash = hash(&token);
-    assert!(
-        verify(&token, &token_hash),
-        "R-0008-b: verify(token, hash(token)) must be true"
-    );
-}
-
-/// Assert `verify(token2, hash(&token1))` is `false` for distinct tokens.
-///
-/// # R-0008-b
-///
-/// A token must not verify against a hash that was produced from a different token.
-/// This pins the reject path of `verify()`.
-#[tokio::test]
-async fn verify_different_token_false() {
-    // R-0008-b: verify must return false for a token matched against a different hash.
-    let token1 = generate();
-    let token2 = generate();
-    let hash1 = hash(&token1);
-    assert!(
-        !verify(&token2, &hash1),
-        "R-0008-b: verify(token2, hash(token1)) must be false"
-    );
-}
-
-/// Adversarial: a bogus/random token string does not verify against a real hash.
-///
-/// # R-0008-b (adversarial)
-///
-/// `verify()` must reject a token whose hash does not match the stored hash
-/// even when the bogus token has the correct 43-char base64url shape. This is
-/// the Task-23 401 precursor: any token not matching a stored hash → reject.
-#[tokio::test]
-async fn verify_bogus_token_against_real_hash_false() {
-    // R-0008-b adversarial: bogus token must not verify against any real hash.
-    let real_token = generate();
-    let real_hash = hash(&real_token);
-
-    // A different generate() call is the "bogus" attacker-controlled token.
-    let attacker_token = generate();
-
-    assert!(
-        !verify(&attacker_token, &real_hash),
-        "R-0008-b adversarial: attacker token must not verify against the real token's hash"
-    );
-}
+//
+// R-0008-b was amended (2026-06-21): authentication is a BLAKE3-hash lookup
+// against the unique `token_hash` column, NOT a constant-time byte comparison.
+// The admin token is a 256-bit CSPRNG value compared via its BLAKE3 hash, so
+// comparison-timing attacks do not apply and no constant-time primitive is
+// required on this path. The former `verify_*` tests sealed the (now removed)
+// constant-time `verify()` function; they are deleted because the requirement
+// they sealed no longer exists. R-0008-b's authentication invariant is now
+// covered by the lookup-path tests below:
+//   - `round_trip_via_db` — auth-by-hash SUCCESS path: a token's BLAKE3 hash
+//     finds its row via `lookup_by_hash` (R-0008-b + R-0008-c).
+//   - `bogus_hash_lookup_returns_none` — auth-by-hash FAILURE path: a
+//     never-inserted hash yields `Ok(None)` → 401 (R-0008-b + R-0008-f).
 
 // ---------------------------------------------------------------------------
 // R-0008-c — round-trip via DB: generate → hash → INSERT → lookup_by_hash
@@ -227,10 +178,13 @@ async fn verify_bogus_token_against_real_hash_false() {
 
 /// Assert round-trip: `generate()` → `hash()` → INSERT → `lookup_by_hash()` returns `Some`.
 ///
-/// # R-0008-c
+/// # R-0008-b, R-0008-c
 ///
 /// The DB round-trip pins that `lookup_by_hash` finds the row, and that the
-/// returned `TokenRow` carries the expected `workspace_id` and `scopes`.
+/// returned `TokenRow` carries the expected `workspace_id` and `scopes`. This is
+/// also the R-0008-b authentication SUCCESS path: a presented token is
+/// authenticated by matching its BLAKE3 hash against the unique `token_hash`
+/// column (no constant-time byte comparison — see the R-0008-b section note).
 #[tokio::test]
 async fn round_trip_via_db() {
     // R-0008-c: full round-trip through the real DB.
@@ -278,11 +232,12 @@ async fn round_trip_via_db() {
 
 /// Adversarial: `lookup_by_hash` for a bogus hash returns `Ok(None)`.
 ///
-/// # R-0008-f (adversarial — Task-23 401 precursor)
+/// # R-0008-b, R-0008-f (adversarial — Task-23 401 precursor)
 ///
 /// A hash that was never inserted must yield `Ok(None)` — the caller translates
 /// this into a 401 Unauthorized at the HTTP layer (Task 23). No row in the table
-/// should produce a match for arbitrary BLAKE3-shaped bytes.
+/// should produce a match for arbitrary BLAKE3-shaped bytes. This is the R-0008-b
+/// authentication FAILURE path: a token not matching any stored hash is rejected.
 #[tokio::test]
 async fn bogus_hash_lookup_returns_none() {
     // R-0008-f adversarial: a bogus hash must return Ok(None).
