@@ -65,6 +65,12 @@ rmcp = { workspace = true, features = ["client"] }
 serde_json = "1.0"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 quote = "1.0.45"
+# T3.4 (R-0012-e): capture host-side `tracing` events in tests to assert the
+# @unstable dispatch deprecation log fires. Dev-only — no runtime activation.
+# `no-env-filter`: capture events from the library-under-test crate
+# (`mnemra_host::abi`), not only the test-binary crate. The default filter is
+# `<test-binary-crate>=trace`, which would exclude `mnemra_host` events.
+tracing-test = { version = "0.2.6", features = ["no-env-filter"] }
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
 tempfile = "3.27.0"
 tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
