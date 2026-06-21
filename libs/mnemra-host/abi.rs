@@ -10,8 +10,10 @@
 //! wrapper inspects the function's [`Stability`] annotation:
 //!
 //! - `Stability::Stable` — passes through unchanged.
-//! - `Stability::Unstable` — emits a [`DispatchWarning`] value and passes
-//!   through.  The *caller* owns the warning; nothing is silently swallowed.
+//! - `Stability::Unstable` — emits a host-side `tracing` WARN event (R-0012-e:
+//!   "@unstable emits a deprecation warning to the log") AND returns a
+//!   [`DispatchWarning`] value, then passes through.  The *caller* owns the
+//!   returned warning; the log fires regardless so nothing is silently swallowed.
 //! - `Stability::Deprecated` — returns [`DispatchError::Deprecated`] without
 //!   invoking the body.  A structured error, not a panic or a log line.
 //!
@@ -103,10 +105,22 @@ impl DispatchWrapper {
                 value: f(),
                 warning: None,
             }),
-            Stability::Unstable { feature } => Ok(DispatchOutcome {
-                value: f(),
-                warning: Some(DispatchWarning { feature, fn_name }),
-            }),
+            Stability::Unstable { feature } => {
+                // R-0012-e: "@unstable emits a deprecation warning to the log."
+                // Emit a host-side WARN event in addition to returning the
+                // `DispatchWarning` value — the returned value lets the caller
+                // forward/collect; the log fires unconditionally so unstable
+                // usage is recorded even when the caller drops the warning.
+                tracing::warn!(
+                    feature,
+                    fn_name,
+                    "unstable host-fn invoked — feature is experimental and may change"
+                );
+                Ok(DispatchOutcome {
+                    value: f(),
+                    warning: Some(DispatchWarning { feature, fn_name }),
+                })
+            }
             Stability::Deprecated { since, reason } => Err(DispatchError::Deprecated {
                 since,
                 reason,

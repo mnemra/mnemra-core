@@ -80,6 +80,7 @@ use mnemra_host::abi::{
 };
 use std::cell::Cell;
 use std::path::Path;
+use tracing_test::traced_test;
 use wit_parser::{Resolve, Stability, Type};
 
 // ---------------------------------------------------------------------------
@@ -1138,18 +1139,47 @@ fn projection_emit_signature_params() {
 // R-0012-e — behavioural stubs (ignored; Task 4 runtime half)
 // ---------------------------------------------------------------------------
 
-/// Behavioural half of R-0012-e: invoking an `@unstable` function via the
-/// dispatch wrapper must return a [`DispatchWarning`] value on
-/// `DispatchOutcome.warning`.
-///
-/// Note: R-0012-e says "@unstable emits a deprecation warning to the log."
-/// At the skeleton stage the warning is returned as a value rather than
-/// written to `log.emit`.  The caller owns the warning and can forward it to
-/// the log surface when logging lands (named follow-up).  This satisfies the
-/// R-ID at skeleton stage: the warning is observable and the contract intention
-/// (caller is informed of unstable usage) is met.
+/// Happy path / negative control for R-0012-e: a `Stable` dispatch passes the
+/// value through, carries no `DispatchWarning`, and — critically — emits NO
+/// deprecation log. This pins that the WARN event is scoped to `@unstable`
+/// invocation and does not fire on the common stable path.
 ///
 /// R-0012-e
+#[traced_test]
+#[test]
+fn stable_fn_invocation_emits_no_deprecation_log() {
+    let outcome = DispatchWrapper::invoke(&AbiStability::Stable, "artifact-get", || "stub-result")
+        .expect("stable dispatch must succeed (R-0012-e)");
+
+    assert_eq!(
+        outcome.value, "stub-result",
+        "stable dispatch must return closure value"
+    );
+    assert!(
+        outcome.warning.is_none(),
+        "stable dispatch must not carry a DispatchWarning (R-0012-e)"
+    );
+    assert!(
+        !logs_contain("unstable host-fn invoked"),
+        "stable dispatch must NOT emit the @unstable deprecation log (R-0012-e)"
+    );
+}
+
+/// Behavioural half of R-0012-e: invoking an `@unstable` function via the
+/// dispatch wrapper must (1) return a [`DispatchWarning`] value on
+/// `DispatchOutcome.warning` AND (2) emit a host-side `tracing` WARN event so
+/// "@unstable emits a deprecation warning to the log" is met on the host path.
+///
+/// "The log" is read as the host's own `tracing` surface, not the plugin-facing
+/// `log.emit` WIT interface: the host warns on its own dispatch path rather than
+/// calling its plugin-facing log interface. The returned value remains for the
+/// caller to forward; the log fires unconditionally on `@unstable` invocation.
+///
+/// `#[traced_test]` installs a per-test capturing subscriber so `logs_contain`
+/// can assert the WARN event fired.
+///
+/// R-0012-e
+#[traced_test]
 #[test]
 fn unstable_fn_invocation_emits_deprecation_warning() {
     // R-0012-e: @unstable dispatch must return the result AND a DispatchWarning.
@@ -1179,6 +1209,23 @@ fn unstable_fn_invocation_emits_deprecation_warning() {
     assert_eq!(
         warn.fn_name, "sampling-request",
         "DispatchWarning.fn_name must match the dispatched function name (R-0012-e)"
+    );
+
+    // A host-side WARN log fired carrying the verb + feature identity. The
+    // WARN level is guaranteed by the `warn!` call site; we pin a stable
+    // message fragment plus the verb/feature so the assertion can fail if the
+    // emission is removed or its identity drifts.
+    assert!(
+        logs_contain("unstable host-fn invoked"),
+        "@unstable dispatch must emit a deprecation log warning (R-0012-e)"
+    );
+    assert!(
+        logs_contain("sampling-request"),
+        "deprecation log must carry the invoked fn name (R-0012-e)"
+    );
+    assert!(
+        logs_contain("sampling-v0"),
+        "deprecation log must carry the @unstable feature name (R-0012-e)"
     );
 }
 
