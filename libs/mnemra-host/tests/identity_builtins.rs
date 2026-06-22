@@ -20,12 +20,29 @@
 //! A `std::sync::Mutex` serializes engine startup within this binary. Each
 //! test starts its own engine instance.
 
+use mnemra_host::auth::role::Role;
+use mnemra_host::auth::workspace_ctx::WorkspaceCtx;
 use mnemra_host::builtins;
 use mnemra_host::builtins::agents::derive_agent_id;
 use mnemra_host::schema::init::{DEFAULT_WORKSPACE_ID, init};
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 use std::sync::Mutex;
 use uuid::Uuid;
+
+/// Construct an Admin `WorkspaceCtx` scoped to `workspace_id` for tests.
+///
+/// T13.3 / R-0006-e: the 4 identity-query builtins are threaded by
+/// `&WorkspaceCtx` (type-level tenancy), so test call sites build a ctx rather
+/// than passing a raw `workspace_id: Uuid`.
+///
+/// Uses `WorkspaceCtx::new` (the public production constructor). `for_test` is
+/// `#[cfg(test)]`-gated inside the library crate and is NOT visible from this
+/// integration-test binary (separate crate; the gate applies to the library's
+/// own unit tests only) — mirrors the convention already used in
+/// `tests/permissions.rs`.
+fn ctx_for(workspace_id: Uuid) -> WorkspaceCtx {
+    WorkspaceCtx::new(workspace_id, Role::Admin, Uuid::new_v4())
+}
 
 /// Serializes engine startup across concurrent test threads (A-11).
 static STARTUP_LOCK: Mutex<()> = Mutex::new(());
@@ -174,10 +191,13 @@ async fn agent_canonical_registration_succeeds() {
 
     let canonical_id = derive_agent_id(workspace_id, user_id, agent_name);
 
+    // T13.3 / R-0006-e: register is threaded by &WorkspaceCtx (tenancy at the
+    // type level), no longer a raw workspace_id param.
+    let ctx = ctx_for(workspace_id);
+
     // Supply the canonically derived id — registration must succeed.
     let result =
-        builtins::agents::register(pool, workspace_id, user_id, agent_name, Some(canonical_id))
-            .await;
+        builtins::agents::register(pool, &ctx, user_id, agent_name, Some(canonical_id)).await;
 
     let agent = result.expect("canonical agent registration must succeed (R-0015-c)");
     assert_eq!(
@@ -201,8 +221,11 @@ async fn agent_registration_without_supplied_id_uses_canonical() {
 
     let expected_id = derive_agent_id(workspace_id, user_id, agent_name);
 
+    // T13.3 / R-0006-e: register is threaded by &WorkspaceCtx.
+    let ctx = ctx_for(workspace_id);
+
     // No supplied_agent_id — the builtin derives the id canonically.
-    let agent = builtins::agents::register(pool, workspace_id, user_id, agent_name, None)
+    let agent = builtins::agents::register(pool, &ctx, user_id, agent_name, None)
         .await
         .expect("registration without supplied id must succeed");
 
@@ -232,8 +255,10 @@ async fn agent_identity_mismatch_returns_structured_error() {
         "test setup: wrong_id must differ from canonical"
     );
 
-    let result =
-        builtins::agents::register(pool, workspace_id, user_id, agent_name, Some(wrong_id)).await;
+    // T13.3 / R-0006-e: register is threaded by &WorkspaceCtx.
+    let ctx = ctx_for(workspace_id);
+
+    let result = builtins::agents::register(pool, &ctx, user_id, agent_name, Some(wrong_id)).await;
 
     match result {
         Err(builtins::agents::RegisterError::IdentityMismatch {
@@ -267,13 +292,16 @@ async fn agent_re_registration_returns_already_registered() {
     let user_id = Uuid::new_v4();
     let agent_name = "test-agent-idempotent";
 
+    // T13.3 / R-0006-e: register is threaded by &WorkspaceCtx.
+    let ctx = ctx_for(workspace_id);
+
     // First registration succeeds.
-    let first = builtins::agents::register(pool, workspace_id, user_id, agent_name, None)
+    let first = builtins::agents::register(pool, &ctx, user_id, agent_name, None)
         .await
         .expect("first registration must succeed");
 
     // Second registration with the same triple → AlreadyRegistered.
-    let result = builtins::agents::register(pool, workspace_id, user_id, agent_name, None).await;
+    let result = builtins::agents::register(pool, &ctx, user_id, agent_name, None).await;
 
     match result {
         Err(builtins::agents::RegisterError::AlreadyRegistered { existing_id }) => {
@@ -425,8 +453,12 @@ async fn session_lifecycle_open_list_close() {
     let user_id = Uuid::new_v4();
     let agent_id = Uuid::new_v4();
 
+    // T13.3 / R-0006-e: open + list_active_by_workspace are threaded by
+    // &WorkspaceCtx (tenancy at the type level), no longer raw workspace_id.
+    let ctx = ctx_for(workspace_id);
+
     // Open a session.
-    let session = builtins::sessions::open(pool, workspace_id, user_id, agent_id)
+    let session = builtins::sessions::open(pool, &ctx, user_id, agent_id)
         .await
         .expect("session open must succeed");
 
@@ -436,7 +468,7 @@ async fn session_lifecycle_open_list_close() {
     assert!(session.ended_at.is_none(), "new session must be active");
 
     // List active sessions for the workspace — must include it.
-    let active = builtins::sessions::list_active_by_workspace(pool, workspace_id)
+    let active = builtins::sessions::list_active_by_workspace(pool, &ctx)
         .await
         .expect("list active sessions must succeed");
 
@@ -445,13 +477,15 @@ async fn session_lifecycle_open_list_close() {
         "opened session must appear in active list"
     );
 
-    // Close the session.
-    builtins::sessions::close(pool, session.id)
+    // Close the session. R-0006-e expansion: `close` is now threaded by
+    // `&WorkspaceCtx` (was `close(pool, session_id)` — a cross-tenant IDOR). The
+    // owner's ctx closes the owner's session.
+    builtins::sessions::close(pool, &ctx, session.id)
         .await
         .expect("session close must succeed");
 
     // Must no longer appear in active list.
-    let active_after = builtins::sessions::list_active_by_workspace(pool, workspace_id)
+    let active_after = builtins::sessions::list_active_by_workspace(pool, &ctx)
         .await
         .expect("list active sessions after close must succeed");
 
@@ -473,8 +507,13 @@ async fn project_crud_round_trip_and_exists_check() {
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
 
+    // R-0006-e expansion: projects builtins are now threaded by `&WorkspaceCtx`
+    // (create/list_by_workspace/exists/delete), no longer a raw `workspace_id`
+    // (and `delete` previously took none — a cross-tenant IDOR).
+    let ctx = ctx_for(workspace_id);
+
     // Create a project.
-    let project = builtins::projects::create(pool, workspace_id, "my-project")
+    let project = builtins::projects::create(pool, &ctx, "my-project")
         .await
         .expect("project create must succeed");
 
@@ -482,19 +521,19 @@ async fn project_crud_round_trip_and_exists_check() {
     assert_eq!(project.workspace_id, workspace_id);
 
     // Exists check — the plugin scoping prerequisite (R-0015-g).
-    let exists = builtins::projects::exists(pool, workspace_id, project.id)
+    let exists = builtins::projects::exists(pool, &ctx, project.id)
         .await
         .expect("project exists check must succeed");
     assert!(exists, "created project must report as existing");
 
     // A random id must not exist.
-    let missing = builtins::projects::exists(pool, workspace_id, Uuid::new_v4())
+    let missing = builtins::projects::exists(pool, &ctx, Uuid::new_v4())
         .await
         .expect("project exists check for missing id must succeed");
     assert!(!missing, "random id must not report as existing");
 
     // List must include it.
-    let list = builtins::projects::list_by_workspace(pool, workspace_id)
+    let list = builtins::projects::list_by_workspace(pool, &ctx)
         .await
         .expect("project list must succeed");
 
@@ -503,13 +542,13 @@ async fn project_crud_round_trip_and_exists_check() {
         "created project must appear in list"
     );
 
-    // Delete it.
-    builtins::projects::delete(pool, project.id)
+    // Delete it (the owner's ctx deletes the owner's project).
+    builtins::projects::delete(pool, &ctx, project.id)
         .await
         .expect("project delete must succeed");
 
     // Must no longer exist.
-    let exists_after = builtins::projects::exists(pool, workspace_id, project.id)
+    let exists_after = builtins::projects::exists(pool, &ctx, project.id)
         .await
         .expect("project exists check after delete must succeed");
     assert!(!exists_after, "deleted project must not report as existing");
@@ -523,11 +562,14 @@ async fn project_duplicate_name_in_workspace_returns_error() {
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
 
-    builtins::projects::create(pool, workspace_id, "dup-project")
+    // R-0006-e expansion: projects::create is threaded by `&WorkspaceCtx`.
+    let ctx = ctx_for(workspace_id);
+
+    builtins::projects::create(pool, &ctx, "dup-project")
         .await
         .expect("first project create must succeed");
 
-    let result = builtins::projects::create(pool, workspace_id, "dup-project").await;
+    let result = builtins::projects::create(pool, &ctx, "dup-project").await;
 
     match result {
         Err(builtins::projects::ProjectError::AlreadyExists {

@@ -43,6 +43,7 @@
 //! )
 //! ```
 
+use crate::auth::workspace_ctx::WorkspaceCtx;
 use sqlx::PgPool;
 use std::fmt;
 use uuid::Uuid;
@@ -208,11 +209,12 @@ pub fn derive_agent_id(workspace_id: Uuid, user_id: Uuid, agent_name: &str) -> U
 /// 4. Return the new `Agent`.
 pub async fn register(
     pool: &PgPool,
-    workspace_id: Uuid,
+    ctx: &WorkspaceCtx,
     user_id: Uuid,
     agent_name: &str,
     supplied_agent_id: Option<Uuid>,
 ) -> Result<Agent, RegisterError> {
+    let workspace_id = ctx.workspace_id();
     let canonical_id = derive_agent_id(workspace_id, user_id, agent_name);
 
     // Step 2: mismatch guard — if the caller supplied a specific id, verify it.
@@ -286,8 +288,9 @@ pub async fn register(
 /// List all agents in a workspace, ordered by creation time.
 pub async fn list_by_workspace(
     pool: &PgPool,
-    workspace_id: Uuid,
+    ctx: &WorkspaceCtx,
 ) -> Result<Vec<Agent>, AgentError> {
+    let workspace_id = ctx.workspace_id();
     let rows: Vec<(Uuid, Uuid, Uuid, String)> = sqlx::query_as(
         "SELECT id, workspace_id, user_id, agent_name
          FROM agents
