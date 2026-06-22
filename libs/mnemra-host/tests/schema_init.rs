@@ -12,7 +12,9 @@
 //! - Roles: all four least-privilege roles exist in `pg_roles`.
 //! - Health snapshot: `overall: ok` after init.
 //! - Default workspace: exists with name `"default"`.
-//! - Partition tables: `content` and `state_config` both exist.
+//! - Substrate tables: `content` and `state_config` both exist and are
+//!   *regular* (non-partitioned) tables — `pg_class.relkind = 'r'` (T7.4).
+//! - No vector/tsvector columns on the substrate tables at V0 (T7.7).
 //!
 //! # Startup serialization
 //!
@@ -165,7 +167,7 @@ async fn init_no_timescaledb_no_hypertable() {
 }
 
 // ---------------------------------------------------------------------------
-// Content + state-config partition tables exist (R-0013-b)
+// Content + state-config substrate tables exist (R-0013-b)
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -189,6 +191,116 @@ async fn init_creates_content_and_state_config_tables() {
             row.is_some(),
             "table '{}' must exist after init (R-0013-b)",
             table
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// T7.4 — content + state_config are *regular* (non-partitioned) tables
+// (R-0013-b, R-0013-c)
+// ---------------------------------------------------------------------------
+
+/// Both substrate tables must be ordinary tables, not partitioned parents.
+///
+/// `pg_class.relkind` distinguishes ordinary tables (`'r'`) from partitioned
+/// tables (`'p'`). The AC claims a *regular* Postgres table; the existing
+/// `init_creates_content_and_state_config_tables` only asserts existence (which
+/// `information_schema.tables` reports for a partitioned parent too). This pins
+/// the relkind: if the DDL ever grew a `PARTITION BY`, relkind would flip to
+/// `'p'` and this test would fail — that is exactly the regression it guards.
+#[tokio::test]
+async fn init_content_tables_are_regular_relkind() {
+    let engine = start_engine().await;
+
+    init(&engine, "vector").await.expect("init should succeed");
+
+    for table in &["content", "state_config"] {
+        let relkind: (String,) = sqlx::query_as(
+            "SELECT relkind::text
+             FROM pg_class
+             WHERE relname = $1
+               AND relnamespace = 'public'::regnamespace",
+        )
+        .bind(*table)
+        .fetch_one(engine.pool.as_ref())
+        .await
+        .expect("pg_class relkind query failed");
+
+        assert_eq!(
+            relkind.0, "r",
+            "T7.4 (R-0013-b/c): table '{}' must be a regular table (relkind 'r'), \
+             not a partitioned table (relkind 'p'); got '{}'",
+            table, relkind.0
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// T7.7 — no vector/tsvector columns on the substrate tables at V0 (R-0001-g)
+// ---------------------------------------------------------------------------
+
+/// At V0 the substrate/artifact tables carry NO vector or tsvector columns.
+///
+/// pgvector IS installed (see `init_enables_pgvector_extension`), so the `vector`
+/// type exists and a column *could* be declared — the V0 contract is that none
+/// is, deferred to a V0.1+ `ADD COLUMN` (init.rs:120). This pins the negative so
+/// a future column addition becomes a deliberate, visible change.
+///
+/// Specificity notes (so the test fails on regression, not vacuously):
+/// - A pgvector column reports `data_type = 'USER-DEFINED'` with
+///   `udt_name = 'vector'`; filtering on `data_type` alone would miss it, so the
+///   match is on `udt_name IN ('vector', 'tsvector')`.
+/// - A positive control asserts the tables actually have columns — guarding
+///   against a vacuous `COUNT = 0` from a typo'd table name or empty table set.
+#[tokio::test]
+async fn init_no_vector_or_tsvector_columns_at_v0() {
+    let engine = start_engine().await;
+
+    init(&engine, "vector").await.expect("init should succeed");
+
+    // The tables that exist at V0 and would carry search/embedding columns if any.
+    let tables = ["content", "state_config", "echo_fixture"];
+
+    for table in &tables {
+        // Negative: no vector/tsvector-typed column.
+        let vec_cols: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = $1
+               AND udt_name IN ('vector', 'tsvector')",
+        )
+        .bind(*table)
+        .fetch_one(engine.pool.as_ref())
+        .await
+        .expect("information_schema.columns vector/tsvector query failed");
+
+        assert_eq!(
+            vec_cols.0, 0,
+            "T7.7 (R-0001-g): table '{}' must have zero vector/tsvector columns at V0; \
+             found {}",
+            table, vec_cols.0
+        );
+
+        // Positive control: the table actually has columns (so COUNT=0 above is
+        // a real absence, not a query that matched nothing).
+        let total_cols: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = $1",
+        )
+        .bind(*table)
+        .fetch_one(engine.pool.as_ref())
+        .await
+        .expect("information_schema.columns total query failed");
+
+        assert!(
+            total_cols.0 > 0,
+            "T7.7 positive control: table '{}' must have at least one column \
+             (otherwise the vector/tsvector absence check is vacuous); got {}",
+            table,
+            total_cols.0
         );
     }
 }

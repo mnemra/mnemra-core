@@ -209,6 +209,103 @@ async fn content_schema_r0001a_workspace_id_indexed() {
 }
 
 // ---------------------------------------------------------------------------
+// T8.1 (R-0001-a) — column TYPES + id-as-PK on `echo_fixture`
+//
+// The existing R-0001-a tests assert column NAMES and nullability; the AC also
+// names concrete column TYPES and that `id` is the primary key. These pin the
+// exact types/PK so a DDL type change (e.g. id → uuid, frontmatter → text) or a
+// PK change (e.g. composite key) fails the test rather than passing silently.
+// ---------------------------------------------------------------------------
+
+/// `id`, `workspace_id`, `frontmatter`, and `frontmatter_version` on
+/// `echo_fixture` must have their AC-named SQL types (T8.1, R-0001-a).
+///
+/// `information_schema.columns.data_type` reports the canonical type name:
+/// `text` / `uuid` / `jsonb` / `bigint`. Each is asserted by exact equality;
+/// a wrong type (e.g. `character varying` for a `text` column, or `text` for a
+/// `jsonb` column) fails the matching assertion.
+#[tokio::test]
+async fn content_schema_t8_1_artifact_column_types() {
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+
+    // (column_name, expected information_schema.columns.data_type)
+    let expected: &[(&str, &str)] = &[
+        ("id", "text"),
+        ("workspace_id", "uuid"),
+        ("frontmatter", "jsonb"),
+        ("frontmatter_version", "bigint"),
+    ];
+
+    for (col, expected_type) in expected {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT data_type
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name   = $1
+               AND column_name  = $2",
+        )
+        .bind(FIXTURE_TYPE)
+        .bind(*col)
+        .fetch_optional(engine.pool.as_ref())
+        .await
+        .expect("information_schema.columns data_type query failed");
+
+        let (data_type,) = row.unwrap_or_else(|| {
+            panic!(
+                "T8.1 (R-0001-a): column '{}' must exist on table '{}'",
+                col, FIXTURE_TYPE
+            )
+        });
+
+        assert_eq!(
+            &data_type, expected_type,
+            "T8.1 (R-0001-a): column '{}' on table '{}' must have data_type '{}'; got '{}'",
+            col, FIXTURE_TYPE, expected_type, data_type
+        );
+    }
+}
+
+/// The PRIMARY KEY of `echo_fixture` must be exactly the single column `id`
+/// (T8.1, R-0001-a).
+///
+/// Joins `table_constraints` (constraint_type = 'PRIMARY KEY') to
+/// `key_column_usage` and asserts the ordered PK column list equals `["id"]`.
+/// Asserting the exact set (not "contains id") fails the test if the PK were a
+/// composite key such as `(workspace_id, id)`.
+#[tokio::test]
+async fn content_schema_t8_1_primary_key_is_id_only() {
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+
+    let pk_columns: Vec<(String,)> = sqlx::query_as(
+        "SELECT kcu.column_name
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema    = kcu.table_schema
+         WHERE tc.table_schema    = 'public'
+           AND tc.table_name      = $1
+           AND tc.constraint_type = 'PRIMARY KEY'
+         ORDER BY kcu.ordinal_position",
+    )
+    .bind(FIXTURE_TYPE)
+    .fetch_all(engine.pool.as_ref())
+    .await
+    .expect("primary-key column query failed");
+
+    let cols: Vec<String> = pk_columns.into_iter().map(|(c,)| c).collect();
+
+    assert_eq!(
+        cols,
+        vec!["id".to_string()],
+        "T8.1 (R-0001-a): the primary key of '{}' must be exactly {{id}}; got {:?}",
+        FIXTURE_TYPE,
+        cols
+    );
+}
+
+// ---------------------------------------------------------------------------
 // R-0001-b — Dedicated system columns. `migrated_from` and `migrated_at` are
 //             dedicated columns absent from the frontmatter JSONB.
 //             `frontmatter_version` is a dedicated GENERATED column that

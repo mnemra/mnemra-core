@@ -798,3 +798,114 @@ fn verification_failure_precedes_unknown_schema_version() {
          verification is the outermost gate (fail-shut ordering)"
     );
 }
+
+// ===========================================================================
+// R-0003-a / R-0003-g — Real committed reference manifest (T19.1, T19.3)
+//
+// The tests above use SYNTHETIC in-memory manifests. These two assert against
+// the REAL committed `plugins/mnemra-echo/manifest.toml` to pin its shape.
+//
+// `include_str!` anchors at THIS source file (`tests/`), so the path climbs
+// tests → mnemra-host → libs → repo root (three `..`) then into `plugins/`.
+// A wrong path is then a compile error, not a runtime miss. The committed
+// `[signature]` is a build-time placeholder ("ROOT"/"PLACEHOLDER_SIG") that does
+// NOT verify against the embedded root at V0, so these tests parse the TOML
+// directly (`toml::Table`) and assert on the parsed shape — NOT via
+// `PluginRuntime::load`, whose fail-shut signature gate would reject the
+// placeholder before any shape check runs.
+// ===========================================================================
+
+/// The committed echo manifest bytes (compile-time embedded — path verified at build).
+const ECHO_MANIFEST: &str = include_str!("../../../plugins/mnemra-echo/manifest.toml");
+
+/// The reference manifest declares the full required section set: `schema_version
+/// = 1`, `core = true`, `name`/`version` present, and all of `[verbs]`,
+/// `[content_types]`, `[state_scopes]`, `[host_fns]`, `[signature]` (T19.1,
+/// R-0003-a).
+///
+/// Asserts on the parsed `toml::Table`; a missing section, a dropped
+/// `schema_version`/`core`, or a wrong `schema_version` value fails the matching
+/// assertion. (The load path is deliberately NOT used — see section header.)
+#[test]
+fn real_echo_manifest_declares_full_section_set() {
+    let manifest: toml::Table = ECHO_MANIFEST
+        .parse()
+        .expect("R-0003-a: committed echo manifest must be valid TOML");
+
+    // [plugin] table with required scalar fields.
+    let plugin = manifest
+        .get("plugin")
+        .and_then(|v| v.as_table())
+        .expect("T19.1 (R-0003-a): manifest must have a [plugin] table");
+
+    assert_eq!(
+        plugin.get("schema_version").and_then(|v| v.as_integer()),
+        Some(1),
+        "T19.1 (R-0003-a): [plugin].schema_version must be exactly 1"
+    );
+    assert_eq!(
+        plugin.get("core").and_then(|v| v.as_bool()),
+        Some(true),
+        "T19.1 (R-0003-a): [plugin].core must be true (reference plugin is core)"
+    );
+    assert!(
+        plugin
+            .get("name")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.is_empty()),
+        "T19.1 (R-0003-a): [plugin].name must be present and non-empty"
+    );
+    assert!(
+        plugin
+            .get("version")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.is_empty()),
+        "T19.1 (R-0003-a): [plugin].version must be present and non-empty"
+    );
+
+    // All required top-level sections must be present.
+    for section in &[
+        "verbs",
+        "content_types",
+        "state_scopes",
+        "host_fns",
+        "signature",
+    ] {
+        assert!(
+            manifest.get(*section).and_then(|v| v.as_table()).is_some(),
+            "T19.1 (R-0003-a): manifest must declare the [{}] section",
+            section
+        );
+    }
+}
+
+/// In the real echo manifest, `artifact.delete` is an EXPLICIT opt-in: it appears
+/// in `[host_fns].required` (T19.3, R-0003-g).
+///
+/// The synthetic default-deny case (`undeclared_host_fn_is_denied_by_allowlist_query`)
+/// already covers the deny side; this pins the positive real-manifest opt-in —
+/// removing `artifact.delete` from the committed `required` list fails this test.
+#[test]
+fn real_echo_manifest_opts_into_artifact_delete() {
+    let manifest: toml::Table = ECHO_MANIFEST
+        .parse()
+        .expect("R-0003-g: committed echo manifest must be valid TOML");
+
+    let required = manifest
+        .get("host_fns")
+        .and_then(|v| v.as_table())
+        .and_then(|t| t.get("required"))
+        .and_then(|v| v.as_array())
+        .expect("T19.3 (R-0003-g): [host_fns].required must be an array");
+
+    let has_delete = required
+        .iter()
+        .any(|v| v.as_str() == Some("artifact.delete"));
+
+    assert!(
+        has_delete,
+        "T19.3 (R-0003-g): the reference manifest must EXPLICITLY opt into \
+         'artifact.delete' by listing it in [host_fns].required; not found in {:?}",
+        required
+    );
+}
