@@ -25,6 +25,7 @@
 //! )
 //! ```
 
+use crate::auth::workspace_ctx::WorkspaceCtx;
 use sqlx::PgPool;
 use std::fmt;
 use uuid::Uuid;
@@ -96,9 +97,10 @@ impl From<sqlx::Error> for ProjectError {
 /// exists in the workspace.
 pub async fn create(
     pool: &PgPool,
-    workspace_id: Uuid,
+    ctx: &WorkspaceCtx,
     name: &str,
 ) -> Result<Project, ProjectError> {
+    let workspace_id = ctx.workspace_id();
     let id = Uuid::new_v4();
     let result = sqlx::query(
         "INSERT INTO projects (id, workspace_id, name)
@@ -133,9 +135,10 @@ pub async fn create(
 /// Delete a project by ID.
 ///
 /// Returns `ProjectError::NotFound` if no project with that ID exists.
-pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), ProjectError> {
-    let rows = sqlx::query("DELETE FROM projects WHERE id = $1")
+pub async fn delete(pool: &PgPool, ctx: &WorkspaceCtx, id: Uuid) -> Result<(), ProjectError> {
+    let rows = sqlx::query("DELETE FROM projects WHERE id = $1 AND workspace_id = $2")
         .bind(id)
+        .bind(ctx.workspace_id())
         .execute(pool)
         .await?
         .rows_affected();
@@ -156,8 +159,9 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), ProjectError> {
 /// before accepting a registration scoped to it.
 pub async fn list_by_workspace(
     pool: &PgPool,
-    workspace_id: Uuid,
+    ctx: &WorkspaceCtx,
 ) -> Result<Vec<Project>, ProjectError> {
+    let workspace_id = ctx.workspace_id();
     let rows: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
         "SELECT id, workspace_id, name
          FROM projects
@@ -187,10 +191,10 @@ pub async fn list_by_workspace(
 /// This is the prerequisite check for plugin scoping (Task 19). A plugin
 /// registration scoped to a project MUST call this first; if it returns
 /// `false`, the registration is refused.
-pub async fn exists(pool: &PgPool, workspace_id: Uuid, id: Uuid) -> Result<bool, ProjectError> {
+pub async fn exists(pool: &PgPool, ctx: &WorkspaceCtx, id: Uuid) -> Result<bool, ProjectError> {
     let row: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM projects WHERE workspace_id = $1 AND id = $2")
-            .bind(workspace_id)
+            .bind(ctx.workspace_id())
             .bind(id)
             .fetch_one(pool)
             .await?;

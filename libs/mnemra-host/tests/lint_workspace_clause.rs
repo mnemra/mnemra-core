@@ -24,10 +24,15 @@
 //! A function is a read-path host-fn if ALL of the following hold:
 //! 1. It is a free function (not an associated method) at the top level of the
 //!    scanned source file.
-//! 2. Its first parameter is named `ctx` (the WorkspaceCtx convention).
-//! 3. Its return type contains `Option` or `Vec` (data-returning signatures).
-//! 4. Its body (as a token string) contains a SELECT keyword (case-insensitive
+//! 2. Its return type contains `Option` or `Vec` (data-returning signatures).
+//! 3. Its body (as a token string) contains a SELECT keyword (case-insensitive
 //!    match on the string "SELECT").
+//!
+//! The classifier is **position-independent**: it does NOT require the first
+//! parameter to be named `ctx`. The builtins read-paths (added to the scanned
+//! set in T13.3) take `pool: &PgPool` first; a first-param-name gate would
+//! silently skip them and let an unscoped builtin SELECT pass the lint — a false
+//! green. See the rationale on `run_lint`.
 //!
 //! ## What counts as the required WHERE-clause
 //!
@@ -39,14 +44,39 @@
 //!
 //! ## Source files scanned (production mode)
 //!
-//! When the real implementation lands (Task 13), the lint scans:
+//! The lint scans:
 //!   - `libs/mnemra-host/abi/host_fns.rs`
 //!   - `libs/mnemra-host/abi.rs`
+//!   - `libs/mnemra-host/builtins/agents.rs`     (T13.3 / R-0006-e)
+//!   - `libs/mnemra-host/builtins/sessions.rs`   (T13.3 / R-0006-e)
+//!   - `libs/mnemra-host/builtins/projects.rs`   (R-0006-e expansion)
 //!
-//! In red phase (current state), these files exist but contain `todo!()` stubs
-//! with no SELECT queries. The lint passes on the real files (no read-path
-//! host-fns currently have bodies with SELECT). The planted fixture tests prove
-//! both directions.
+//! The `abi/*` files contain `todo!()` stubs with no SELECT queries, so they
+//! produce no read-path classifications. The classified read-paths
+//! (`agents::list_by_workspace`, `sessions::list_active_by_workspace`,
+//! `projects::list_by_workspace`) return `Vec` and issue `SELECT`, so they are
+//! classified — and at the current raw-`workspace_id` state they bind
+//! `workspace_id` directly without referencing `ctx.workspace_id`, so the lint
+//! FLAGS them (RED). The green phase threads `&WorkspaceCtx` and binds
+//! `ctx.workspace_id()`, which clears the flag.
+//!
+//! Note: `projects::exists` returns `Result<bool, _>` — `bool` is neither
+//! `Option` nor `Vec`, so the data-returning classifier does NOT pick it up. The
+//! lint flags `projects::list_by_workspace` (a `Vec`-returning SELECT), which is
+//! sufficient to make the projects.rs scan RED. The cross-tenant behavior of
+//! `exists` is pinned by the behavior test `projects_exists_is_false_cross_tenant`
+//! in `tests/tenancy_isolation.rs` rather than by this structural lint.
+//!
+//! `builtins/projects.rs` was SILENTLY omitted from the scanned set before the
+//! R-0006-e expansion (security audit, dispatch 1073) — a false green: the lint
+//! that enforces R-0006-e scanned only the builtins already threaded, so the live
+//! `projects` bypass passed by construction. The fix is to enumerate every
+//! tenant-table builtin source in the scanned set, not just the threaded ones.
+//!
+//! `builtins/authentication.rs` is intentionally NOT in the scanned set:
+//! `bootstrap` is the documented pre-token carve-out (R-0006-e) — it runs before
+//! any `WorkspaceCtx` can exist, so it cannot reference `ctx.workspace_id`. See
+//! the `bootstrap_is_the_single_pre_token_carve_out` test.
 //!
 //! # RED-phase design for `scan_real_host_fn_files`
 //!
@@ -70,7 +100,7 @@
 //! - R-0018-d: CI lint = `cargo test --test lint_workspace_clause` (syn AST);
 //!   a planted violation MUST return non-zero AND name the offending function
 
-use syn::{FnArg, Item, Pat};
+use syn::Item;
 
 // ---------------------------------------------------------------------------
 // Lint engine: classify and check functions
@@ -92,17 +122,31 @@ struct LintViolation {
 ///
 /// A function is classified as a read-path host-fn if:
 /// 1. It is a top-level free function (not method).
-/// 2. Its first parameter is named `ctx` (WorkspaceCtx first-param convention).
-/// 3. Its return type contains `Option` or `Vec` (data-returning).
-/// 4. Its body token string contains "SELECT" (case-insensitive).
+/// 2. Its return type contains `Option` or `Vec` (data-returning).
+/// 3. Its body token string contains "SELECT" (case-insensitive).
+///
+/// ## Why the first-parameter NAME is NOT a classifier gate (T13.3 / R-0006-e)
+///
+/// An earlier version of this lint required the first parameter to be named
+/// `ctx`/`_ctx`. That gate was sound for the `abi/host_fns.rs` surface (where
+/// `WorkspaceCtx` is genuinely the first param), but it would SILENTLY SKIP the
+/// identity-query builtins (`builtins/agents.rs`, `builtins/sessions.rs`), whose
+/// first parameter is `pool: &PgPool`. With the builtins now in the scanned set
+/// (T13.3), a name gate would mean a raw-`workspace_id` builtin issuing an
+/// unscoped SELECT is never even classified — the lint would pass on a real
+/// tenancy bypass (a false green / inverted gate). The classifier is therefore
+/// position-independent: any data-returning function whose body contains SELECT
+/// is a read-path, regardless of where `WorkspaceCtx` sits in its parameter
+/// list. The contract is enforced by the required-clause check below.
 ///
 /// # Required clause
 ///
 /// The body token string must contain `ctx . workspace_id` or `ctx.workspace_id`
 /// (syn strips comments; `quote!` renders `.` field access with spaces).
 /// This proves the workspace identity derived from `WorkspaceCtx` is actually
-/// used in the query path, not as a post-read filter. A function that receives
-/// `_ctx` (unused) and issues a SELECT fails the lint.
+/// used in the query path, not as a post-read filter. A function that issues a
+/// SELECT but never references `ctx.workspace_id` fails the lint — this is
+/// exactly the state of the current raw-`workspace_id` builtins (RED).
 fn run_lint(source: &str) -> Vec<LintViolation> {
     let ast = syn::parse_file(source).expect("lint source must parse");
     let mut violations = Vec::new();
@@ -111,28 +155,7 @@ fn run_lint(source: &str) -> Vec<LintViolation> {
         if let Item::Fn(func) = item {
             let fn_name = func.sig.ident.to_string();
 
-            // 1. First param named `ctx`
-            let first_param_is_ctx = func
-                .sig
-                .inputs
-                .first()
-                .map(|p| {
-                    if let FnArg::Typed(pt) = p
-                        && let Pat::Ident(pi) = pt.pat.as_ref()
-                    {
-                        // Accept both `ctx` and `_ctx` (the underscore prefix is
-                        // used for unused params in stubs — Task 13 removes them).
-                        return pi.ident == "ctx" || pi.ident == "_ctx";
-                    }
-                    false
-                })
-                .unwrap_or(false);
-
-            if !first_param_is_ctx {
-                continue;
-            }
-
-            // 2. Return type contains Option or Vec
+            // 1. Return type contains Option or Vec
             let sig_output = &func.sig.output;
             let return_type_str = format!("{}", quote::quote!(#sig_output));
             let is_data_returning =
@@ -142,7 +165,7 @@ fn run_lint(source: &str) -> Vec<LintViolation> {
                 continue;
             }
 
-            // 3. Body contains SELECT keyword
+            // 2. Body contains SELECT keyword
             let func_block = &func.block;
             let body_tokens = format!("{}", quote::quote!(#func_block));
             let body_lower = body_tokens.to_lowercase();
@@ -348,6 +371,193 @@ fn write_path_fixture_not_classified_as_read_path() {
 }
 
 // ---------------------------------------------------------------------------
+// T13.3 / R-0006-e — builtins read-path fixtures (pool-first signature)
+//
+// The identity-query builtins take `pool: &PgPool` first; `WorkspaceCtx`/raw
+// `workspace_id` is NOT the first parameter. These fixtures pin that the lint's
+// position-independent classifier catches an unscoped builtin SELECT and clears
+// a ctx-scoped one — the property that a first-param-name gate would have missed.
+// ---------------------------------------------------------------------------
+
+/// A planted BUILTIN read-path that mirrors the CURRENT raw-`workspace_id`
+/// builtins: `pool` first, a raw `workspace_id: Uuid` param, and a SELECT that
+/// binds the raw id without going through `ctx.workspace_id`. The lint MUST flag
+/// this — it is the live tenancy-bypass shape T13.3 forbids.
+const BUILTIN_RAW_WORKSPACE_ID_VIOLATION_FIXTURE: &str = r#"
+use uuid::Uuid;
+
+// Stub types for fixture compilation
+pub struct PgPool;
+pub struct AgentError;
+pub struct Agent;
+
+/// builtin read-path with a RAW workspace_id param (pre-T13.3 bypass shape).
+/// Returns Vec, contains SELECT, but never references ctx.workspace_id → violation.
+pub fn list_by_workspace(
+    _pool: &PgPool,
+    workspace_id: Uuid,
+) -> Result<Vec<Agent>, AgentError> {
+    // Raw workspace_id bound directly — no WorkspaceCtx threaded (R-0006-e bypass).
+    let _query = "SELECT id, workspace_id FROM agents WHERE workspace_id = $1";
+    let _bind = workspace_id;
+    todo!()
+}
+"#;
+
+/// A compliant BUILTIN read-path in the LOCKED target shape: `pool` first,
+/// `ctx: &WorkspaceCtx` threaded, SELECT scoped by `ctx.workspace_id()`. The
+/// lint must NOT flag this — proves the position-independent classifier clears
+/// the green shape even though `ctx` is not the first parameter.
+const BUILTIN_CTX_THREADED_COMPLIANT_FIXTURE: &str = r#"
+use uuid::Uuid;
+
+// Stub types for fixture compilation
+pub struct PgPool;
+pub struct AgentError;
+pub struct Agent;
+pub struct WorkspaceCtx { workspace_id: Uuid }
+impl WorkspaceCtx {
+    pub fn workspace_id(&self) -> Uuid { self.workspace_id }
+}
+
+/// builtin read-path in the T13.3 target shape — ctx threaded (second param),
+/// SELECT scoped by ctx.workspace_id(). Compliant.
+pub fn list_by_workspace(
+    _pool: &PgPool,
+    ctx: &WorkspaceCtx,
+) -> Result<Vec<Agent>, AgentError> {
+    // ctx.workspace_id() drives the WHERE clause (R-0006-d / R-0006-e).
+    let _query = "SELECT id, workspace_id FROM agents WHERE workspace_id = $1";
+    let _bind = ctx.workspace_id();
+    todo!()
+}
+"#;
+
+/// T13.3 / R-0006-e (direction 1 — builtin bypass caught):
+/// A builtin read-path that binds a raw `workspace_id` (pool-first signature,
+/// ctx NOT first) must be flagged. This is the property the old first-param-name
+/// gate would have silently skipped — proving the classifier loosening is
+/// load-bearing, not cosmetic.
+#[test]
+fn builtin_raw_workspace_id_read_path_is_flagged() {
+    // R-0006-e direction 1
+    let violations = run_lint(BUILTIN_RAW_WORKSPACE_ID_VIOLATION_FIXTURE);
+
+    assert!(
+        !violations.is_empty(),
+        "Lint must flag a builtin read-path that binds a RAW workspace_id and never \
+        references ctx.workspace_id (R-0006-e). The function takes `pool` first and \
+        `workspace_id` second; a first-param-name classifier would skip it entirely. \
+        Zero violations here means the classifier still gates on the param name — \
+        an inverted/false-green lint."
+    );
+
+    let names: Vec<&str> = violations.iter().map(|v| v.fn_name.as_str()).collect();
+    assert!(
+        names.contains(&"list_by_workspace"),
+        "Lint must name the offending builtin read-path `list_by_workspace` (R-0006-e); \
+        found violations naming: {:?}",
+        names
+    );
+}
+
+/// T13.3 / R-0006-e (direction 2 — ctx-threaded builtin passes):
+/// A builtin read-path in the locked target shape (`ctx: &WorkspaceCtx` second,
+/// SELECT scoped by `ctx.workspace_id()`) must NOT be flagged — even though ctx
+/// is not the first parameter.
+#[test]
+fn builtin_ctx_threaded_read_path_passes() {
+    // R-0006-e direction 2
+    let violations = run_lint(BUILTIN_CTX_THREADED_COMPLIANT_FIXTURE);
+
+    assert!(
+        violations.is_empty(),
+        "Lint must NOT flag a ctx-threaded builtin read-path (R-0006-e direction 2): \
+        `ctx.workspace_id()` is referenced even though `ctx` is the second param. \
+        Found violations:\n{}",
+        format_violations(&violations)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T13.3 / R-0006-e — bootstrap pre-token carve-out pin
+// ---------------------------------------------------------------------------
+
+/// R-0006-e carve-out pin: `authentication::bootstrap` is the SINGLE pre-token
+/// exception. It runs before any token (and therefore any `WorkspaceCtx`) can
+/// exist — it creates the first `admin_tokens` row — so it cannot, by
+/// construction, reference `ctx.workspace_id`. It legitimately takes a raw
+/// `workspace_id: Uuid`.
+///
+/// This test pins two things so a future change can't silently fold bootstrap
+/// into the type-threaded set or drop the carve-out:
+///
+/// 1. `builtins/authentication.rs` is NOT in the lint's scanned set (so bootstrap
+///    is never classified / flagged). A future edit that adds it to the scanned
+///    list of `scan_real_host_fn_files_no_where_clause_violations` would break
+///    this expectation — and bootstrap would be flagged, surfacing the change.
+/// 2. `bootstrap` still exists with a raw `workspace_id: Uuid` parameter and is
+///    NOT threaded by `&WorkspaceCtx` — documenting the carve-out at the source.
+///
+/// If a future task threads `WorkspaceCtx` into bootstrap (impossible without a
+/// pre-existing token), or adds `authentication.rs` to the lint scope, this test
+/// fails and forces an explicit decision rather than a silent drift.
+#[test]
+fn bootstrap_is_the_single_pre_token_carve_out() {
+    // R-0006-e carve-out
+    let auth_path = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR")))
+        .join("builtins/authentication.rs");
+
+    let src = std::fs::read_to_string(&auth_path)
+        .unwrap_or_else(|e| panic!("cannot read {}: {}", auth_path.display(), e));
+
+    let ast = syn::parse_file(&src).expect("builtins/authentication.rs must parse");
+
+    // Locate `pub async fn bootstrap` and inspect its first non-pool parameter.
+    let mut found_bootstrap = false;
+    let mut threads_workspace_ctx = false;
+    let mut takes_raw_workspace_id = false;
+
+    for item in &ast.items {
+        if let Item::Fn(func) = item
+            && func.sig.ident == "bootstrap"
+        {
+            found_bootstrap = true;
+            for input in &func.sig.inputs {
+                let param_str = format!("{}", quote::quote!(#input));
+                if param_str.contains("WorkspaceCtx") {
+                    threads_workspace_ctx = true;
+                }
+                // The raw carve-out param: `workspace_id : Uuid` (quote! spacing).
+                if param_str.contains("workspace_id")
+                    && param_str.contains("Uuid")
+                    && !param_str.contains("WorkspaceCtx")
+                {
+                    takes_raw_workspace_id = true;
+                }
+            }
+        }
+    }
+
+    assert!(
+        found_bootstrap,
+        "authentication::bootstrap must exist (R-0006-e carve-out pin)"
+    );
+    assert!(
+        !threads_workspace_ctx,
+        "authentication::bootstrap MUST NOT thread `WorkspaceCtx` (R-0006-e carve-out): \
+        it runs before any token/ctx can exist (it creates the first admin_token). \
+        If this fires, the pre-token carve-out is being eroded — make that decision \
+        explicitly, do not fold bootstrap into the type-threaded set."
+    );
+    assert!(
+        takes_raw_workspace_id,
+        "authentication::bootstrap must keep its raw `workspace_id: Uuid` parameter \
+        (R-0006-e carve-out — the documented pre-token exception)."
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Production lint: scan the real host-fn source files
 // ---------------------------------------------------------------------------
 
@@ -385,23 +595,48 @@ fn host_fns_defines_no_local_workspace_ctx_stub() {
     );
 }
 
-/// R-0006-d, R-0018-d: run the WHERE-clause lint against the real host-fn
+/// R-0006-d, R-0018-d, R-0006-e: run the WHERE-clause lint against the real
 /// source files. All read-path host-fns must include the WHERE-clause.
 ///
-/// In red phase (Task 12), the real functions have `todo!()` bodies with no
-/// SELECT queries, so this test passes (zero violations). The planted-fixture
-/// tests above are the red-phase evidence. This test becomes load-bearing
-/// once Task 13 wires real DB queries into the read-path functions.
+/// # T13.3 / R-0006-e RED state (this is the failing production-scan assertion)
+///
+/// The `abi/*` files still have `todo!()` bodies with no SELECT, so they
+/// contribute zero violations. But the builtins read-paths now in the scanned
+/// set (`agents::list_by_workspace`, `sessions::list_active_by_workspace`,
+/// `projects::list_by_workspace`) DO issue a `SELECT ... WHERE workspace_id = $N`
+/// that binds a RAW `workspace_id: Uuid` and never references `ctx.workspace_id`.
+/// Under the position-independent classifier they are read-paths, and the missing
+/// clause makes this test FAIL — naming those functions. That failure IS the RED
+/// for T13.3 / R-0006-e: it proves the lint catches the real tenancy bypass in
+/// the live builtins, exactly the contract R-0006-e asks the lint to enforce. The
+/// `projects.rs` entry in particular closes the silent-omission false-green the
+/// security audit flagged.
+///
+/// The green phase (Forge) threads `&WorkspaceCtx` and binds
+/// `ctx.workspace_id()`, after which this test passes for the right reason.
 #[test]
 fn scan_real_host_fn_files_no_where_clause_violations() {
-    // R-0006-d, R-0018-d
-    // Note: this test currently passes (todo!() stubs have no SELECT).
-    // The `host_fns_defines_no_local_workspace_ctx_stub` test above is what
-    // makes the full lint surface RED until Task 13 wires the canonical type.
+    // R-0006-d, R-0018-d, R-0006-e
+    // RED today: the builtins read-paths bind a raw workspace_id and do not
+    // reference ctx.workspace_id, so this scan FAILS naming them. Green clears it.
 
     let files = vec![
         std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("abi/host_fns.rs"),
         std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("abi.rs"),
+        // T13.3 / R-0006-e: builtins read-paths are now in the lint's scanned set.
+        // RED today (raw workspace_id, no ctx.workspace_id); GREEN once Forge
+        // threads &WorkspaceCtx and binds ctx.workspace_id().
+        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins/agents.rs"),
+        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins/sessions.rs"),
+        // R-0006-e expansion: the security audit (dispatch 1073) flagged that
+        // `builtins/projects.rs` was SILENTLY omitted from this set while it
+        // contains the exact raw-`workspace_id` SELECT shape the lint exists to
+        // catch (`projects::list_by_workspace`, `projects::exists`) — a false
+        // green over a live R-0006-e bypass. Adding it makes this scan RED until
+        // the green phase threads `&WorkspaceCtx` and binds `ctx.workspace_id()`
+        // (an enumerate-the-permitted control: the scanned set must list every
+        // tenant-table builtin source, not just the ones already threaded).
+        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins/projects.rs"),
     ];
 
     let mut all_violations: Vec<(String, LintViolation)> = Vec::new();
