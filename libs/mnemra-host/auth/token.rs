@@ -506,7 +506,73 @@ fn libc_getuid() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
     use tempfile::tempdir;
+
+    /// Serializes any test that mutates process environment variables
+    /// (`MNEMRA_TOKEN_FILE`, `HOME`) within this binary.
+    ///
+    /// `std::env::set_var`/`remove_var` mutate process-global state; under
+    /// `cargo test` (multiple threads in one binary) two tests racing on the
+    /// same vars produce nondeterministic results. Holding this lock for the
+    /// duration of any env-mutating test serializes them (workspace
+    /// `set_var_test_flake` rule — lock-serialize rather than ban env tests).
+    /// Independent of any other test binary's locks; the binary is the race
+    /// boundary because env is per-process.
+    static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    /// RAII guard: snapshot one env var on construction, restore it on drop.
+    ///
+    /// `None` snapshot means "was unset" → restored by `remove_var`. Restoring
+    /// on drop keeps env mutations from leaking into sibling tests even if an
+    /// assertion panics mid-test.
+    struct EnvVarGuard {
+        key: &'static str,
+        prev: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        /// Snapshot `key`'s current value (so it can be restored on drop).
+        fn capture(key: &'static str) -> Self {
+            let prev = std::env::var(key).ok();
+            Self { key, prev }
+        }
+
+        /// Set `key` to `value` for the lifetime of the guard.
+        fn set(&self, value: &str) {
+            // SAFETY: env mutation is serialized by `ENV_LOCK` (held by the
+            // caller for the whole test); no other thread reads/writes env
+            // concurrently. `#[allow(unsafe_code)]` matches the `libc_getuid`
+            // convention in this file (env::set_var is `unsafe fn` in edition 2024).
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::set_var(self.key, value);
+            }
+        }
+
+        /// Remove `key` from the environment for the lifetime of the guard.
+        fn unset(&self) {
+            // SAFETY: see `set` — env mutation is serialized by `ENV_LOCK`.
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // SAFETY: see `set` — restoration runs under the same serialization
+            // (the lock outlives the guards within each test).
+            #[allow(unsafe_code)]
+            unsafe {
+                match &self.prev {
+                    Some(v) => std::env::set_var(self.key, v),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
 
     // -----------------------------------------------------------------------
     // generate / hash
@@ -649,27 +715,70 @@ mod tests {
     // default_token_file_path
     // -----------------------------------------------------------------------
 
+    /// `default_token_file_path()` honours the `MNEMRA_TOKEN_FILE` override when
+    /// set+non-empty, and otherwise falls back to `$HOME/.config/mnemra/token`
+    /// (R-0008-e, T10.5).
+    ///
+    /// Both branches are asserted with exact equality (not `.ends_with`) against
+    /// a known tempdir HOME, so a regression in either clause fails this test:
+    /// dropping the override would make the override case return the HOME path;
+    /// changing the fallback suffix would break the fallback case.
+    ///
+    /// Env mutation is serialized via `ENV_LOCK` and every mutated var is
+    /// restored on drop (`set_var_test_flake` workspace rule — env vars are
+    /// process-global, so the lock and the file-local punt-replaced test share
+    /// one serialization point). The parked clauses (owner-UID negative;
+    /// startup-mode-resolves-same-override) have no clean assertion surface and
+    /// stay out of scope.
     #[test]
     fn default_token_file_path_uses_mnemra_token_file_env() {
-        // This test cannot safely mutate std::env (race under --test-threads>1).
-        // We test the path-builder logic via a direct function call with a known
-        // pre-set environment. Since set_var is not safe to use here, we verify
-        // only the HOME-based fallback path shape (the env-var branch is tested
-        // by inspecting the function logic in code review).
-        //
-        // The HOME-based path: default_token_file_path() must return a path ending
-        // in ".config/mnemra/token" when MNEMRA_TOKEN_FILE is not set.
-        let path = default_token_file_path();
-        // On CI and developer machines HOME is always set; on very minimal
-        // environments it may not be. Accept either Some(ending with our suffix)
-        // or None (no HOME).
-        if let Some(p) = path {
-            let p_str = p.to_string_lossy();
-            assert!(
-                p_str.ends_with(".config/mnemra/token")
-                    || std::env::var("MNEMRA_TOKEN_FILE").is_ok(),
-                "default path must end in .config/mnemra/token, got: {p_str}"
-            );
-        }
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+        // Snapshot + auto-restore both vars this test mutates.
+        let token_file = EnvVarGuard::capture("MNEMRA_TOKEN_FILE");
+        let home = EnvVarGuard::capture("HOME");
+
+        // --- Branch 1: MNEMRA_TOKEN_FILE override (set + non-empty) wins. ---
+        let override_dir = tempdir().expect("tempdir for override path");
+        let override_path = override_dir.path().join("custom-token");
+        let override_str = override_path.to_string_lossy().into_owned();
+        token_file.set(&override_str);
+        // HOME also set, to prove the override takes precedence over the fallback.
+        let home_dir = tempdir().expect("tempdir for HOME");
+        home.set(&home_dir.path().to_string_lossy());
+
+        let resolved = default_token_file_path()
+            .expect("override branch: MNEMRA_TOKEN_FILE set → must return Some");
+        assert_eq!(
+            resolved, override_path,
+            "R-0008-e: when MNEMRA_TOKEN_FILE is set+non-empty, \
+             default_token_file_path() must return exactly that path (override wins over HOME)"
+        );
+
+        // --- Branch 2: empty MNEMRA_TOKEN_FILE is ignored → HOME fallback. ---
+        // An empty value must NOT be treated as an override (the `!p.is_empty()`
+        // guard); resolution falls through to $HOME/.config/mnemra/token.
+        token_file.set("");
+        let expected_fallback = home_dir.path().join(".config/mnemra/token");
+
+        let resolved_fallback =
+            default_token_file_path().expect("fallback branch: HOME set → must return Some");
+        assert_eq!(
+            resolved_fallback, expected_fallback,
+            "R-0008-e: when MNEMRA_TOKEN_FILE is empty, \
+             default_token_file_path() must fall back to exactly $HOME/.config/mnemra/token"
+        );
+
+        // --- Branch 2b: MNEMRA_TOKEN_FILE fully unset → same HOME fallback. ---
+        token_file.unset();
+        let resolved_unset =
+            default_token_file_path().expect("unset branch: HOME set → must return Some");
+        assert_eq!(
+            resolved_unset, expected_fallback,
+            "R-0008-e: when MNEMRA_TOKEN_FILE is unset, \
+             default_token_file_path() must fall back to $HOME/.config/mnemra/token"
+        );
+
+        // Guards drop here → MNEMRA_TOKEN_FILE and HOME restored to prior values.
     }
 }
