@@ -4,15 +4,113 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "2c5c6e73092f9a4d24ad0b123343baca13572b494d29efcac5e6db8da45738ac",
-      "translated_at": "2026-05-21T02:41:31Z"
+      "source_sha256": "2a1968b68011e73c8027c57e8cfc9c23f62e8a3e1fb9f760edde7e38dea52d10",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0001-storage-layout.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "723969196386e53d62cc9931bca7735f37be395088b1ba9b761b1622d59f8e0a",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0002-core-plugin-partition.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "d8f8a6b062724c25daa28ce5a649e94ef464bdfc71d6e1e43638152665f2af66",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0003-plugin-manifest.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "586bfecca3d3ca1a04b6ee1866268e363160fdb0a81998695adce76a0f4255ec",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0004-observability-shape.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "a5381d173615e4fb1c7de83b6226359022b08b578d9cf78919049b44b0cd0c82",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0005-v0-signing-chain.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "c46d9d992d1c87723d319774e23ec62a703b1e1323a44574c3fdf49bff4e3395",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0006-v0-tenant-enforcement.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "2a6cac9f0f80e963d21a71dbd8352b1e2114a5fd2bfe5fc480821715401bc0d6",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0007-plugin-resource-limits.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "c7e1d187a66a9ecc2f6fde796725ca565cd98886eafbd69f76ff0913abe820ea",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0008-admin-token-shape.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "f36eef4634057346827ed07158c996f7b7d7572edbd3bf5b39f851e5878a8272",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0009-rls-admin-token.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "a1e121124211d3701ba8d96d243b835082abec66f5ababc07bfcb2f8086187c4",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0010-storage-substrate-engine.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "1503830e28beb41df5bd3582c66ab045070142de1651a9c6eed208bb2155098b",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0011-logging-facade.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "c0fe2f86bfb4566405aa41889fa28fe69c3c5e0662a80269deacebd762fe7102",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0012-plugin-runtime-and-mcp-sdk.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "f5b7eea2c2071e1958a2ed5a776eb8e30738626a186ad67efae8ac5809795d5a",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/P-0013-plugin-invocation-model.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "c8879ee229f1fb6dc67477d8af25879aee1af89dc3ac49ce196e46c5a6264618",
+      "translated_at": "2026-06-23T22:38:45Z"
     },
     "adrs/README.md": {
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "0dc80475ae01403e6e0ee7e1b6f76e5747d6b314eb3a58273a2fe675030262e9",
-      "translated_at": "2026-05-21T02:41:31Z"
+      "source_sha256": "306f8e8cf684fd295e90bcf13f50c0d9aa2832493f574f21c6022ea9a8c2be22",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "adrs/placeholder-resolution.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "f2b08f40b33560d98cd9a75d5fb0c5ec18d307722259313509e38f64cf4075a0",
+      "translated_at": "2026-06-23T22:38:45Z"
     },
     "adrs/template.md": {
       "primary_audience": "agent",
@@ -21,12 +119,26 @@
       "source_sha256": "b25c2f8142b55e8deb6b068197035a37820489eb232c4073a635ce9846d91527",
       "translated_at": "2026-05-21T02:41:31Z"
     },
+    "architecture/overview.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "60e2588a93a4a5046fd781db1ea1ec6b607576e245dd7901328022021ddc5a5e",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
+    "intent/mnemra-core-frame.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "90fbea180479eaaf087204fc52aae619186d1770f809814c60b497134ad027a7",
+      "translated_at": "2026-06-23T22:38:45Z"
+    },
     "intent/mnemra-core.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "1f8487d0630395ff8813f967436f41f51cc0eec4646a246f56a27f4896585727",
-      "translated_at": "2026-05-21T02:41:31Z"
+      "source_sha256": "4f1a535287b3ae5cd198564760de7c62ede6df8cdc5a4a2c21bdcb1399ebd9b7",
+      "translated_at": "2026-06-23T22:38:45Z"
     },
     "intro.md": {
       "primary_audience": "human",

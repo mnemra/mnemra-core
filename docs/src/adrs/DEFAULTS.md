@@ -98,6 +98,12 @@ Agent-primary doc repos publish two surfaces from one canonical source tree (`do
 
 ---
 
+## G-0015: Relational Substrate Default — Postgres (server-side) / SQLite (embedded), behind an engine-agnostic seam
+
+Default relational substrate is keyed on deployment topology. **Server-side / multi-tenant / managed-tier → PostgreSQL**, chosen on affirmative merits after a hard license-pass-first gate (RLS multi-tenancy maturity, single-transaction atomicity for multi-write commit-or-rollback, decades-deep backup / PITR / observability). **Embedded / single-writer / single-process → SQLite** — not a fallback from Postgres but the correct default for that topology. A project records its substrate against its topology rather than re-litigating Postgres-vs-SQLite. Lock an engine-agnostic `Storage` seam as an intrinsic contract invariant (P-LockContract): the storage surface is a trait, the chosen engine the implementation behind it; a future swap is bounded behind that one seam (P-MinBlastRadius). Do not build a second adapter speculatively (P-Defer) — the second implementation is deferred behind a named trip-wire. When the Postgres lane is taken with Row-Level Security: the application role MUST NOT hold `BYPASSRLS` or be a superuser; `ALTER TABLE … FORCE ROW LEVEL SECURITY` is required if the app role owns the tables; the tenant key MUST be set per-transaction (`SET LOCAL`), never per-session (a session-level `SET` leaks across pooled checkouts). mnemra-core's own embedded-engine choice (`postgresql_embedded`, single-self-hosted-binary posture) and V0 stack specifics stay in project ADRs P-0001 / P-0010. See workspace `brain/decisions/G-0015-relational-substrate-default.md`.
+
+---
+
 ## Elevated to workspace principles / skills
 
 These standards still apply to mnemra-core; their canonical home moved out of the numbered ADR corpus in the 2026-06-22 reset.
