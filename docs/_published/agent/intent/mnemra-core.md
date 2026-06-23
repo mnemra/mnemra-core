@@ -39,7 +39,7 @@ primary-audience: agent
 > commercial gating is referenced, not described.
 >
 > Brief-home: this artifact lives in the mnemra-core repository at
-> `docs/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component
+> `docs/src/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component
 > it scopes (per-repo-first). The general multi-repo product-brief-home convention question
 > remains in APPARATUS-1's scope for future multi-repo briefs in other components.
 
@@ -113,8 +113,13 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   Transport is stdio at V0; streamable-HTTP is a later-version activation.
 - **An MCP server is a V0 deliverable** — intent-clarity: the MCP-native constraint is
   satisfied by a running MCP server in V0 scope, not merely a future protocol posture.
-- The substrate SHALL be a **single-process Postgres** instance with `pgvector` and
-  `timescaledb` extensions present.
+- The substrate SHALL be a **single-process Postgres** instance with the `pgvector`
+  extension present. TimescaleDB is demoted off the V0 stack (P-0010 D8) — it is absent by
+  decision, not oversight, because at V0 only content and state are persisted in-app
+  Postgres shapes; the former timeseries and log shapes are observability emission surfaces,
+  not in-app storage (telemetry is emitted, not stored — per the architecture-overview
+  observability baseline), so the time-series engine has no V0 store to back. TimescaleDB is
+  held behind a named latency/storage trip-wire for a later version.
 - Plugins SHALL be **WebAssembly Component Model modules** hosted in-process via Wasmtime;
   plugin core logic MUST be IO-free; all plugin IO MUST be mediated by host-provided
   functions. Plugins are leaves — no direct sideways linkage; cross-plugin calls are
@@ -278,8 +283,9 @@ ordered by dogfood value and dependency with the maintainer's stated priority (t
 after substrate). A one-clause ordering rationale accompanies each entry so the sequence
 can be reordered cheaply at the intake-exit gate without restructuring entries.
 
-- **`0.1.0` — Builtin substrate + host core.** Single-process Postgres (pgvector +
-  TimescaleDB); the content/timeseries/log/state storage-shape partitions; the pre-1.0
+- **`0.1.0` — Builtin substrate + host core.** Single-process Postgres (pgvector); the
+  content and state storage-shape partitions persisted in-app, with the former timeseries
+  and log shapes emitted to the observability minimum rather than stored (P-0010 D8); the pre-1.0
   host-fn ABI; an MCP server skeleton (stdio) onto which each capability increment adds its
   verbs; the admin/destructive control CLI; an observability minimum; an **LLM-API-key
   configuration surface** (mnemra-core calls out to an external model for embeddings per
@@ -469,7 +475,7 @@ unsettled scope are named, not papered.
   repo artifact can cite internal-record decisions by name and date without exposing
   internal paths.
 - **DEFER-1 — resolved (relocated).** Brief moved from the landing-site repository to
-  the mnemra-core repository at `docs/intent/mnemra-core.md` (2026-05-20). The brief
+  the mnemra-core repository at `docs/src/intent/mnemra-core.md` (2026-05-20). The brief
   lives with the component it scopes (per-repo-first). APPARATUS-1's broader multi-repo
   product-brief-home convention question still applies for future multi-repo briefs in
   other components.
@@ -514,7 +520,7 @@ unsettled scope are named, not papered.
   wording confirmed); µVM-OQ1..4 (all confirmed parked until streamable-HTTP active);
   APPARATUS-1 (confirmed tracked separately, no mid-brief absorption); alignment-doc
   framing flag confirmed as a separate downstream amendment candidate. Brief relocated
-  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/intent/mnemra-core.md` —
+  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/src/intent/mnemra-core.md` —
   the brief travels with the component it scopes (per-repo-first); DEFER-1 resolves to
   relocation rather than parking. Hard constraints
   updated for the license lock; `0.1.0` substrate updated for the LLM-API-key config

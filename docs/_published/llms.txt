@@ -9,6 +9,11 @@
 ## Intent
 
 - [mnemra-core](intent/mnemra-core.md): Product brief locking mnemra-core's intent and feature register.
+- [Frame: mnemra-core](intent/mnemra-core-frame.md): Architectural frame for mnemra-core — system boundary, component map, cross-cutting decisions, and open ADR slots — reconciled to the locked product brief.
+
+## Architecture
+
+- [Overview](architecture/overview.md): Constraint inventory, quality-attribute utility tree, data-flow diagram, and threat-modeling scaffold for mnemra-core. Companion to the Frame doc.
 
 ## Specifications
 
