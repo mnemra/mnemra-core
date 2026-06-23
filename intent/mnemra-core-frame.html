@@ -1,0 +1,913 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Frame: mnemra-core - mnemra-core</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-45962466.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-5d081ac2.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">mnemra-core</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/mnemra/mnemra-core" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="frame--mnemra-core"><a class="header" href="#frame--mnemra-core">Frame — Mnemra Core</a></h1>
+<p><strong>Date:</strong> 2026-05-22 · <strong>Status:</strong> draft (Stage 2 of <code>/brief</code>) · <strong>Altitude:</strong> component</p>
+<blockquote>
+<p>Format note: this is the <strong>Stage 2 (Frame)</strong> output of the <code>/brief</code> pipeline. It sits between
+the locked product brief (Stage 1, Intent) and the per-feature specs (Stage 3). The Frame’s
+job is to translate the product intent’s purpose and hard constraints into an architectural
+shape: system boundary, component map, the key cross-cutting decisions, and the open
+ADR-shaped questions the spec stage will need to lock. The Frame <strong>refines</strong> the brief; it
+does not contradict it. Where a tension surfaces between Frame and brief, the Frame body
+records the tension explicitly and flags it for resolution rather than silently choosing.</p>
+<p>Source-of-truth artifacts (this Frame, the architecture overview, and ADRs) are
+agent-primary per the workspace-wide agent-primary-source-artifacts decision (locked
+2026-05-11). Human views are derivative.</p>
+</blockquote>
+<h2 id="provenance"><a class="header" href="#provenance">Provenance</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Artifact</th><th>Reference</th></tr>
+</thead>
+<tbody>
+<tr><td>Locked product brief (Stage 1, intake-exit gated)</td><td><a href="mnemra-core.html">Product Brief: Mnemra Core</a>, locked 2026-05-20</td></tr>
+<tr><td>V0 architecture discovery (high-stakes, zero-new-finding stopping rule)</td><td>“V0 discovery” decision record, locked 2026-05-02</td></tr>
+<tr><td>V0 architecture constraints (high-stakes; constraint inventory, QA tree, DFD, threat scaffold)</td><td>“V0 constraints” decision record, draft 2026-05-03, partially superseded by INCR-1 resolution in the brief (see Framing corrections below)</td></tr>
+<tr><td>Architecture alignment mental model (round-6)</td><td>“Architecture alignment R6” decision record, agreed 2026-04-27</td></tr>
+<tr><td>Substrate shape exploration (pre-discovery, background only)</td><td>“Substrate shape exploration” exploration note, 2026-05-02</td></tr>
+<tr><td>Architecture overview port</td><td><a href="../architecture/overview.html">Architecture overview</a>, a companion artifact, ports constraint inventory + QA utility tree + DFD + threat scaffold</td></tr>
+<tr><td>Project defaults (G-* baseline)</td><td><a href="../adrs/DEFAULTS.html">Project Defaults</a></td></tr>
+</tbody>
+</table>
+</div>
+<p>This Frame reconciles every architectural claim against the locked brief’s Hard constraints
+and the staged-increment sequence (<code>0.1.0</code> host core through <code>1.0.0</code> dogfood cutover) it locked
+at intake-exit (2026-05-20).</p>
+<h2 id="stage-2a--elicitation-input-record"><a class="header" href="#stage-2a--elicitation-input-record">Stage 2a — Elicitation input record</a></h2>
+<p>This section records the maintainer’s architectural directions that anchored Stage 2b
+synthesis. Stage 2a was run <strong>retroactively</strong> against this Frame on 2026-05-23. The
+Frame-exit gate ran on the 2026-05-22 synthesized output (the result of the original lock
+under the warm-start two-touchpoint shape), returned a Revise verdict, and the four
+architectural directions below were locked through a Stage 2a-shaped walkthrough against
+the Warden Stage 2 code-and-security review’s findings. The directions feed every revision in
+this Frame. Later Spec-stage ADRs anchor on these slot descriptions, not on the original
+Warden findings.</p>
+<p>Origin: 2026-05-23 G-0028 cold-start amendment (calibration phase, N=5 Frame-exit-cohort
+trip-wire). Mnemra-core is the first cold-start exercise of the new shape.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Direction</th><th>Warden finding addressed</th><th>One-liner</th></tr>
+</thead>
+<tbody>
+<tr><td>Split <code>{{P-SigningKeyCustody}}</code> into Tier-A <code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code> (V0 build-host-on-disk for dogfood + multi-deployment trip-wire) and Tier-C <code>{{P-SigningKeyCustodyHardening}}</code> (HSM, runtime-fetch, never-on-node)</td><td>H1</td><td>V0 ships signed <code>core: true</code> plugins under a stated-and-tripwire’d custody decision rather than under a deferred one. Per <a href="../glossary.html#p-defer">P-Defer</a> (defer mechanism choice until evidence forces it).</td></tr>
+<tr><td>Add Tier-A <code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code> with <strong>typed <code>WorkspaceCtx</code> parameter binding at the host-fn boundary</strong> as the conservative lead, with storage-layer query rewriter and per-host-fn <code>workspace_id</code> parameter validation as open variants</td><td>H2</td><td>The V0 enforcement layer for workspace isolation is named at Frame altitude; RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0. Per <code>P-SecurityLayered</code> (each layer is independently load-bearing).</td></tr>
+<tr><td>Rename Tier-C <code>{{P-PluginPoolMemory}}</code> to <code>[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)</code> and promote to Tier A; V0 turns on Wasmtime fuel + epoch-interruption + memory ceiling + table/instance limits</td><td>M3</td><td>The plugin-sandbox DoS-containment outcomes the Frame commits to (kill-and-replace on infinite-loop, no single-process-wide DoS via plugin) require the mechanism named at Frame altitude. Per <code>P-StackDiscipline</code> (use the stack’s own knobs rather than building new ones).</td></tr>
+<tr><td>Split <code>{{P-RLSAdminToken}}</code> into Tier-A <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code> (opaque-vs-claim-carrying token structure + workspace-claim binding mechanism) and Tier-A <code>[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)</code> (role model + permission shape, downstream of <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code>)</td><td>M4</td><td>Token <em>shape</em> gates security architecture and belongs at Frame altitude; role + permission is mechanism downstream of shape.</td></tr>
+</tbody>
+</table>
+</div>
+<p>The four directions above anchored revisions H1, H2, M3, and M4. Three additional Warden
+Mediums (M1 trust-boundary reconciliation, M2 DFD-builtin coverage, M5 core-plugin
+partition forward-reference) were absorbed as mechanical revisions without further
+maintainer input. Their fixes are scoped tightly to Warden’s spec.</p>
+<h2 id="framing-corrections"><a class="header" href="#framing-corrections">Framing corrections</a></h2>
+<p>The Frame inherits work from artifacts that predate the brief’s intake-exit lock. Three
+framings the older inputs carried are stale and corrected here. Each correction cites the
+brief section that authorizes it.</p>
+<h3 id="correction-1--projects-and-agents-are-builtin-not-plugins"><a class="header" href="#correction-1--projects-and-agents-are-builtin-not-plugins">Correction 1 — <code>projects</code> and <code>agents</code> are builtin, not plugins</a></h3>
+<p><strong>Older framing.</strong> The constraints strawman draft (2026-05-03) drew the data-flow diagram
+with <code>P-core-plugin-projects</code> and <code>P-core-plugin-agents</code> as subgraph nodes inside the WASM
+<code>TB-plugin-sandbox</code> trust boundary, and the alignment record (2026-04-27, round 2) framed
+core identity as <code>core: true</code> plugins.</p>
+<p><strong>Corrected framing.</strong> The brief’s <code>0.1.0</code> substrate description (Proposed tier, locked
+2026-05-20) makes <code>projects</code> and <code>agents</code> <strong>builtin</strong> components of the host, not plugins:</p>
+<blockquote>
+<p>Projects and agents are <strong>builtin</strong>, not plugins: plugins are scoped per project, so a
+project cannot itself be a plugin (a host bootstrap chicken-and-egg).</p>
+</blockquote>
+<p>The plugin model (also locked in Hard constraints) is this. WebAssembly Component Model
+modules hosted in-process via Wasmtime, with IO-free plugin core logic; all plugin IO MUST
+be mediated by host-provided functions; plugins are leaves with no sideways linkage;
+cross-plugin calls are host-mediated. That model does not accommodate identity-bearing
+components. By construction they sit above the plugin boundary.</p>
+<p><strong>Why the change.</strong> Per-project plugin scoping makes “projects” a plugin a chicken-and-egg
+bootstrap problem. The brief’s INCR-1 resolution (locked 2026-05-20) records the upstream
+resolution: builtin substrate first. The Frame surfaces the consequence on the system
+boundary. The DFD nodes for <code>projects</code> and <code>agents</code> move out of the plugin sandbox into
+the host.</p>
+<h3 id="correction-2--stdio-mcp-wrappers-around-external-clis-is-not-the-plugin-shape"><a class="header" href="#correction-2--stdio-mcp-wrappers-around-external-clis-is-not-the-plugin-shape">Correction 2 — “stdio MCP wrappers around external CLIs” is not the plugin shape</a></h3>
+<p><strong>Older framing.</strong> A class of MCP-server tooling models plugins as stdio wrappers spawning
+external CLI processes (an external-process-per-tool pattern that the project context
+describes as the framing to reject).</p>
+<p><strong>Corrected framing.</strong> Plugins are <strong>WebAssembly Component Model modules loaded
+in-process by Wasmtime</strong>, communicating with the host via WIT-defined host functions.
+This shapes downstream decisions:</p>
+<ul>
+<li><strong>Core logic is IO-free.</strong> Plugin Rust crates declare no <code>std::fs</code>, no <code>std::process</code>,
+no stdin/stdout. Inputs and outputs are structs over the WIT contract.</li>
+<li><strong>IO is host-provided.</strong> A plugin declares what IO categories it needs (file reads,
+network, clock, state); the host implements them.</li>
+<li><strong>A native CLI binary is a separate frontend.</strong> A tool can ship both a native CLI
+(workspace-era ergonomics) and a WASM plugin (mnemra-era), sharing an IO-free core
+crate. The CLI wires native IO; the plugin wires host-fn IO.</li>
+</ul>
+<p>The “stdio-wrapper” shape does not port to mnemra. The Frame designs for IO-free core plus
+thin host-fn adapters from day one.</p>
+<h3 id="correction-3--v0-is-a-staged-increment-sequence-not-a-monolithic-release"><a class="header" href="#correction-3--v0-is-a-staged-increment-sequence-not-a-monolithic-release">Correction 3 — V0 is a staged increment sequence, not a monolithic release</a></h3>
+<p><strong>Older framing.</strong> The constraints strawman draft (2026-05-03) treated V0 as a single
+monolithic deliverable; some constraint phrasing assumed a one-shot cutover.</p>
+<p><strong>Corrected framing.</strong> The brief’s INCR-1 resolution (locked 2026-05-20) decomposes V0
+into a builtin-substrate-first, one-capability-per-increment staged sequence:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>SemVer</th><th>Capability family</th><th>Brief reference</th></tr>
+</thead>
+<tbody>
+<tr><td><code>0.1.0</code></td><td>Builtin substrate + host core (Postgres + extensions; host-fn ABI; MCP server skeleton; admin CLI; observability minimum; LLM-API-key config; tenancy/identity core)</td><td>Proposed tier</td></tr>
+<tr><td><code>0.2.0</code></td><td>Task management</td><td>Proposed tier</td></tr>
+<tr><td><code>0.3.0</code></td><td>Dispatch metrics &amp; lifecycle</td><td>Proposed tier</td></tr>
+<tr><td><code>0.4.0</code></td><td>Skill-run measurement</td><td>Proposed tier</td></tr>
+<tr><td><code>0.5.0</code></td><td>Activity / audit log</td><td>Proposed tier</td></tr>
+<tr><td><code>0.6.0</code></td><td>Collaboration session friction tracking</td><td>Proposed tier</td></tr>
+<tr><td><code>0.7.0</code></td><td>Repo registry</td><td>Proposed tier</td></tr>
+<tr><td><code>0.8.0</code></td><td>Relationships / edges</td><td>Proposed tier</td></tr>
+<tr><td><code>0.9.0</code></td><td>Tags / taggings</td><td>Proposed tier</td></tr>
+<tr><td><code>0.10.0</code></td><td>Dependency-approval state</td><td>Proposed tier</td></tr>
+<tr><td><code>0.11.0</code></td><td>Scope-violation log</td><td>Proposed tier</td></tr>
+<tr><td><code>0.12.0</code></td><td>Job-search pipeline</td><td>Proposed tier</td></tr>
+<tr><td><code>0.13.0</code></td><td>Contacts</td><td>Proposed tier</td></tr>
+<tr><td><code>0.14.0</code></td><td>Content-corpus migration</td><td>Proposed tier</td></tr>
+<tr><td><code>1.0.0</code></td><td>Dogfood cutover (public API defined), the V0 milestone</td><td>Proposed tier</td></tr>
+</tbody>
+</table>
+</div>
+<p>The Frame’s component map (below) reconciles to this sequence. Capability families that
+land in distinct increments share the substrate <code>0.1.0</code> provides; each downstream
+increment adds verbs to the MCP server skeleton without changing the host-fn ABI’s shape
+(the ABI is pre-1.0 within the <code>0.y.z</code> band per SemVer §4: backward-compatible additions
+are minor bumps, breaking changes accumulated for <code>1.0.0</code>).</p>
+<h2 id="system-boundary"><a class="header" href="#system-boundary">System boundary</a></h2>
+<h3 id="what-is-in-mnemra-core"><a class="header" href="#what-is-in-mnemra-core">What is in mnemra-core</a></h3>
+<p>Mnemra-core is the <strong>single-process server binary</strong> that ships the substrate, the host,
+the plugin runtime, and the builtin components. Per the brief’s Hard constraints:</p>
+<ul>
+<li>The agent-facing surface is <strong>MCP-native</strong> (MCP specification 2025-06-18). Transport is
+<strong>stdio at V0</strong>; streamable-HTTP is a later-version activation.</li>
+<li>The substrate is a <strong>single-process Postgres</strong> instance with <code>pgvector</code> (bundled with
+the embedded engine); TimescaleDB is demoted off the V0 stack (P-0010 D8).</li>
+<li>Plugins are <strong>WebAssembly Component Model modules</strong> hosted in-process via Wasmtime.</li>
+<li>Deployment posture is <strong>self-hosted-first, single-binary</strong>. The system MUST NOT host a
+language model; it calls out to an external one.</li>
+</ul>
+<p>The “single-binary” constraint binds the <strong>server</strong>, not the deployment packaging. An
+immutable image or appliance is a valid packaging shape (per brief Hard constraints).
+Native compile-time asset embedding is not used (project default <code>G-0002</code>: assets are
+served at runtime, with a packaging-time copy into the deployment image).</p>
+<h3 id="what-is-adjacent-to-mnemra-core-referenced-not-absorbed"><a class="header" href="#what-is-adjacent-to-mnemra-core-referenced-not-absorbed">What is adjacent to mnemra-core (referenced, not absorbed)</a></h3>
+<p>The brief explicitly carves out four adjacent components that the Frame must name but not
+absorb into mnemra-core’s component map:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Adjacent component</th><th>Relationship to mnemra-core</th></tr>
+</thead>
+<tbody>
+<tr><td>The dispatch CLI (external component, sibling repository)</td><td>Build-time dependency: gates the start of the <code>0.1.0</code> build sequence (consumes the intent → frame → spec pipeline output); later runs as a mnemra plugin (a native CLI and a WASM plugin sharing an IO-free core)</td></tr>
+<tr><td>The spec-delta/merge tool (external component, sibling repository)</td><td>Build-time dependency: the structured-delta consumer this brief’s living-document format forward-contracts with; later runs as a mnemra plugin</td></tr>
+<tr><td>The markdown review/annotation tool (sibling product, tentative)</td><td>Hosted under the mnemra umbrella when published; relationship to mnemra-core is downstream, not absorbed</td></tr>
+<tr><td>The landing site (<code>mnemra.dev</code>)</td><td>Separate repository; not a runtime component of mnemra-core. Marketing-tier dates appearing on the landing <strong>MUST NOT</strong> weight architectural tradeoff analysis (brief Hard constraints)</td></tr>
+</tbody>
+</table>
+</div>
+<p>The workspace tooling that mnemra-core’s <code>1.0.0</code> cutover replaces (the prior structured
+task store plus the prior markdown content corpus) is the <strong>migration source</strong> for the
+<code>0.2.0</code> through <code>0.14.0</code> increments. It is not a runtime adjacency of the running mnemra-core
+server; it is one-shot import scope.</p>
+<h3 id="trust-boundaries"><a class="header" href="#trust-boundaries">Trust boundaries</a></h3>
+<p>The Frame inherits eight steady-state trust boundaries from the constraints draft
+(corrected per Framing correction 1; the predecessor’s <code>TB-fs-source</code> and <code>TB-fs-backup</code>
+are present in the architecture overview’s data-flow diagram but are migration-and-
+backup-scoped and not part of the steady-state trust topology):</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Boundary</th><th>What it contains</th><th>What crosses it</th></tr>
+</thead>
+<tbody>
+<tr><td><code>TB-agent-runtime</code></td><td>MCP-client agents (separate processes hosting MCP clients)</td><td>The MCP transport (stdio at V0; streamable-HTTP V0.1+)</td></tr>
+<tr><td><code>TB-human</code></td><td>The operator invoking the admin CLI</td><td>The admin CLI’s local IPC to the running mnemra-core server, or a direct admin token over MCP</td></tr>
+<tr><td><code>TB-mnemra-host</code></td><td>The mnemra-core server process itself</td><td>Crosses MCP transport, admin CLI IPC, Postgres connection, filesystem secrets reads</td></tr>
+<tr><td><code>TB-plugin-sandbox</code></td><td>The Wasmtime sandbox running plugin code</td><td>All cross-boundary calls are host-fn-mediated; plugin core is IO-free</td></tr>
+<tr><td><code>TB-postgres</code></td><td>The Postgres process</td><td>SQL connection from mnemra-core host; no agent or plugin code reaches Postgres directly</td></tr>
+<tr><td><code>TB-fs-secrets</code></td><td>Filesystem-stored secrets (mode 600)</td><td>Admin token and (per the open ADR slot for signing-key custody) plugin-signing key material; read by host code only</td></tr>
+<tr><td><code>TB-build-pipeline</code></td><td>Conceptual, the signing authority at build time</td><td>Signed plugin artifacts are what crosses into runtime; runtime sees signatures, not the key</td></tr>
+<tr><td><code>TB-external-llm</code></td><td>The external LLM provider hosting embeddings (out-of-deployment)</td><td>Per-embedding-batch HTTPS call from host functions; the LLM-API-key configuration surface (<code>0.1.0</code>) and a hostname allowlist gate the egress</td></tr>
+</tbody>
+</table>
+</div>
+<p>The host trust boundary (<code>TB-mnemra-host</code>) is where policy enforcement happens. Plugins
+execute inside <code>TB-plugin-sandbox</code> and cannot reach Postgres, the network, or the
+filesystem directly; every IO call traverses a host function.</p>
+<p><strong>Canonical TB enumeration.</strong> The architecture overview (<a href="../architecture/overview.html">overview</a>)
+is the canonical source for the trust-boundary set, because the data-flow diagram lives
+there and the TB table sits adjacent to it. This Frame’s table is the steady-state subset
+used in Frame-altitude prose; the overview’s nine-row TB table additionally carries the
+two migration-and-backup-scoped boundaries (<code>TB-fs-source</code>, <code>TB-fs-backup</code>) plus the
+steady-state set above. When the two tables disagree, the overview wins.</p>
+<h2 id="component-map"><a class="header" href="#component-map">Component map</a></h2>
+<p>The six responsibility buckets are (1) memory substrate, (2) inbound protocol surfaces,
+(3) plugin runtime, (4) plugin-facing host functions, (5) outbound integrations, and
+(6) cross-cutting. They map onto the brief’s <code>0.1.0</code> substrate description. Each
+bucket is a module surface inside the host process, not a microservice.</p>
+<h3 id="1-memory-substrate"><a class="header" href="#1-memory-substrate">1. Memory substrate</a></h3>
+<p>The content and projection layer the host owns directly.</p>
+<ul>
+<li><strong>Storage substrate.</strong> PostgreSQL ratified on merits, behind an engine-agnostic
+swappable <code>Storage</code> trait (one implementation), per <a href="../adrs/P-0010-storage-substrate-engine.html">P-0010</a>
+D1 + D5. <strong>V0 engine: embedded Postgres</strong> (<code>postgresql_embedded</code> + bundled <code>pgvector</code>
+for V0.1+ vector retrieval), shipping with the single binary. TimescaleDB is demoted off
+the V0 stack (D8); the V0 timeseries shape is plain timestamped Postgres tables, with
+TimescaleDB held behind a latency/storage trip-wire. The <strong>storage-shape model</strong> is the
+alignment-doc round-4 four-shape model: content / timeseries / log / state-config. It was
+re-derived 2026-06-09 (E1 dispositioned = re-derive now): only content and state-config are
+persisted in-app Postgres shapes; the former timeseries and log shapes are observability
+emission surfaces, not in-app storage at V0 (telemetry is emitted, not stored; see the
+<a href="../architecture/overview.html#observability">observability baseline</a>).</li>
+<li><strong>Projections.</strong> Materialized read-side derivatives over content. Refresh strategy and
+dependency tracking is a Frame-level open slot; see the open ADR list below.</li>
+<li><strong>Indexing pipelines.</strong> Content arrives, projections update reactively. The
+detailed refresh-graph is a per-ADR concern.</li>
+<li><strong>Ingest.</strong> V0 covers one-shot batch migration of the prior content corpus (brief
+<code>0.14.0</code>); ongoing-ingest (watchers, scheduled polls, webhooks) is brief V0.1
+scope (<code>1.2.0</code>).</li>
+</ul>
+<h3 id="2-inbound-protocol-surfaces"><a class="header" href="#2-inbound-protocol-surfaces">2. Inbound protocol surfaces</a></h3>
+<ul>
+<li><strong>MCP server.</strong> Single MCP server with namespaced plugin verbs (each plugin extends
+the catalog under a namespace prefix; plugins are not separate MCP servers). Stdio
+transport at V0; streamable-HTTP transport is a V0.1+ activation.</li>
+<li><strong>Admin CLI.</strong> Schema-driven dynamic subcommands generated from plugin manifests at
+startup. Per the brief, the admin CLI handles destructive and control-plane operations
+only; agent-facing CRUD is on MCP. <strong>An MCP server is a V0 deliverable</strong> (brief
+intent-clarity).</li>
+</ul>
+<h3 id="3-plugin-runtime"><a class="header" href="#3-plugin-runtime">3. Plugin runtime</a></h3>
+<p>Wasmtime-hosted WebAssembly Component Model modules.</p>
+<ul>
+<li><strong>Lifecycle.</strong> Plugin pool per plugin; instances stateless with respect to tenant (every call
+carries the workspace-scoping key); failure containment via host-managed restart.</li>
+<li><strong>Sandbox config.</strong> Plugins receive only the host-fn surface their manifest declares;
+no ambient network or filesystem authority. <strong>Wasmtime fuel and epoch-interruption are
+ON at V0</strong>; ceiling values (fuel budget, epoch-interruption deadline, per-instance memory
+ceiling, table/instance limits) are slotted in <code>[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)</code> (Tier A).</li>
+<li><strong>Manifest validation.</strong> Plugin manifests declare <code>content_types</code> (host-owned tables
+the plugin writes into via host-fns), <code>state_scopes</code> (small KV state the plugin owns),
+and the host-fn surface the plugin needs. <code>core: true</code> plugins ship signed by the
+mnemra root authority and uninstall is structurally blocked. The manifest schema and
+the host-fn ABI surface are open ADR slots (see below). The capability-family increments
+<code>0.2.0</code> through <code>0.14.0</code> are partitioned between additional builtins and <code>core: true</code> plugins;
+<code>[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)</code> (Tier A) determines the partition. The signed-and-non-
+uninstallable invariant binds whichever increments are partitioned as plugins.</li>
+<li><strong>Signing.</strong> Plugin signature verification; the V0 custody decision lives at
+<code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code> (Tier A), the minimum-viable build-host-on-disk for dogfood, with a
+multi-deployment trip-wire to <code>{{P-SigningKeyCustodyHardening}}</code> (Tier C).</li>
+</ul>
+<h3 id="4-plugin-facing-host-functions"><a class="header" href="#4-plugin-facing-host-functions">4. Plugin-facing host functions</a></h3>
+<p>The host-fn ABI is the contract plugins write against. The following surface was
+established during the architectural alignment walk and is enumerated here for
+self-containment:</p>
+<ul>
+<li>LLM handoff (MCP sampling: the plugin asks; the agent’s MCP client runs the
+completion).</li>
+<li>Content emit and query (universal artifact CRUD at V0; aspect-aware verbs are an open
+evolution path, see open ADR slot for storage layout).</li>
+<li>Projection registration / read.</li>
+<li>Secrets / keyring access (per-plugin permissions).</li>
+<li>HTTP fetch (declared per-plugin; subject to manifest-declared permission).</li>
+<li>Logging and metrics emission.</li>
+</ul>
+<p>The ABI is pre-1.0 within <code>0.y.z</code>; per-host-fn stability marks (<code>@stable</code> / <code>@unstable</code>)
+are the discipline mechanism.</p>
+<h3 id="5-outbound-integrations"><a class="header" href="#5-outbound-integrations">5. Outbound integrations</a></h3>
+<ul>
+<li><strong>External LLM provider.</strong> mnemra-core calls out to an external model for embeddings
+via the embedding-batch pathway (the Extract-Load-Transform pipeline that routes
+artifact content through host functions to the external provider and writes resulting
+vectors into the projection substrate). The LLM-API-key configuration surface for this
+pathway is folded into <code>0.1.0</code> per the brief’s T-5 resolution. The detailed pipeline
+shape (batching strategy, retry, provider-level hostname allowlist) is a Spec-stage
+concern; the Frame names only the pathway’s existence and its trust-boundary crossing
+(<code>DF-embed-call</code> to <code>TB-external-llm</code> in the companion overview). The system MUST NOT
+host a language model (brief Hard constraints).</li>
+<li><strong>Federated MCP servers.</strong> Mnemra-as-MCP-client to upstream MCP servers (re-exposing
+their tools under the mnemra namespace) is forward-context, not V0 scope.</li>
+<li><strong>Filesystem and HTTP.</strong> Host-fn-mediated; plugins cannot reach these directly.</li>
+</ul>
+<h3 id="6-cross-cutting"><a class="header" href="#6-cross-cutting">6. Cross-cutting</a></h3>
+<ul>
+<li><strong>Security / permissions / auth.</strong> Mnemra is <strong>Resource Server only</strong> (no
+authorization-server role at V0). Per-deployment OIDC AS via RFC 9728
+protected-resource-metadata; a static admin token bootstrap path for first-run and
+solo deployments (token shape at <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code>, Tier A). The workspace claim is
+structural in every token; the V0 enforcement mechanism for workspace isolation while
+RLS policy enforcement is deferred lives at <code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code> (Tier A).</li>
+<li><strong>Observability / metrics.</strong> Per-verb metrics, structured logs, a health endpoint, all
+<strong>emitted</strong> (stdout structured logs + OTel metrics/events + health-endpoint-first),
+storage-independently from the bare shell. Re-derived 2026-06-09 (E1 dispositioned) and
+<strong>re-altituded out of the project-ADR layer</strong>: observability is a theory trait plus chassis
+mechanism, not a per-project ADR. The generation decisions live in the
+<a href="../architecture/overview.html#observability">observability baseline</a> in the companion
+overview, and the original observability ADR <a href="../adrs/P-0004-observability-shape.html">P-0004</a>
+is <code>deprecated</code> (no successor ADR). The observability storage backend is deferred behind the
+generation⊥storage separation (option set plus named tripwire); there is no in-app
+observability store at V0. Observability ships from <code>0.1.0</code>, per the workspace-wide observability
+principle: ship instrumented before first user-touch.</li>
+<li><strong>Configuration.</strong> Per-deployment configuration surface; runtime configuration via
+state-shape storage.</li>
+<li><strong>Agent sessions.</strong> Per-MCP-connection technical primitive (MCP-protocol-defined),
+distinct from the brief’s collaboration-session concept at <code>0.6.0</code>.</li>
+<li><strong>Saga coordination.</strong> Not V0; designed-for as a host-service shape when a first real
+cross-plugin atomicity need lands. Plugins are leaves; the day-1 contract is “no
+cross-plugin atomicity, ever; design for partial failure.”</li>
+</ul>
+<h3 id="builtin-components-inside-the-host"><a class="header" href="#builtin-components-inside-the-host">Builtin components inside the host</a></h3>
+<p>Per Framing correction 1, the following are <strong>builtin</strong> to the host process (not
+plugins):</p>
+<ul>
+<li><strong>Workspace</strong> (tenant boundary; solo collapses to <code>default</code>)</li>
+<li><strong>Users</strong> and <strong>Agents</strong> (agents tied to user-workspace pairs)</li>
+<li><strong>Authentication</strong> (workspace claim in every token; per-deployment OIDC; static
+dev-token first-run bootstrap)</li>
+<li><strong>Agent sessions</strong> (per-MCP-connection)</li>
+<li><strong>Per-plugin permissions</strong></li>
+<li><strong>Projects</strong></li>
+</ul>
+<p>These compose with the MCP server, the plugin runtime, and the host functions to provide
+the substrate every capability-family increment (<code>0.2.0</code> onward) rides on. They are not
+absorbed into the “plugins” surface; per the brief, plugins are scoped per project, so
+projects-as-plugins is a circular bootstrap.</p>
+<h2 id="key-cross-cutting-decisions"><a class="header" href="#key-cross-cutting-decisions">Key cross-cutting decisions</a></h2>
+<p>The Frame inherits these decisions from the locked brief and from the alignment record’s
+already-locked agreements. Each is a constraint the Spec stage operates within.</p>
+<h3 id="authentication-and-authorization"><a class="header" href="#authentication-and-authorization">Authentication and authorization</a></h3>
+<ul>
+<li><strong>Mnemra is Resource Server only.</strong> No authorization-server role at V0.</li>
+<li><strong>OIDC per deployment.</strong> Each self-hosted deployment configures its own OIDC AS;
+mnemra-core advertises the configured AS via RFC 9728 protected-resource-metadata.</li>
+<li><strong>Static admin token at V0.</strong> Bootstrap path for first-run and solo deployments; held
+in <code>~/.config/mnemra/token</code> mode 600 (per the constraints draft’s filesystem secrets
+posture). The token’s structure (opaque-with-server-side-lookup versus claim-carrying
+signed) is the Frame-altitude decision at <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code> (Tier A); the
+role-and-permission shape downstream of that decision sits at <code>[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)</code>
+(Tier A).</li>
+<li><strong>Workspace claim is structural.</strong> Every token carries a <code>workspace</code> claim; the host
+scopes storage by it. How the workspace claim is <em>bound</em> to the token (host-side
+lookup against a server-side mapping table, or a claim-carrying cryptographic signature)
+is the <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code> decision.</li>
+<li><strong>External authorization server integration</strong> (federated authorization) is brief V0.1+
+scope.</li>
+</ul>
+<h3 id="multi-tenancy"><a class="header" href="#multi-tenancy">Multi-tenancy</a></h3>
+<ul>
+<li><strong>Tenancy invariant.</strong> The <code>workspace_id</code> scoping key is <strong>structural from V0</strong>:
+NOT NULL on every artifact table, indexed, explicitly passed, forward-compatible
+without migration (brief Hard constraints).</li>
+<li><strong>RLS column-shape at V0.</strong> Postgres Row-Level Security column infrastructure ships at
+V0; <strong>policy enforcement activation</strong> is brief V0.1+ scope (the brief’s open <code>idea</code>
+entry for row-level-security policy enforcement). The V0 enforcement mechanism is named
+at <code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code> (Tier A). RLS at V0.1+ is the substrate-layer hardening
+of an enforcement that is already load-bearing at V0 via an application-layer mechanism
+(per <code>P-SecurityLayered</code>, each layer is independently load-bearing).</li>
+<li><strong>Tenant unit is workspace.</strong> Solo dogfooding collapses to one <code>default</code> workspace.</li>
+<li><strong>Tenant hierarchy</strong> (org and layers above the workspace=tenant boundary) is brief
+idea-tier deferred; safe to defer because the scoping key is structural.</li>
+</ul>
+<h3 id="plugin-runtime"><a class="header" href="#plugin-runtime">Plugin runtime</a></h3>
+<ul>
+<li><strong>WASM Component Model + Wasmtime + WIT-defined host functions</strong> (brief Hard
+constraints; Framing correction 2).</li>
+<li><strong>Plugins are leaves.</strong> No sideways linkage between plugins; cross-plugin calls are
+host-mediated.</li>
+<li><strong>Plugin instance pool from V0.</strong> A single mutex breaks under multi-tenant load; pool
+size 3 to 5 per plugin at V0, adaptive sizing is V0.1+ work.</li>
+<li><strong><code>core: true</code> plugins signed by mnemra root and structurally non-uninstallable.</strong>
+Distribution at V0 is build-time-embedded. V0 custody decision at <code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code>
+(Tier A); hardening decision at <code>{{P-SigningKeyCustodyHardening}}</code> (Tier C). The set of
+<code>0.2.0</code> through <code>0.14.0</code> capability families that are <code>core: true</code> plugins (versus additional
+builtins) is named at <code>[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)</code> (Tier A).</li>
+</ul>
+<h3 id="storage-shape"><a class="header" href="#storage-shape">Storage shape</a></h3>
+<blockquote>
+<p><strong>Reframed 2026-06-08 (substrate re-opened on merits, <a href="../adrs/P-0010-storage-substrate-engine.html">P-0010-storage-substrate-engine</a>).</strong> The original Frame treated the storage substrate as a hard-locked brief carry-forward with no substrate ADR slot. A storage-engine evaluation (ratified 2026-06-07) re-opened it on merits: <strong>PostgreSQL is ratified on merits</strong> (the only license-clean, capable, and mature contender after a license gate), <strong>behind an engine-agnostic, swappable <code>Storage</code> trait</strong> with Postgres as the only implementation. This reverses the prior “Postgres-natural / no-swap” treatment. The substrate is now a decided artifact (P-0010), not an unexamined constraint. The points below are updated to that decision; the four-shape model and the layout fork are unchanged in substance.</p>
+</blockquote>
+<ul>
+<li><strong>PostgreSQL ratified on merits as the storage substrate</strong>, behind an engine-agnostic
+swappable <code>Storage</code> trait (one implementation), per <a href="../adrs/P-0010-storage-substrate-engine.html">P-0010</a>
+D1 + D5. The <strong>V0 engine is embedded Postgres</strong> (<code>postgresql_embedded</code> + bundled
+<code>pgvector</code>), shipping with the single self-hosted binary, not an operator-provisioned
+external Postgres server.</li>
+<li><strong>V0 stack is A1-clean</strong> (<a href="../adrs/P-0010-storage-substrate-engine.html">P-0010</a> D2):
+pgvector HNSW + native FTS + recursive CTEs + JSONB. Extensions beyond pgvector are
+adopted only on named trip-wires (keyword/BM25-fidelity → D3; graph/AGE → D4;
+time-series/TimescaleDB → D8).</li>
+<li><strong>Storage shapes at V0: content + state-config (persisted); observability is emitted, not
+stored in-app.</strong> The content shape is <code>pgvector</code>-ready tables and state-config is state KV
+tables, the two persisted Postgres shapes. <strong>The former timeseries and log shapes are
+observability emission surfaces</strong> (the <a href="../architecture/overview.html#observability">observability baseline</a>,
+re-derived 2026-06-09; E1 dispositioned = re-derive now): the server emits structured logs
+to stdout and OTel metrics/events; <em>where</em> telemetry lands is the operator’s choice behind
+the generation⊥storage separation, deferred and not in the binary at V0. The content-substrate’s
+own time-series tables (if any beyond observability) are plain timestamped Postgres tables
+(<a href="../adrs/P-0010-storage-substrate-engine.html">P-0010</a> D8 demotes TimescaleDB off the V0 stack
+to a latency/storage trip-wire).</li>
+<li><strong>Content-first with CQRS-real projections.</strong> Mutations write content;
+projections rebuild reactively from content; reads hit projections.</li>
+<li><strong>The detailed layout of a single logical artifact across the four shapes</strong> (whether a
+task lives in one row, in multiple tables in the content substrate, or fans across
+content + state + log substrates) is the central architectural fork at the Spec stage.
+This is resolved in <code>[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)</code> (Tier A)
+as the Postgres <em>implementation</em> under P-0010’s substrate decision; see the Tier A table
+below for context.</li>
+</ul>
+<h3 id="mcp-transport"><a class="header" href="#mcp-transport">MCP transport</a></h3>
+<ul>
+<li><strong>Stdio at V0.</strong> Streamable-HTTP is a V0.1+ activation, conditional on the
+microVM-appliance trip-wire (a named-capability condition, not release-gated).</li>
+<li><strong>MCP specification version 2025-06-18</strong> (brief Hard constraints).</li>
+</ul>
+<h3 id="observability"><a class="header" href="#observability">Observability</a></h3>
+<ul>
+<li><strong>Ship instrumented from V0.</strong> Metrics, structured logs, and traces in place at first
+user-touch; per-verb metrics on every MCP call, all <strong>emitted</strong> (stdout + OTel) storage-independently
+from the bare shell (a workspace-wide observability discipline). The observability storage
+backend is deferred behind the generation⊥storage separation, not in the binary at V0
+(the <a href="../architecture/overview.html#observability">observability baseline</a>, re-derived 2026-06-09;
+re-altituded out of the project-ADR layer; P-0004 <code>deprecated</code>, no successor ADR).</li>
+<li><strong>Health endpoint shape.</strong> Structured-detail body identifying which dependency failed
+(Postgres reachable / <code>pgvector</code> loaded / workspace=default exists). The listener binds
+loopback-only at V0, so loopback IS the gate on the detail body (named tripwire: if the
+listener ever binds non-loopback, admin-token gating becomes required).</li>
+</ul>
+<h3 id="migration-discipline"><a class="header" href="#migration-discipline">Migration discipline</a></h3>
+<ul>
+<li><strong>Migration scope at V0.</strong> The prior structured task store’s table set and a fixed
+subset of the prior content corpus subdirectories (brief locks the scope; workspace-
+level operational tooling such as skills, team profiles, and inbox surfaces is V0.1+ scope
+per the brief’s idea-tier entry for internal-workspace absorption).</li>
+<li><strong>R6.4 / R6.4a / R6.4b idempotency and resumability.</strong> Migration must support
+resume-from-mid-failure with a per-record progress manifest.</li>
+<li><strong>R2.7 round-trip equivalence.</strong> Source-frontmatter round-trip MUST be byte-equal
+modulo system-generated migration metadata fields.</li>
+<li><strong>R6.3 system-field separation.</strong> System-generated fields (e.g., <code>migrated_from</code>,
+<code>migrated_at</code>, <code>frontmatter_version</code>) MUST NOT overwrite source frontmatter.</li>
+</ul>
+<h3 id="testing-and-review-discipline"><a class="header" href="#testing-and-review-discipline">Testing and review discipline</a></h3>
+<ul>
+<li><strong>Test-Driven Development pairs on non-trivial work</strong> (workspace-wide principle:
+TDD pairs). A separate red-phase test task precedes the implementation task on
+security boundaries, public APIs, parsers, validators.</li>
+<li><strong>Worktrees mandatory.</strong> All code work in worktrees; main is protected.</li>
+<li><strong>Heterogeneous reviewers.</strong> A code-and-security reviewer on every change; specialists
+join when their surface is touched.</li>
+</ul>
+<h2 id="open-adr-slots"><a class="header" href="#open-adr-slots">Open ADR slots</a></h2>
+<p>The Spec stage will need locked decisions on the following. Each is named with a
+candidate identifier (<code>{{P-XXX}}</code> placeholder shape; final IDs are assigned at Spec
+stage). The triage tiering follows the constraints strawman’s Tier A / B / C ordering,
+adapted for the brief’s INCR-1 staged-increment shape. Tier A unblocks the <code>0.1.0</code>
+substrate; Tier B unblocks the migration increments; Tier C unblocks operational
+hardening.</p>
+<p><strong>Placeholder-to-ADR resolution mechanism.</strong> At Spec stage, the implementing developer
+authors the actual ADR files using MADR format with the <code>P-</code> prefix, stored at
+<code>docs/src/adrs/P-NNNN-&lt;slug&gt;.md</code> (e.g., <code>{{P-StorageLayout}}</code> resolves to
+<code>P-0001-storage-layout.md</code>). Each <code>{{P-XXX}}</code> placeholder in this Frame and in the
+companion overview is back-updated to cite the resolved ADR file at that point. The
+resolution mapping is recorded in a placeholder-resolution table authored at Spec stage
+as part of the first ADR dispatch, so the Frame and overview do not carry orphaned
+placeholders beyond the Spec authoring window.</p>
+<h3 id="tier-a--unblock-010-substrate"><a class="header" href="#tier-a--unblock-010-substrate">Tier A — unblock <code>0.1.0</code> substrate</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Candidate ID</th><th>Decision</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)</code></td><td>The storage <strong>substrate and engine</strong>: which engine (Postgres-on-merits vs unified vs polyglot), the V0 engine shape (embedded vs external), the V0 extension stack, and whether storage sits behind an engine-agnostic swap trait or a Postgres-shaped one</td><td><strong>Fold-added slot (2026-06-08).</strong> The original Frame had <em>no</em> substrate slot; the substrate was treated as a hard-locked brief carry-forward. A storage-engine evaluation (ratified 2026-06-07, after the substrate spec lock) re-opened it on merits. <strong>Resolved:</strong> PostgreSQL ratified on merits behind an engine-agnostic swappable <code>Storage</code> trait (D5, one implementation); V0 embedded Postgres; A1-clean V0 stack (D2); keyword/graph/time-series on named trip-wires (D3/D4/D8); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. P-0001 (layout) sits under this decision. Escalation E1 (D8 vs the observability hypertables) dispositioned 2026-06-09 (re-derive now) → re-altituded out of the ADR layer to the <a href="../architecture/overview.html#observability">observability baseline</a>; P-0004 <code>deprecated</code>, no successor ADR.</td></tr>
+<tr><td><code>[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)</code></td><td>The detailed layout of a single logical artifact across the four storage shapes (single-document vs composite-typed-slots vs multi-substrate-with-joins)</td><td>Central architectural fork. <strong>Resolved 2026-05-24: C1 single-document layout.</strong> Whole artifact in one row; JSONB frontmatter + body + system fields; non-breaking C2 evolution path designed into the projection layer. Sits under <code>[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)</code> (the Postgres implementation under the swap trait).</td></tr>
+<tr><td><code>[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)</code></td><td>Cohesion criterion for the V0 core plugin set; partitions the capability-family increments <code>0.2.0</code> through <code>0.14.0</code> between additional builtins and <code>core: true</code> plugins</td><td>Depends-on <code>[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)</code>. <strong>Resolved 2026-05-24:</strong> 4 <code>core: true</code> plugins (tasks / repos / jobs / contacts) + 7 builtins. Verb-on-content discriminator.</td></tr>
+<tr><td><code>[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)</code></td><td>Plugin manifest schema + host-fn ABI surface</td><td>Depends-on <code>[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)</code> and <code>[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)</code>. <strong>Resolved 2026-05-24:</strong> Universal <code>content.emit</code> verb shape; <code>schema_version: 1</code>; typed host-fn allowlist compiled per-instance from signed manifest.</td></tr>
+<tr><td><code>{{P-ObservabilityShape}}</code> → <strong>re-altituded out of the ADR layer</strong> to the <a href="../architecture/overview.html#observability">observability baseline</a> (a theory-trait baseline in the companion overview, <strong>not</strong> an ADR); <a href="../adrs/P-0004-observability-shape.html">P-0004</a> <code>deprecated</code>, <strong>no successor ADR</strong></td><td>Observability shape re-derived around generation⊥storage separation: the server EMITS telemetry (stdout structured logs + OTel metrics/events + health-endpoint-first) storage-independently; the storage backend is deferred behind the separation (option set + named tripwire), not locked. The maintainer ruled observability a theory trait plus chassis mechanism, <strong>not a per-project ADR</strong>, so this Frame ADR-slot resolves to a non-ADR baseline (the altitude re-disposition is marked explicitly). P-0004 (TimescaleDB hypertables + retention + continuous aggregate in the app’s own Postgres) is the <code>deprecated</code> historical record; its storage core was falsified by P-0010 D8.</td><td>Originally drafted as P-0004 in parallel with the Tier A core; re-derived 2026-06-09 (E1 disposition) and re-altituded out of the ADR layer to the overview observability baseline.</td></tr>
+<tr><td><code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code></td><td>Minimum-viable custody decision that lets V0 ship signed <code>core: true</code> plugins. <strong>V0 mechanism:</strong> the build host has the key on disk for dogfood. <strong>Trip-wire:</strong> the moment mnemra-core is deployed beyond the maintainer’s single dogfood instance, the trip-wire fires and <code>{{P-SigningKeyCustodyHardening}}</code> (Tier C) is authored.</td><td>Anchored in <a href="../glossary.html#p-defer">P-Defer</a> (Open/Deferred mechanism named with a stated trip-wire). Split out of the originally-Tier-C <code>{{P-SigningKeyCustody}}</code> because the <code>0.1.0</code> build pipeline cannot ship signed artifacts under a deferred custody decision; V0 needs a custody story even if the hardened story comes later.</td></tr>
+<tr><td><code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code></td><td>V0 application-layer enforcement mechanism for workspace isolation while RLS policy enforcement is deferred to V0.1+. Conservative pick: <strong>typed <code>WorkspaceCtx</code> parameter binding at the host-fn boundary</strong>, where every host-fn signature requires a <code>WorkspaceCtx</code> argument that the host populates from the validated request token; queries that don’t take it cannot be authored. Open variants: (a) typed parameter binding (lead), (b) storage-layer query rewriter, (c) per-host-fn explicit <code>workspace_id</code> parameter validation.</td><td>Anchored in <code>P-SecurityLayered</code> (“each layer is independently load-bearing; losing any layer weakens the whole”). The V0 enforcement layer is named here so RLS at V0.1+ is the substrate-layer hardening of an enforcement that is already load-bearing at V0 via an application-layer mechanism.</td></tr>
+<tr><td><code>[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)</code></td><td>Plugin sandbox resource limits per Wasmtime instance: <strong>fuel (CPU-time ceiling) + epoch-interruption (deadline-based preemption) + memory ceiling + table/instance limits</strong>. V0 turns on fuel and epoch; values specified in this ADR.</td><td>Anchored in <code>P-StackDiscipline</code> (Wasmtime’s resource knobs are stack-aligned and already present in the library; this is a config decision, not a build decision). Promoted from Tier C <code>{{P-PluginPoolMemory}}</code> (renamed) because the sandbox security posture commitments in this Frame depend on these limits being live at V0.</td></tr>
+<tr><td><code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code></td><td>Static admin token structure: opaque-with-server-side-lookup vs claim-carrying signed (JWT/PASETO/etc.). The choice gates security architecture (loss of the token-file means different things in each shape) and the binding mechanism for the workspace claim every token carries.</td><td>Split out of the originally-Tier-A <code>{{P-RLSAdminToken}}</code>. Upstream of role/permission shape; the role model lives downstream at <code>[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)</code> and presupposes this decision.</td></tr>
+<tr><td><code>[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)</code></td><td>RLS role model + admin token permission shape</td><td>Depends-on <code>[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)</code> (determines policy-surface count) and <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code> (determines whether destructive ops bind on a claim-carrying or opaque-lookup token). <strong>Resolved 2026-05-24:</strong> binary admin/read-observer role enum; permission matrix per role; V0 app-layer enforcement; V0.1+ RLS policy hardening path.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tier-b--unblock-migration-increments-0200140"><a class="header" href="#tier-b--unblock-migration-increments-0200140">Tier B — unblock migration increments (<code>0.2.0</code>–<code>0.14.0</code>)</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Candidate ID</th><th>Decision</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{{P-MigrationID}}</code></td><td>Migration ID derivation strategy for the prior task store + content corpus → mnemra-core ULID identity</td></tr>
+<tr><td><code>{{P-FKPreservation}}</code></td><td>Foreign-key preservation across the migration and inside the content substrate; legacy task-store disposition policy</td></tr>
+<tr><td><code>{{P-BackupRestore}}</code></td><td>Backup and restore atomicity + role separation; round-trip verify before destructive operations</td></tr>
+<tr><td><code>{{P-CutoverDualWrite}}</code></td><td>Cutover dual-write gate (during the <code>1.0.0</code> cutover window, what guarantees prevent the prior tooling and mnemra-core from diverging)</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="tier-c--operational--concurrency-hardening"><a class="header" href="#tier-c--operational--concurrency-hardening">Tier C — operational + concurrency hardening</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Candidate ID</th><th>Decision</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{{P-PostgresExtDeploy}}</code></td><td>Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade)</td></tr>
+<tr><td><code>{{P-MCPWriteSemantics}}</code></td><td>MCP write semantics, including concurrent-write conflict resolution, deletion semantics, idempotency keys</td></tr>
+<tr><td><code>{{P-SigningKeyCustodyHardening}}</code></td><td>Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on <code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="cross-tier"><a class="header" href="#cross-tier">Cross-tier</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Candidate ID</th><th>Decision</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>{{P-ProjectionRebuild}}</code></td><td>Projection rebuild semantics, including per-substrate source-of-truth declarations, cross-substrate rebuild ordering, refresh-queue dependency tracking</td><td>Surfaces under any non-trivial storage layout. The 2026-05-03 strawman called this out as a likely standalone ADR.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="forward-context-v01-not-frame-time"><a class="header" href="#forward-context-v01-not-frame-time">Forward-context (V0.1+; not Frame-time)</a></h3>
+<p>The brief’s V0.1 (post-<code>1.0.0</code>) immediate roadmap names two committed-to-the-phase
+increments: <code>1.1.0</code> (<code>get_context_for(artifact_id)</code> retrieval verb) and <code>1.2.0</code>
+(ongoing-ingest pipeline). Neither is in V0 Frame scope. Per the brief, V0.1 entries
+lock their own frame plus spec when they’re build-actioned.</p>
+<h2 id="reconciliation-to-the-locked-brief"><a class="header" href="#reconciliation-to-the-locked-brief">Reconciliation to the locked brief</a></h2>
+<p>The Frame’s reconciliation discipline is direct citation: every claim above is either
+(a) directly stated in the locked brief, (b) directly stated in a locked predecessor
+decision (the V0 discovery, the architecture alignment record, the project defaults),
+or (c) an inference whose chain the Frame body makes explicit. No tensions surfaced that
+contradict the brief. The Frame-level refinements (Frame is narrower than the brief, but
+consistent) are:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Refinement</th><th>Where the brief permits it</th></tr>
+</thead>
+<tbody>
+<tr><td>The four-shape storage model (content / timeseries / log / state-config), re-derived 2026-06-09 to two persisted shapes (content / state-config) plus observability emission surfaces (former timeseries / log)</td><td>Brief Hard constraints fix the substrate (<code>pgvector</code>) but do not enumerate the four shapes; the alignment record’s round-4 mental model does, and the brief’s <code>0.1.0</code> substrate description (“content/timeseries/log/state storage-shape partitions”) cites it. The substrate is re-opened on merits by <a href="../adrs/P-0010-storage-substrate-engine.html">P-0010-storage-substrate-engine</a> (TimescaleDB demoted off the V0 stack, D8); the former timeseries/log shapes are observability emission surfaces, not in-app storage at V0 (telemetry is emitted, not stored; see the <a href="../architecture/overview.html#observability">observability baseline</a>).</td></tr>
+<tr><td>Plugin instance pool size 3 to 5 at V0</td><td>Brief Hard constraints require multi-tenancy structure; the alignment record’s round-5 pool decision operationalizes it.</td></tr>
+<tr><td>RLS column-shape at V0, policy enforcement at V0.1+, <strong>application-layer enforcement load-bearing at V0</strong></td><td>Brief Tenancy invariant locks “<code>workspace_id</code> structural from V0”; the brief’s idea-tier entry for row-level-security policy enforcement defers activation. The V0 enforcement mechanism for workspace isolation is named at <code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code> (Tier A). Per <code>P-SecurityLayered</code>, the application layer is independently load-bearing at V0; RLS at V0.1+ is the substrate-layer hardening.</td></tr>
+<tr><td><code>core: true</code> plugins ship signed at V0 under a Tier-A V0 custody decision</td><td>Brief Hard constraints commit to signed <code>core: true</code> plugins; this Frame names <code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code> (Tier A) as the V0 custody decision (build-host-on-disk for dogfood) with the multi-deployment trip-wire to <code>{{P-SigningKeyCustodyHardening}}</code> (Tier C). Per <a href="../glossary.html#p-defer">P-Defer</a>, the Open/Deferred mechanism names the V0 mechanism AND its trip-wire.</td></tr>
+<tr><td>Wasmtime fuel + epoch-interruption ON at V0</td><td>Brief and predecessor specs commit to the plugin-sandbox security outcomes (“an infinite-loop plugin is killed and replaced from the pool”); this Frame names the <em>mechanism</em> (fuel, epoch-interruption, memory ceiling, table/instance limits) and slots ceiling values at <code>[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)</code> (Tier A, renamed/promoted from the prior Tier-C <code>{{P-PluginPoolMemory}}</code>). Per <code>P-StackDiscipline</code>, Wasmtime’s resource knobs are stack-aligned.</td></tr>
+<tr><td>Static admin token shape is a Frame-altitude decision</td><td>Brief Hard constraints commit to the static admin token with a structural workspace claim; the <em>token structure</em> (opaque-with-server-side-lookup versus claim-carrying signed) and the workspace-claim <em>binding mechanism</em> gate downstream security architecture, so the choice lives at Frame altitude as <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code> (Tier A). The role-and-permission shape downstream sits at <code>[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)</code> (Tier A).</td></tr>
+<tr><td><code>core: true</code> plugins partition of <code>0.2.0</code>–<code>0.14.0</code> is named</td><td>Brief enumerates the capability-family increments but does not partition them between additional builtins and <code>core: true</code> plugins. <code>[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)</code> (Tier A) determines the partition; the signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins.</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="out-of-frame-scope"><a class="header" href="#out-of-frame-scope">Out of Frame scope</a></h2>
+<p>The following are explicitly <strong>not</strong> Frame-stage decisions and are recorded here so the
+boundary is unambiguous:</p>
+<ul>
+<li><strong>Detailed ADR authoring.</strong> Spec stage owns this. Frame names candidate ADRs and
+surfaces the relationships between them, but does not lock decisions.</li>
+<li><strong>Threat-modeling output</strong> (STRIDE-per-element, risk-register entries, accepted-risks
+list). The architecture overview port contains a threat-scaffold placeholder; the
+terminal-review threat-modeling pass populates it at Stage 2 fire (security-mode
+review with the threat-modeling skill loaded).</li>
+<li><strong>Test-suite design.</strong> Test discipline is named (TDD pairs, heterogeneous reviewers);
+test-fixture authoring is Spec-stage and Stage-3 implementation work.</li>
+<li><strong>Plan / sequencing within the staged-increment sequence.</strong> The brief locks ordering
+rationale per-entry; per-increment plans are ephemeral, generated when each increment
+is build-actioned.</li>
+<li><strong>Commercial gating.</strong> The brief explicitly carves commercial validation thresholds,
+pricing, and go-to-market to a separate internal record; Frame does not absorb them.</li>
+</ul>
+<h2 id="pointers"><a class="header" href="#pointers">Pointers</a></h2>
+<ul>
+<li>For the <strong>constraint inventory</strong>, the <strong>6-axis quality-attribute utility tree</strong>, the
+<strong>data-flow diagram</strong>, and the <strong>threat-scaffold placeholder</strong>, see the companion
+artifact: <a href="../architecture/overview.html">Architecture overview</a>.</li>
+<li>For the workspace-wide project defaults (G-* ADR baseline projected at project
+creation), see <a href="../adrs/DEFAULTS.html">Project Defaults</a>.</li>
+<li>For glossary entries (ADR, MADR format, the two-tier G-/P- ADR system), see
+<a href="../glossary.html">Glossary</a>.</li>
+</ul>
+<h2 id="changelog"><a class="header" href="#changelog">Changelog</a></h2>
+<ul>
+<li><strong>2026-06-09</strong> — Observability re-derivation (E1 dispositioned = re-derive now), <strong>re-altituded
+out of the project-ADR layer</strong>. The maintainer dispositioned escalation E1 by separating
+observability <strong>generation</strong> from <strong>storage</strong>: the server EMITS telemetry (stdout structured
+logs + OTel metrics/events + health-endpoint-first) storage-independently from the bare shell;
+the observability storage backend is deferred behind the separation (option set {Prometheus,
+InfluxDB, TimescaleDB, plain Postgres tables}, named tripwire), not locked; the standalone
+binary survives (observability storage is external operator infra). The maintainer further
+ruled observability a <strong>theory trait + chassis mechanism, not a per-project ADR</strong>: the
+generation decisions land in the <a href="../architecture/overview.html#observability">observability baseline</a>
+in the companion overview (a theory-trait baseline, not an ADR), and the original observability
+ADR <code>[P-0004-observability-shape](../adrs/P-0004-observability-shape.md)</code> is <code>deprecated</code>
+(its storage core falsified by P-0010 D8; <strong>no successor ADR</strong>). The intermediate
+observability ADR (P-0011) drafted earlier this day is <strong>dissolved</strong>; it
+over-built the altitude (re-asserting at project-ADR altitude a thing that is a theory baseline
+plus chassis wiring). Reframed the Frame’s two Observability sections, the storage-shape model
+(the former timeseries/log shapes are emission surfaces, not in-app storage), and the Tier-A
+slot table (the <code>{{P-ObservabilityShape}}</code> slot is marked re-altituded out of the ADR layer to
+the overview baseline; P-0010’s E1 tail re-targeted). The <code>/health</code> detail body is gated by the
+loopback-only listener bind (loopback IS the gate at V0; named tripwire if it ever binds
+non-loopback). The host capability-manifest is a settled invariant (generated from WIT, never
+hand-maintained; generation mechanism routes to the chassis). Non-observability Frame content
+unchanged.</li>
+<li><strong>2026-06-08</strong> — Storage-substrate fold. A storage-engine evaluation (ratified
+2026-06-07, <em>after</em> the 2026-05-24 substrate spec lock) re-opened the storage substrate
+on merits and was folded into the WS-E-2 designed tier before merge. The Frame’s
+storage treatment is reframed from “hard-locked brief constraint, no substrate slot” to
+“PostgreSQL ratified on merits, behind an engine-agnostic swappable <code>Storage</code> trait”
+(new <code>[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)</code>,
+added to the Tier-A slot table). Reframed: the Storage-shape cross-cutting block, the
+Memory-substrate component bullet, and the four-shape model’s timeseries shape (plain
+timestamped Postgres tables at V0; TimescaleDB demoted off the V0 stack to a trip-wire,
+D8). The V0 engine is embedded Postgres (not an external server). Carried escalation
+<strong>E1</strong> (D8 vs the then-accepted <code>[P-0004-observability-shape](../adrs/P-0004-observability-shape.md)</code>
+hypertables, a maintainer scope/sequencing call, pending at fold time), <strong>dispositioned
+2026-06-09 (re-derive now); see the 2026-06-09 entry above.</strong> Non-storage Frame content is
+unchanged.</li>
+<li><strong>2026-05-23</strong> — Frame revision per Frame-exit gate Revise verdict. Frame-exit gate
+ran retroactively on the 2026-05-22 synthesized Frame after the 2026-05-23 G-0028
+cold-start amendment landed (Stage 2 split into 2a elicitation + 2b synthesis +
+Frame-exit gate). Warden’s Stage 2 code-and-security review (target_commit
+<code>0fafbf39c2a5412bc99de0ecf499cebc7524ec63</code>, dispatch_id 652, dated 2026-05-22) returned
+Approve-with-conditions; the gate read that as Revise. Four architectural directions
+were locked via Stage 2a-shaped walkthrough (recorded at the new Stage 2a section
+above): (H1) split <code>{{P-SigningKeyCustody}}</code> → Tier-A <code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code> + Tier-C
+<code>{{P-SigningKeyCustodyHardening}}</code>; (H2) add Tier-A <code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code>
+application-layer enforcement backstop; (M3) rename <code>{{P-PluginPoolMemory}}</code> →
+<code>[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)</code> and promote to Tier A; (M4) split <code>{{P-RLSAdminToken}}</code>
+→ Tier-A <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code> + Tier-A <code>[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)</code> (narrowed). Three
+Mediums absorbed mechanically: (M1) <code>TB-external-llm</code> row added to Frame TB table,
+overview designated canonical TB enumeration; (M2) overview DFD extended with
+<code>P-builtin-users</code>, <code>P-builtin-sessions</code>, <code>P-builtin-permissions</code>; (M5) inline forward-
+reference to <code>[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)</code> for the <code>0.2.0</code>–<code>0.14.0</code> partition. L1, L2,
+N1 deferred (housekeeping). Net ADR-slot change: +3 Tier A slots
+(<code>[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)</code>, <code>[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)</code>, <code>[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)</code>),
++1 promoted Tier A slot (<code>[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)</code>, renamed from
+<code>{{P-PluginPoolMemory}}</code>), Tier C gains <code>{{P-SigningKeyCustodyHardening}}</code>, Tier C
+loses <code>{{P-PluginPoolMemory}}</code> and <code>{{P-SigningKeyCustody}}</code>. Final tally: Tier A 9
+(was 5), Tier B 4 (unchanged), Tier C 3 (was 4), Cross-tier 1 (unchanged).</li>
+<li><strong>2026-05-23</strong> (Stage 3 entry housekeeping) — Resolved three deferred housekeeping
+items from the Stage 2 code-and-security review (d652/d655): (L1) ELT subsystem forward
+reference resolved, removed undefined “ELT subsystem” term; replaced with an inline
+description of the embedding-batch pathway (Extract-Load-Transform pipeline routing
+artifact content through host functions to external provider; Spec-stage detail deferred
+with explicit callout to <code>DF-embed-call</code>/<code>TB-external-llm</code>); (L2) workspace-internal
+citation resolved, “Round-6 of the alignment record” citations removed from component
+map intro and host-fn surface intro; six bucket names inlined directly; host-fn surface
+enumeration already present inline so only the citation header changed; (N1) placeholder
+resolution mechanism added, an explicit paragraph inserted at the open-ADR-slots section
+(before Tier A table) specifying that the implementing developer at Spec stage authors
+<code>P-NNNN-&lt;slug&gt;.md</code> ADR files in MADR format; each placeholder resolves to a numbered
+filename; resolution recorded in a placeholder-resolution table at Spec stage. No
+architectural content changes; Frame remains locked at acc511f baseline. Companion
+overview updated in the same commit for slot citation routing and R-0004 rewrite.</li>
+<li><strong>2026-05-22</strong> — Frame doc initial draft. Stage 2 of <code>/brief</code> for mnemra-core; first
+real Stage-2 → Stage-3 dogfood of the new agent-first workflow shape. Reconciles to
+the locked brief (intake-exit 2026-05-20). Applies three framing corrections from
+predecessor artifacts: (1) <code>projects</code> and <code>agents</code> are builtin not plugins; (2) plugin
+shape is WASM Component Model loaded in-process, not stdio MCP wrappers around
+external CLIs; (3) V0 is a staged increment sequence (<code>0.1.0</code> → <code>1.0.0</code>), not a
+monolithic release. Companion artifact: <code>architecture/overview.md</code>. Open ADR slots
+named with <code>{{P-XXX}}</code> placeholders for Spec-stage authorship.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../intent/mnemra-core.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../architecture/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../intent/mnemra-core.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../architecture/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
