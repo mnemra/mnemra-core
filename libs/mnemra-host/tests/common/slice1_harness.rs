@@ -49,6 +49,17 @@ pub struct Slice1Harness {
     pub admin_token: AdminToken,
     /// The workspace this harness operates against.
     pub workspace_id: Uuid,
+    /// The live PluginPool shared with the running `MnemraMcpServer`.
+    ///
+    /// The server holds one `Arc` clone; this field holds another pointing to the
+    /// same `PluginPool`. Tests that need fault-injection (R-0007-h) call
+    /// `plugin_pool.inject_epoch_death_for_test()` on this handle to degrade the
+    /// same pool the server's invoke path reads from.
+    ///
+    /// Available under `#[cfg(feature = "test-hooks")]` only (the accessor is
+    /// feature-gated); storing the `Arc` here is unconditional — the field is always
+    /// present so `Slice1Harness` is a stable struct shape across features.
+    pub plugin_pool: Arc<PluginPool>,
     /// Server task — keeps the `MnemraMcpServer` alive for the duration of the test.
     pub(crate) _server_handle: tokio::task::JoinHandle<()>,
 }
@@ -84,15 +95,21 @@ pub async fn slice1_echo_harness(pg_pool: sqlx::PgPool) -> Slice1Harness {
     // Build the live PluginPool and register the loaded mnemra-echo component
     // under its pool name (R-0016-a). This is the REAL component the host
     // invokes — built by `just plugin` to `wasm32-wasip2`.
-    let plugin_pool = PluginPool::new().expect("PluginPool::new");
-    let component = Component::from_file(plugin_pool.engine(), echo_component_path())
+    //
+    // The pool is wrapped in an Arc here so we can keep a clone in Slice1Harness
+    // (for fault-injection tests, R-0007-h) AND hand a clone to MnemraMcpServer.
+    // Both clones point to the same PluginPool — injecting death via the harness
+    // field degrades the same pool the server's invoke path reads from.
+    let plugin_pool_inner = PluginPool::new().expect("PluginPool::new");
+    let component = Component::from_file(plugin_pool_inner.engine(), echo_component_path())
         .expect("load echo component");
-    plugin_pool
+    plugin_pool_inner
         .register_module(ECHO_PLUGIN_NAME, "0.0.1", &component)
         .expect("register echo component into the pool");
+    let plugin_pool = Arc::new(plugin_pool_inner);
 
     // Build the real MnemraMcpServer over the auth pool + the live plugin pool.
-    let server = MnemraMcpServer::new(pg_pool, Arc::new(plugin_pool));
+    let server = MnemraMcpServer::new(pg_pool, Arc::clone(&plugin_pool));
 
     // Serve over an in-process duplex transport; drive the client in-process.
     let (server_transport, client_transport) = duplex(8192);
@@ -113,6 +130,7 @@ pub async fn slice1_echo_harness(pg_pool: sqlx::PgPool) -> Slice1Harness {
         client,
         admin_token,
         workspace_id,
+        plugin_pool,
         _server_handle: server_handle,
     }
 }

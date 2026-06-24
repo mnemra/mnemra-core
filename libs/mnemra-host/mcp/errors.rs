@@ -7,11 +7,12 @@
 //! # Code allocation
 //!
 //! Custom mnemra MCP error codes occupy the range -4000 to -4099.
-//!   -4001 : AUTH_FAILURE_CODE      — bad/missing token; no WorkspaceCtx constructed
-//!   -4002 : PERMISSION_DENIED_CODE — valid token, wrong role for the verb (R-0009)
-//!   -4003 : NON_DISPATCHABLE_CODE  — manifest verb with no typed export (R-0019-d)
-//!   -4004 : PLUGIN_EXEC_CODE       — plugin execution error (trap / not-registered)
-//!   -4005 : VERB_NOT_EXPOSED_CODE  — verb not in manifest verbs list (R-0010-d)
+//!   -4001 : AUTH_FAILURE_CODE         — bad/missing token; no WorkspaceCtx constructed
+//!   -4002 : PERMISSION_DENIED_CODE    — valid token, wrong role for the verb (R-0009)
+//!   -4003 : NON_DISPATCHABLE_CODE     — manifest verb with no typed export (R-0019-d)
+//!   -4004 : PLUGIN_EXEC_CODE          — plugin execution error (trap / not-registered)
+//!   -4005 : VERB_NOT_EXPOSED_CODE     — verb not in manifest verbs list (R-0010-d)
+//!   -4006 : SUPERVISOR_DEGRADED_CODE  — epoch-tick supervisor degraded; dispatch unsafe (R-0007-h)
 
 use rmcp::model::ErrorCode;
 
@@ -67,3 +68,22 @@ pub const PLUGIN_EXEC_CODE: ErrorCode = ErrorCode(-4004);
 ///   -4003 NON_DISPATCHABLE_CODE  — verb declared in manifest, no typed export
 ///   -4004 PLUGIN_EXEC_CODE       — execution-time trap / pool miss
 pub const VERB_NOT_EXPOSED_CODE: ErrorCode = ErrorCode(-4005);
+
+/// Supervisor degraded: the epoch-tick thread is not healthy; plugin dispatch
+/// is unsafe (R-0007-h).
+///
+/// Returned from `call_tool` when `pool.can_invoke()` returns `false` — the
+/// epoch-tick supervisor has died or been degraded. This is a security control:
+/// the gate FAILS CLOSED (refuses, never passes through on error).
+///
+/// Placed after the manifest-verbs membership gate (-4005) and before
+/// `invoke_content` — a degraded supervisor blocks a valid, authorized,
+/// dispatchable request at the pre-dispatch chokepoint.
+///
+/// Distinct from:
+///   -4001 AUTH_FAILURE_CODE         — bad/missing token
+///   -4002 PERMISSION_DENIED_CODE    — valid token, wrong role
+///   -4003 NON_DISPATCHABLE_CODE     — verb declared, no typed export
+///   -4004 PLUGIN_EXEC_CODE          — execution-time trap / pool miss
+///   -4005 VERB_NOT_EXPOSED_CODE     — verb absent from manifest verbs list
+pub const SUPERVISOR_DEGRADED_CODE: ErrorCode = ErrorCode(-4006);
