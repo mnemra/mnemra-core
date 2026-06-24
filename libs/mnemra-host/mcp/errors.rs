@@ -7,10 +7,11 @@
 //! # Code allocation
 //!
 //! Custom mnemra MCP error codes occupy the range -4000 to -4099.
-//!   -4001 : AUTH_FAILURE_CODE   — bad/missing token; no WorkspaceCtx constructed
-//!   -4002 : PERMISSION_DENIED_CODE — valid token, wrong role for the verb
-//!   -4003 : NON_DISPATCHABLE_CODE — manifest verb with no typed export (R-0019-d)
-//!   -4004 : PLUGIN_EXEC_CODE    — plugin execution error (trap / not-registered)
+//!   -4001 : AUTH_FAILURE_CODE      — bad/missing token; no WorkspaceCtx constructed
+//!   -4002 : PERMISSION_DENIED_CODE — valid token, wrong role for the verb (R-0009)
+//!   -4003 : NON_DISPATCHABLE_CODE  — manifest verb with no typed export (R-0019-d)
+//!   -4004 : PLUGIN_EXEC_CODE       — plugin execution error (trap / not-registered)
+//!   -4005 : VERB_NOT_EXPOSED_CODE  — verb not in manifest verbs list (R-0010-d)
 
 use rmcp::model::ErrorCode;
 
@@ -31,8 +32,10 @@ pub const AUTH_FAILURE_CODE: ErrorCode = ErrorCode(-4001);
 /// Returned from `call_tool` when auth passes (token resolves to a DB row)
 /// but `auth::permissions::authorize` denies the role+verb combination.
 ///
-/// # R-0010-d/f, R-0009-e
+/// # R-0009-e/f
 ///
+/// This is the role-based permission gate (R-0009), NOT the manifest-verbs
+/// membership gate (R-0010-d). R-0010-d is `VERB_NOT_EXPOSED_CODE` (-4005).
 /// Code is custom (-4002) and is distinct from `AUTH_FAILURE_CODE` (-4001)
 /// so callers can distinguish "bad token" from "good token, wrong role".
 pub const PERMISSION_DENIED_CODE: ErrorCode = ErrorCode(-4002);
@@ -50,3 +53,17 @@ pub const NON_DISPATCHABLE_CODE: ErrorCode = ErrorCode(-4003);
 /// auth/permission/non-dispatchable so the caller can tell a runtime execution
 /// failure from a pre-dispatch rejection (R-0010-f).
 pub const PLUGIN_EXEC_CODE: ErrorCode = ErrorCode(-4004);
+
+/// Verb not exposed: the requested verb is absent from the plugin manifest's
+/// declared `verbs` list (R-0010-d, R-0010-f class verb-not-found).
+///
+/// This is the **manifest-verbs membership gate** (R-0010-d / R-0019-c).
+/// It fires pre-dispatch, after DF-auth-check (R-0010-c) passes, when the
+/// requested verb is NOT in the registered plugin's manifest `verbs` list.
+///
+/// Distinct from:
+///   -4001 AUTH_FAILURE_CODE      — bad/missing token
+///   -4002 PERMISSION_DENIED_CODE — valid token, wrong role (R-0009)
+///   -4003 NON_DISPATCHABLE_CODE  — verb declared in manifest, no typed export
+///   -4004 PLUGIN_EXEC_CODE       — execution-time trap / pool miss
+pub const VERB_NOT_EXPOSED_CODE: ErrorCode = ErrorCode(-4005);

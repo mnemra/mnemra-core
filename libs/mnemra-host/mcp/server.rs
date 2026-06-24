@@ -41,6 +41,7 @@ use rmcp::service::RequestContext;
 use sqlx::PgPool;
 
 use crate::mcp::dispatch::{auth_and_authorize, resolve_content_call};
+use crate::mcp::errors::VERB_NOT_EXPOSED_CODE;
 use crate::plugin::manifest::parse_manifest;
 use crate::plugin::pool::PluginPool;
 use crate::plugin::trap_recovery::{ContentResult, ResourceBudget, invoke_content};
@@ -141,17 +142,24 @@ impl ServerHandler for MnemraMcpServer {
         Ok(ListToolsResult::with_all_items(tools))
     }
 
-    /// Call a tool — DF-auth-check + permission check + stub dispatch (R-0010-c/d).
+    /// Call a tool — DF-auth-check + role check + manifest-verbs gate + dispatch (R-0010-c/d).
     ///
-    /// Auth and permission checks run before any routing (R-0010-c). On success,
-    /// returns a minimal `Ok(CallToolResult)`. Full plugin dispatch is wired in
-    /// a future task (Task 5 storage + Task 22 PluginPool integration).
+    /// Checks run in order before any plugin routing (R-0010-c/d):
+    ///   1. Auth: token lookup (R-0010-c). Failure → AUTH_FAILURE_CODE (-4001).
+    ///   2. Role: permission check (R-0009-d/e). Failure → PERMISSION_DENIED_CODE (-4002).
+    ///   3. Manifest-verbs gate (R-0010-d): verb must be in manifest `verbs` list.
+    ///      Failure → VERB_NOT_EXPOSED_CODE (-4005). NOT the same as NON_DISPATCHABLE.
+    ///   4. Dispatch: resolve verb to typed `content` call (R-0019-c/d).
+    ///      Declared-but-no-export → NON_DISPATCHABLE_CODE (-4003).
     ///
     /// Returns `Err(ErrorData { code: AUTH_FAILURE_CODE, .. })` if the token
     /// is missing, invalid base64url, or not found in `admin_tokens`.
     ///
     /// Returns `Err(ErrorData { code: PERMISSION_DENIED_CODE, .. })` if the
     /// token resolves but the role is not authorized for the verb.
+    ///
+    /// Returns `Err(ErrorData { code: VERB_NOT_EXPOSED_CODE, .. })` if the
+    /// verb is absent from the plugin manifest's `verbs` list (R-0010-d).
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -174,10 +182,38 @@ impl ServerHandler for MnemraMcpServer {
                 data: None,
             })?;
 
-        // DF-auth-check + per-verb capability check (R-0010-c/d).
+        // DF-auth-check + role permission check (R-0010-c, R-0009-d/e).
         // token_str is consumed; it does not appear in any error payload.
         let ctx = auth_and_authorize(&token_str_owned, &request.name, &self.pool).await?;
         let workspace_id = ctx.workspace_id();
+
+        // Manifest-verbs membership gate (R-0010-d, R-0019-c).
+        //
+        // Rejects any verb NOT present in the registered plugin's manifest
+        // `verbs` list before routing to the plugin. This is the pre-dispatch
+        // capability check: "is this verb exposed by the plugin at all?"
+        //
+        // Placement rationale: after auth_and_authorize (DF-auth-check passes
+        // first) and before resolve_content_call (no dispatch attempt for
+        // undeclared verbs). Placement is unbypassable — every authenticated
+        // call_tool path passes through this check regardless of token role.
+        //
+        // Membership-only: this gate answers "is the verb declared in the
+        // manifest?" It does NOT subsume resolve_content_call. A verb that IS
+        // declared but has no typed export (e.g. echo.audit) passes this gate
+        // and then receives NON_DISPATCHABLE (-4003) from resolve_content_call
+        // exactly as before (R-0019-d, precision guard — test #2).
+        if !self.echo_verbs.iter().any(|v| v == request.name.as_ref()) {
+            return Err(rmcp::model::ErrorData {
+                code: VERB_NOT_EXPOSED_CODE,
+                message: format!(
+                    "verb '{}' is not in the registered plugin's manifest verbs list",
+                    request.name
+                )
+                .into(),
+                data: None,
+            });
+        }
 
         // Resolve the authenticated verb to its typed `content` call, reading the
         // MCP arguments (CC-MAPPING + R1). A manifest-declared verb with no typed
