@@ -41,7 +41,7 @@ use rmcp::service::RequestContext;
 use sqlx::PgPool;
 
 use crate::mcp::dispatch::{auth_and_authorize, resolve_content_call};
-use crate::mcp::errors::VERB_NOT_EXPOSED_CODE;
+use crate::mcp::errors::{SUPERVISOR_DEGRADED_CODE, VERB_NOT_EXPOSED_CODE};
 use crate::plugin::manifest::parse_manifest;
 use crate::plugin::pool::PluginPool;
 use crate::plugin::trap_recovery::{ContentResult, ResourceBudget, invoke_content};
@@ -142,14 +142,16 @@ impl ServerHandler for MnemraMcpServer {
         Ok(ListToolsResult::with_all_items(tools))
     }
 
-    /// Call a tool — DF-auth-check + role check + manifest-verbs gate + dispatch (R-0010-c/d).
+    /// Call a tool — DF-auth-check + role check + manifest-verbs gate + health gate + dispatch (R-0010-c/d, R-0007-h).
     ///
     /// Checks run in order before any plugin routing (R-0010-c/d):
     ///   1. Auth: token lookup (R-0010-c). Failure → AUTH_FAILURE_CODE (-4001).
     ///   2. Role: permission check (R-0009-d/e). Failure → PERMISSION_DENIED_CODE (-4002).
     ///   3. Manifest-verbs gate (R-0010-d): verb must be in manifest `verbs` list.
     ///      Failure → VERB_NOT_EXPOSED_CODE (-4005). NOT the same as NON_DISPATCHABLE.
-    ///   4. Dispatch: resolve verb to typed `content` call (R-0019-c/d).
+    ///   4. Health gate (R-0007-h): epoch-tick supervisor must be healthy.
+    ///      Failure → SUPERVISOR_DEGRADED_CODE (-4006). Fails closed; never passes through.
+    ///   5. Dispatch: resolve verb to typed `content` call (R-0019-c/d).
     ///      Declared-but-no-export → NON_DISPATCHABLE_CODE (-4003).
     ///
     /// Returns `Err(ErrorData { code: AUTH_FAILURE_CODE, .. })` if the token
@@ -160,6 +162,9 @@ impl ServerHandler for MnemraMcpServer {
     ///
     /// Returns `Err(ErrorData { code: VERB_NOT_EXPOSED_CODE, .. })` if the
     /// verb is absent from the plugin manifest's `verbs` list (R-0010-d).
+    ///
+    /// Returns `Err(ErrorData { code: SUPERVISOR_DEGRADED_CODE, .. })` if the
+    /// epoch-tick supervisor is degraded (R-0007-h).
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -211,6 +216,31 @@ impl ServerHandler for MnemraMcpServer {
                     request.name
                 )
                 .into(),
+                data: None,
+            });
+        }
+
+        // R-0007-h: refuse invocation while the epoch-tick supervisor is degraded.
+        //
+        // Security control — fails closed: a degraded supervisor blocks dispatch.
+        // Reads from the SAME Arc<PluginPool> the harness degrades in tests, so the
+        // health state is live (not a snapshot). A false return from can_invoke()
+        // means the epoch-tick thread has died; forwarding to invoke_content would
+        // run unticked epochs, voiding the resource-limit contract (R-0007-e/f).
+        //
+        // Placement: after auth + permission + manifest-verbs checks, before
+        // resolve_content_call. A valid, authorized, dispatchable request receives
+        // the distinct SUPERVISOR_DEGRADED code (-4006), not auth/permission/verb/
+        // plugin-exec — which is what the distinctness guards in the test assert.
+        //
+        // TRIPWIRE: V0 is MCP-only — server.rs is the sole invoke_content caller.
+        // When a second content-dispatching frontend (CLI/HTTP, T11+) lands, hoist
+        // this can_invoke() check into the shared invoke_content path so every
+        // frontend is gated (task #1702 scope).
+        if !self.plugin_pool.can_invoke() {
+            return Err(rmcp::model::ErrorData {
+                code: SUPERVISOR_DEGRADED_CODE,
+                message: "epoch-tick supervisor is degraded; plugin dispatch is unsafe".into(),
                 data: None,
             });
         }
