@@ -232,6 +232,33 @@ impl PluginPool {
         self.epoch_thread.is_healthy()
     }
 
+    // -----------------------------------------------------------------------
+    // R-0007-h test-only fault-injection seam (gated behind `test-hooks` feature)
+    // -----------------------------------------------------------------------
+    //
+    // These hooks are NOT gated behind `#[cfg(test)]`: integration-test crates
+    // link the library compiled WITHOUT `--test`, so cfg(test) items would be
+    // invisible. Gated behind `#[cfg(feature = "test-hooks")]` — a non-default
+    // cargo feature — so the default build and production binary cannot reach them.
+    // Once Task 23 wires untrusted MCP dispatch into the same process, these
+    // in-process-callable methods must not coexist with an untrusted path on the
+    // default surface (task #1702, Warden condition 1).
+
+    /// Test hook: degrade the pool's epoch-tick supervisor, simulating a thread death.
+    ///
+    /// Delegates to `EpochTickThread::inject_death_for_test()`, which stops the
+    /// current tick thread, transitions health to `Degraded`, and clears the
+    /// confirmed flag. Used by integration tests to drive the R-0007-h gate.
+    ///
+    /// The accessor on `PluginPool` mirrors the existing per-thread hook so tests
+    /// hold a handle to the pool (not the inner thread) — the same object the
+    /// MCP invoke path reads from.
+    #[cfg(feature = "test-hooks")]
+    #[doc(hidden)]
+    pub fn inject_epoch_death_for_test(&self) {
+        self.epoch_thread.inject_death_for_test();
+    }
+
     /// Returns a reference to the Wasmtime engine (for Task 23 component loading).
     pub fn engine(&self) -> &Engine {
         &self.engine
