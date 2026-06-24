@@ -38,7 +38,11 @@
 //! the epoch deadline bind; a small fuel budget + large epoch deadline makes fuel
 //! bind. This is what lets the two trap paths be tested independently.
 
-use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, MEMORY_MAX_BYTES, PluginResourceLimiter};
+use wasmtime::Store;
+use wasmtime::component::Instance;
+
+use crate::plugin::component::HostState;
+use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, MEMORY_MAX_BYTES};
 use crate::plugin::pool::PluginPool;
 
 // ---------------------------------------------------------------------------
@@ -230,32 +234,35 @@ fn classify_trap(err: &wasmtime::Error) -> Option<LimitType> {
 }
 
 // ---------------------------------------------------------------------------
-// invoke_with_recovery — the public recovery seam
+// invoke_through_recovery — the SINGLE kill-and-replace seam (R-0007-e/f, R-0016-c)
 // ---------------------------------------------------------------------------
 
-/// Invoke `verb` on `plugin_name` through the trap-recovery path (R-0007-e/f,
-/// R-0016-c).
+/// The one take -> bind-ws -> budget -> invoke -> repopulate -> classify -> emit
+/// seam, generic over the export call. BOTH the production typed-`content`
+/// dispatch path (`invoke_content`) and the resource-limit trap-recovery path
+/// (`invoke_with_recovery`) go through this function — so the R-0007 trap tests
+/// in `resource_limits.rs` exercise the EXACT machinery the request path runs
+/// (no duplicated copy that production never executes).
 ///
-/// Borrows a live slot for `plugin_name`, instantiates a fresh `Store` configured
-/// with `budget` (fuel + epoch deadline) and the memory limiter, instantiates the
-/// slot's module, and calls the `run` export. If the call traps on a resource
-/// limit:
-///
-///   - the trap is caught (never propagated as a panic, R-0007-f);
-///   - a `plugin_limit_violation` event is emitted with the policy `limit_value`;
-///   - the breaching slot is poisoned and replaced with a fresh live instance
-///     SYNCHRONOUSLY, before this function returns (R-0016-c — pool size is
-///     preserved);
-///   - a structured `PluginExecError` is returned.
-///
-/// On a successful (non-trapping) call the `Output` bytes are returned.
-pub fn invoke_with_recovery(
+/// Steps:
+///   - borrow a live slot for `plugin_name` (missing plugin -> structured error);
+///   - bind the host-derived `workspace_id` onto the store's `HostState` at the
+///     single dispatch site (R-0006-b); trap fixtures ignore it harmlessly;
+///   - apply the per-invocation budget (fuel + epoch, R-0007-g), fail-closed;
+///   - run `call(store, instance)` — the breaching invocation;
+///   - SYNCHRONOUSLY repopulate the slot before returning (R-0016-c — pool size
+///     preserved), whatever the outcome;
+///   - on a trap: classify (epoch/fuel), emit the `plugin_limit_violation` event
+///     with the POLICY `limit_value`, and return a structured `PluginExecError`
+///     (never a panic, R-0007-f).
+fn invoke_through_recovery<R>(
     pool: &PluginPool,
     plugin_name: &str,
     verb: &str,
     budget: ResourceBudget,
     workspace_id: uuid::Uuid,
-) -> Result<Output, PluginExecError> {
+    call: impl FnOnce(&mut Store<HostState>, &Instance) -> Result<R, wasmtime::Error>,
+) -> Result<R, PluginExecError> {
     // Take the live instance OUT of a populated slot. The slot is now empty —
     // genuinely killed pending replacement — so a trap on this instance does not
     // leave a stale live entry behind. A missing plugin is a structured error,
@@ -275,6 +282,26 @@ pub fn invoke_with_recovery(
     let plugin_id = live.plugin_id.clone();
     let plugin_version = live.plugin_version.clone();
     let slot_index = live.slot_index;
+
+    // ========================= TENANT-ISOLATION LINCHPIN =====================
+    // R-0006-b / R-0006-e — THE workspace scoping key derivation site.
+    //
+    // `workspace_id` here is HOST-DERIVED: it came from the authenticated
+    // `WorkspaceCtx` constructed at the single dispatch site in `call_tool`
+    // (auth_and_authorize -> ctx.workspace_id()). We bind it onto the store's
+    // `HostState` HERE, BEFORE the guest export runs. The `artifact-*` host-fn
+    // import bodies read `self.workspace_id` from this `HostState`
+    // (libs/mnemra-host/plugin/component.rs) — they NEVER read the
+    // `workspace-ctx` value the guest passes across the import boundary. The
+    // guest cannot supply, forge, or influence the scoping key (R-0006-e: no
+    // plugin-supplied scoping key). This is what makes cross-workspace access
+    // structurally impossible — verified observably by Glitch's Test B
+    // (cross_workspace_get_returns_none) and enforced at the fenced-map key
+    // `(workspace_id, id)` (R-0006-d). Changing this binding, or making any
+    // host-fn body trust a guest-supplied workspace value, is a tenant-isolation
+    // breach. (Trap fixtures never read it; binding here is harmless for them.)
+    // ========================================================================
+    live.store.data_mut().set_workspace_id(workspace_id);
 
     // Apply the per-invocation budget to the live slot's store. `set_fuel` can
     // fail only if fuel metering is disabled on the engine (it is enabled in
@@ -299,10 +326,10 @@ pub fn invoke_with_recovery(
     }
     live.store.set_epoch_deadline(budget.epoch_deadline);
 
-    // Call the `run` export on the slot's LIVE instance. The instance + store were
-    // taken from the slot; a trap here poisons THIS store (the genuine live entry),
-    // which is dropped at end of scope. This is the breaching invocation.
-    let call_result = run_verb(&mut live.store, &live.instance);
+    // Run the export. The instance + store were taken from the slot; a trap here
+    // poisons THIS store (the genuine live entry), dropped at end of scope. This
+    // is the breaching invocation.
+    let call_result = call(&mut live.store, &live.instance);
 
     // GENUINE kill-and-replace (R-0016-c): whatever the outcome, instantiate a
     // fresh live instance back into the slot synchronously — before this function
@@ -311,11 +338,7 @@ pub fn invoke_with_recovery(
     pool.repopulate_slot(plugin_name, slot_index);
 
     match call_result {
-        Ok(output) => {
-            // Successful invocation — return the verb output. (Unreached by
-            // Task-22 fixtures, which always trap.)
-            Ok(output)
-        }
+        Ok(value) => Ok(value),
         Err(err) => {
             // A trap (or other call error) occurred. Classify it. (The slot was
             // already repopulated above — kill-and-replace is complete.)
@@ -380,20 +403,124 @@ pub fn invoke_with_recovery(
     }
 }
 
-/// Call the `run` export on a pre-instantiated `instance` bound to `store`.
+// ---------------------------------------------------------------------------
+// invoke_with_recovery — the trap-recovery probe (resource-limit suite)
+// ---------------------------------------------------------------------------
+
+/// Invoke the world-level `run` export on `plugin_name` through the shared
+/// kill-and-replace seam (R-0007-e/f, R-0016-c).
 ///
-/// The `run` export takes no params and returns no results (per the Task-22
-/// fixtures and the V0 verb shape). Any trap raised during the call is returned as
-/// the `Err` for the caller to classify — it is NEVER allowed to escape as a panic.
-/// The `instance` was instantiated into `store` at slot population time, so this
-/// only resolves the export and calls it.
-fn run_verb(
-    store: &mut wasmtime::Store<PluginResourceLimiter>,
-    instance: &wasmtime::Instance,
-) -> Result<Output, wasmtime::Error> {
+/// Used by the resource-limit suite: the trap fixtures are components exporting a
+/// parameterless `run` that loops/burns. This is a thin caller over
+/// `invoke_through_recovery` with the `run_verb` closure — the SAME seam the real
+/// `content` dispatch path uses, so the R-0007 trap assertions cover production
+/// machinery. Public signature unchanged (the suite is untouched).
+pub fn invoke_with_recovery(
+    pool: &PluginPool,
+    plugin_name: &str,
+    verb: &str,
+    budget: ResourceBudget,
+    workspace_id: uuid::Uuid,
+) -> Result<Output, PluginExecError> {
+    invoke_through_recovery(pool, plugin_name, verb, budget, workspace_id, run_verb)
+}
+
+// ---------------------------------------------------------------------------
+// Typed `content` invoke — the REAL dispatch path (T5/T6, R-0019-a)
+// ---------------------------------------------------------------------------
+
+/// Which typed `content` method to invoke, plus its marshalled arguments
+/// (CC-MAPPING: `echo.create` -> `Create`, `echo.get` -> `Get`).
+#[derive(Debug, Clone)]
+pub enum ContentCall {
+    /// `content.create(type, frontmatter, body)` — returns the generated ULID.
+    Create {
+        /// The artifact type name (from the MCP `content_type` argument).
+        type_name: String,
+        /// The frontmatter JSON-as-string (from the MCP `payload` argument).
+        frontmatter: String,
+        /// The optional body.
+        body: Option<String>,
+    },
+    /// `content.get(id)` — returns the stored content, or `None`.
+    Get {
+        /// The artifact id (from the MCP `id` argument).
+        id: String,
+    },
+}
+
+/// The typed result of a successful `content` invoke.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ContentResult {
+    /// `content.create` returned the generated id.
+    Created(String),
+    /// `content.get` returned the stored content (or `None`).
+    Got(Option<String>),
+}
+
+/// Invoke the typed `content` export on a pooled component instance through the
+/// shared kill-and-replace seam, scoped to `workspace_id` (R-0019-a, R-0006-b,
+/// R-0007).
+///
+/// This is the REAL request dispatch path. It is a thin caller over
+/// `invoke_through_recovery` with the typed-`content` closure — so a trap during
+/// a `content` invoke gets the IDENTICAL classify -> emit -> kill-and-replace ->
+/// structured-error treatment the resource-limit suite asserts, on the same code.
+pub fn invoke_content(
+    pool: &PluginPool,
+    plugin_name: &str,
+    verb: &str,
+    call: ContentCall,
+    budget: ResourceBudget,
+    workspace_id: uuid::Uuid,
+) -> Result<ContentResult, PluginExecError> {
+    invoke_through_recovery(
+        pool,
+        plugin_name,
+        verb,
+        budget,
+        workspace_id,
+        |store, instance| match &call {
+            ContentCall::Create {
+                type_name,
+                frontmatter,
+                body,
+            } => crate::plugin::component::content_create(
+                store,
+                instance,
+                type_name,
+                frontmatter,
+                body.as_deref(),
+            )
+            .map(ContentResult::Created),
+            ContentCall::Get { id } => {
+                crate::plugin::component::content_get(store, instance, id).map(ContentResult::Got)
+            }
+        },
+    )
+}
+
+/// Call the world-level `run` export on a pre-instantiated component `instance`
+/// bound to `store` (CC-RUNVERB-REWRITE).
+///
+/// This is the trap-recovery probe used by the resource-limit suite: the trap
+/// fixtures are COMPONENTS exporting a parameterless world-level `run: func()`
+/// that loops (epoch) or burns fuel. A trap raised during the call is returned
+/// as the `Err` for the caller to classify — NEVER allowed to escape as a panic
+/// (R-0007-f). The component-typed `content` invoke for the REAL dispatch path
+/// lives in `crate::plugin::component::content_create` / `content_get`; both the
+/// trap path here and the real path go through this same kill-and-replace seam
+/// (`invoke_with_recovery` for the trap path; the dispatch site applies the same
+/// take→budget→invoke→repopulate discipline for the real path).
+///
+/// The move from the core-module `get_typed_func::<(),()>("run")` to the
+/// component `Instance::get_typed_func` is the CC-RUNVERB-REWRITE: the instance
+/// is a `component::Instance`, not a core `wasmtime::Instance`, but the trap
+/// classification (epoch/fuel, at the `wasmtime::Trap` level) is unchanged.
+fn run_verb(store: &mut Store<HostState>, instance: &Instance) -> Result<Output, wasmtime::Error> {
     let run = instance.get_typed_func::<(), ()>(&mut *store, "run")?;
     run.call(&mut *store, ())?;
-    // The V0 verb shape returns no bytes through the export; success yields empty
-    // output. Real output marshalling is Task 23 scope.
+    // The trap fixtures' `run` returns no values; success yields empty output.
+    // (The real dispatch path returns the typed `content` value, not via here.)
     Ok(Vec::new())
 }

@@ -34,14 +34,16 @@ use std::sync::Arc;
 use rmcp::RoleServer;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams, ServerInfo,
-    Tool,
+    CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
+    ServerInfo, Tool,
 };
 use rmcp::service::RequestContext;
 use sqlx::PgPool;
 
-use crate::mcp::dispatch::auth_and_authorize;
+use crate::mcp::dispatch::{auth_and_authorize, resolve_content_call};
 use crate::plugin::manifest::parse_manifest;
+use crate::plugin::pool::PluginPool;
+use crate::plugin::trap_recovery::{ContentResult, ResourceBudget, invoke_content};
 
 // ---------------------------------------------------------------------------
 // Echo manifest bytes (embedded at compile time)
@@ -61,18 +63,27 @@ const ECHO_MANIFEST_TOML: &[u8] = include_bytes!("../../../plugins/mnemra-echo/m
 // MnemraMcpServer
 // ---------------------------------------------------------------------------
 
+/// The registered pool name for the echo content plugin. The pool is populated
+/// under this name (T11 startup / the slice-1 harness); `call_tool` borrows a
+/// pooled instance by it.
+pub const ECHO_PLUGIN_NAME: &str = "mnemra-echo";
+
 /// The mnemra MCP server — single entry point for all MCP tool calls (R-0010-a).
 ///
-/// Holds a `PgPool` for auth lookups and a pre-compiled list of echo plugin
-/// verbs for tool advertisement.
+/// Holds a `PgPool` for auth lookups, the `PluginPool` of live component
+/// instances for dispatch, and a pre-compiled list of echo plugin verbs for tool
+/// advertisement.
 pub struct MnemraMcpServer {
     pool: PgPool,
+    /// The live component-instance pool the dispatch path borrows from (R-0016-a).
+    plugin_pool: Arc<PluginPool>,
     /// Plugin verbs parsed from the echo manifest at construction time.
     echo_verbs: Vec<String>,
 }
 
 impl MnemraMcpServer {
-    /// Construct a new `MnemraMcpServer` with the given pool.
+    /// Construct a new `MnemraMcpServer` with the auth pool and the live plugin
+    /// pool (R-0010-a, R-0016-a).
     ///
     /// Parses the echo manifest to extract verb names for `list_tools`.
     /// Does NOT start any background tasks or open additional connections.
@@ -81,11 +92,15 @@ impl MnemraMcpServer {
     ///
     /// Panics if the embedded echo manifest TOML cannot be parsed. This is a
     /// compile-time-embedded file; a parse failure indicates a broken build.
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool, plugin_pool: Arc<PluginPool>) -> Self {
         let manifest =
             parse_manifest(ECHO_MANIFEST_TOML).expect("embedded echo manifest must be valid TOML");
         let echo_verbs = manifest.verbs.exposed;
-        Self { pool, echo_verbs }
+        Self {
+            pool,
+            plugin_pool,
+            echo_verbs,
+        }
     }
 }
 
@@ -161,10 +176,66 @@ impl ServerHandler for MnemraMcpServer {
 
         // DF-auth-check + per-verb capability check (R-0010-c/d).
         // token_str is consumed; it does not appear in any error payload.
-        let _ctx = auth_and_authorize(&token_str_owned, &request.name, &self.pool).await?;
+        let ctx = auth_and_authorize(&token_str_owned, &request.name, &self.pool).await?;
+        let workspace_id = ctx.workspace_id();
 
-        // Auth and permission passed. Return a minimal Ok result.
-        // Full plugin dispatch is out of scope until Task 5 + Task 22 wiring lands.
-        Ok(CallToolResult::default())
+        // Resolve the authenticated verb to its typed `content` call, reading the
+        // MCP arguments (CC-MAPPING + R1). A manifest-declared verb with no typed
+        // export returns the R-0019-d structured non-dispatchable error; the
+        // pre-dispatch permission outcome above is unchanged (R-0019-e). Verb
+        // -> export resolution is STATIC against the fixed `content` interface —
+        // no runtime export registry (FENCE R-0019-c).
+        let dispatch = resolve_content_call(&request.name, request.arguments.as_ref())?;
+
+        // Invoke the typed `content` export on a pooled component instance. The
+        // pool invoke is synchronous (wasmtime `Store` is not async) and may run
+        // until the epoch deadline on a trapping plugin, so it runs on a blocking
+        // thread to keep the async runtime free. The host-derived `workspace_id`
+        // is bound onto the store inside `invoke_content` at the single dispatch
+        // site (R-0006-b); the guest never supplies it (R-0006-e).
+        let plugin_pool = Arc::clone(&self.plugin_pool);
+        let verb = request.name.to_string();
+        let invoke_result = tokio::task::spawn_blocking(move || {
+            invoke_content(
+                &plugin_pool,
+                ECHO_PLUGIN_NAME,
+                &verb,
+                dispatch.call,
+                ResourceBudget::default(),
+                workspace_id,
+            )
+        })
+        .await
+        .map_err(|join_err| rmcp::model::ErrorData {
+            // A join error means the blocking task panicked — surface as internal,
+            // never swallow it into a fake success.
+            code: rmcp::model::ErrorCode::INTERNAL_ERROR,
+            message: format!("plugin dispatch task failed: {join_err}").into(),
+            data: None,
+        })?;
+
+        // Map the typed return into a `CallToolResult` (R2). On a plugin
+        // execution error (trap / not-registered), surface a structured MCP error
+        // with a distinguishable code (R-0010-f) — never a vacuous `Ok`.
+        match invoke_result {
+            Ok(ContentResult::Created(id)) => {
+                // `echo.create` -> the generated ULID as a text content item.
+                Ok(CallToolResult::success(vec![Content::text(id)]))
+            }
+            Ok(ContentResult::Got(Some(content))) => {
+                // `echo.get` -> the stored content (round-trips the payload).
+                Ok(CallToolResult::success(vec![Content::text(content)]))
+            }
+            Ok(ContentResult::Got(None)) => {
+                // Not found / not visible in this workspace — an empty-content Ok
+                // result (the readback path; cross-workspace get lands here).
+                Ok(CallToolResult::success(vec![]))
+            }
+            Err(exec_err) => Err(rmcp::model::ErrorData {
+                code: crate::mcp::errors::PLUGIN_EXEC_CODE,
+                message: format!("plugin execution failed: {}", exec_err.code()).into(),
+                data: None,
+            }),
+        }
     }
 }

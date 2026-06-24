@@ -25,6 +25,10 @@
 //! R-0016-a/b and R-0007 but are not reachable from the manifest-load tests.
 
 pub mod allowlist;
+// Task 23 / T3: component-model host bindings — `component::bindgen!` over the
+// `plugin` world, `HostState` store data, host-fn import bodies, Linker (R-0019,
+// R-0012-a, R-0006-a/b/e).
+pub mod component;
 pub mod epoch_thread;
 pub mod limits;
 pub mod manifest;

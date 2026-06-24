@@ -34,10 +34,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use wasmtime::{Engine, Instance, Module, Store};
+use wasmtime::component::{Component, Instance, Linker};
+use wasmtime::{Engine, Store};
 
+use crate::abi::host_fns::FencedArtifactStore;
+use crate::plugin::component::{self, HostState};
 use crate::plugin::epoch_thread::{EpochTickThread, HealthState};
-use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, PluginResourceLimiter, build_engine};
+use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, build_engine};
 use crate::plugin::runtime::PluginRuntime;
 
 // ---------------------------------------------------------------------------
@@ -80,41 +83,48 @@ pub struct PluginSlot {
 /// trapped/poisoned) is dropped while a fresh instance is instantiated back into
 /// the slot synchronously (R-0016-c).
 ///
-/// At Task 22 the population path is `register_module` (from a compiled
-/// `wasmtime::Module`); production artifact→Module population is Task 23.
+/// Task 23 migrates this population path to the component model: the slot holds
+/// a `component::Component` instantiated via the host `Linker<HostState>`, and a
+/// `Plugin` typed-export world handle for the typed `content` invoke.
 struct LiveSlot {
-    /// The live store for this slot's instance. `None` only transiently while an
-    /// invocation has taken the instance out and before the replacement lands.
-    store: Store<PluginResourceLimiter>,
-    /// The live instance bound to `store`.
+    /// The live store for this slot's instance — its data is the `HostState`
+    /// (workspace ctx + fenced map + memory limiter). `None` only transiently
+    /// while an invocation has taken the slot out and before the replacement lands.
+    store: Store<HostState>,
+    /// The live, instantiated raw component `Instance` bound to `store`. The raw
+    /// instance (not the typed `Plugin` world handle) is held so the pool can
+    /// carry both real content plugins and the trap fixtures (which export a bare
+    /// `run`, not `content`) uniformly.
     instance: Instance,
 }
 
-/// The live, registered module + identity for a plugin, plus its live slots.
+/// The live, registered component + identity for a plugin, plus its live slots.
 ///
-/// Replaces nothing — it sits alongside the Task-21 `PluginEntry`, which remains
-/// for the manifest-handle `register` path. `LiveModuleEntry` is the Task-22
-/// trappable population path.
+/// Holds the compiled `Component` and the host `Linker<HostState>` used to
+/// (re)instantiate slots. `LiveModuleEntry` is the trappable population path.
 struct LiveModuleEntry {
     plugin_name: String,
     plugin_version: String,
-    module: Arc<Module>,
+    component: Arc<Component>,
+    /// The host Linker for this component (host-fn imports + WASI trap-stubs).
+    linker: Arc<Linker<HostState>>,
     /// Live slots. Each is `Some` when populated and `None` only transiently
     /// during a take→repopulate cycle. `slot_count` counts the `Some` entries.
     slots: Vec<Option<LiveSlot>>,
 }
 
-/// A live invocation borrowed out of the pool: the slot's store + instance moved
-/// out for the duration of the call, plus the identity and slot index needed to
-/// emit the event and repopulate the slot afterward.
+/// A live invocation borrowed out of the pool: the slot's store + component world
+/// handle moved out for the duration of the call, plus the identity and slot
+/// index needed to emit the event and repopulate the slot afterward.
 ///
-/// The `store` + `instance` are the GENUINE live entry taken from the slot — the
+/// The `store` + `plugin` are the GENUINE live entry taken from the slot — the
 /// slot is left empty (`None`) until `repopulate_slot` instantiates a fresh one.
 /// On a trap the store is poisoned; dropping this struct kills it.
 pub struct LiveInvocation {
     /// The live store taken from the slot — the caller applies the budget here.
-    pub store: Store<PluginResourceLimiter>,
-    /// The live instance to call the verb on.
+    pub store: Store<HostState>,
+    /// The live raw component `Instance` to invoke an export on (the typed
+    /// `content` export for the real path; a bare `run` for the trap fixtures).
     pub instance: Instance,
     /// The plugin identity (for the emitted event).
     pub plugin_id: String,
@@ -140,9 +150,14 @@ pub struct PluginPool {
     epoch_thread: EpochTickThread,
     /// Per-plugin-name slot pools (Task-21 manifest-handle path).
     slots: Mutex<Vec<PluginEntry>>,
-    /// Per-plugin-name LIVE module entries (Task-22 trappable path). Each holds a
-    /// compiled `Module` + POOL_MIN live instances usable by `invoke_with_recovery`.
+    /// Per-plugin-name LIVE component entries (trappable path). Each holds a
+    /// compiled `Component` + host `Linker` + POOL_MIN live instances usable by
+    /// `invoke_with_recovery`.
     live_modules: Mutex<Vec<LiveModuleEntry>>,
+    /// The shared, process-wide fenced artifact store (T7, Branch-2 stub). All
+    /// instances share it via their `HostState` so a `create` on one instance is
+    /// visible to a later `get` on another. Swapped for real `Storage` in T13.
+    artifacts: FencedArtifactStore,
 }
 
 // Fields are written during `register` and will be read when Task 23 wires
@@ -168,7 +183,14 @@ impl PluginPool {
             epoch_thread,
             slots: Mutex::new(Vec::new()),
             live_modules: Mutex::new(Vec::new()),
+            artifacts: FencedArtifactStore::new(),
         })
+    }
+
+    /// A handle to the pool's shared fenced artifact store (T7). All pooled
+    /// instances share this via their `HostState`.
+    pub fn artifacts(&self) -> FencedArtifactStore {
+        self.artifacts.clone()
     }
 
     /// Register a plugin by its manifest runtime and pre-initialise POOL_MIN slots.
@@ -229,29 +251,33 @@ impl PluginPool {
     // Task-22 live-module path (trappable instances + kill-and-replace)
     // -----------------------------------------------------------------------
 
-    /// Register a compiled `wasmtime::Module` as a live, trappable plugin and
-    /// populate `POOL_MIN` live instances (R-0016-a, R-0007-e/f).
+    /// Register a compiled `component::Component` as a live, trappable plugin and
+    /// populate `POOL_MIN` live instances (R-0016-a, R-0007-e/f, R-0016-b).
     ///
-    /// Each live slot is a pre-instantiated `Store` + `Instance` ready to run a
-    /// verb. Unlike `register` (the Task-21 manifest-handle path), these slots are
-    /// genuinely trappable: a resource-limit breach during a verb call kills the
-    /// live instance and a fresh one is instantiated synchronously (R-0016-c).
+    /// Each live slot is a pre-instantiated `Store<HostState>` + `Plugin` world
+    /// handle ready to run the typed `content` export. Unlike `register` (the
+    /// Task-21 manifest-handle path), these slots are genuinely trappable: a
+    /// resource-limit breach during a verb call kills the live instance and a
+    /// fresh one is instantiated synchronously (R-0016-c).
     ///
-    /// Production wiring of `artifact bytes → Module` is Task 23; this path is the
-    /// Task-22 `Module → pool → invoke → trap → replace` seam.
+    /// The host `Linker<HostState>` (host-fn imports + WASI trap-stubs) is built
+    /// once per registered component and reused for every (re)instantiation.
     pub fn register_module(
         &self,
         plugin_name: &str,
         plugin_version: &str,
-        module: &Module,
+        component: &Component,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let module = Arc::new(module.clone());
+        let component = Arc::new(component.clone());
+        // Build the host Linker once for this component (host-fn imports wired,
+        // remaining imports trap-stubbed). Reused for every slot (re)instantiation.
+        let linker = Arc::new(component::build_linker(&self.engine, &component)?);
 
         // Pre-instantiate POOL_MIN live slots. A failure to instantiate the
         // fixture is a registration error, surfaced to the caller (fail-closed).
         let mut slots: Vec<Option<LiveSlot>> = Vec::with_capacity(POOL_MIN);
         for _ in 0..POOL_MIN {
-            let slot = self.instantiate_live_slot(&module)?;
+            let slot = self.instantiate_live_slot(&component, &linker)?;
             slots.push(Some(slot));
         }
 
@@ -259,7 +285,8 @@ impl PluginPool {
         live.push(LiveModuleEntry {
             plugin_name: plugin_name.to_owned(),
             plugin_version: plugin_version.to_owned(),
-            module,
+            component,
+            linker,
             slots,
         });
 
@@ -279,18 +306,20 @@ impl PluginPool {
             .unwrap_or(0)
     }
 
-    /// Instantiate a fresh live slot for `module` on this pool's engine.
+    /// Instantiate a fresh live slot for `component` on this pool's engine using
+    /// `linker` (R-0016-b component instantiation via the Linker).
     ///
-    /// Builds a `Store` whose data IS the `PluginResourceLimiter` (memory ceiling)
-    /// and instantiates the module with no imports (the Task-22 fixtures import
-    /// nothing). Budget (fuel/epoch) is applied per-invocation, not here.
+    /// Builds a `Store<HostState>` whose data carries the shared fenced artifact
+    /// store + the memory limiter (unbound to a workspace until the dispatch site
+    /// sets it, R-0006-b), then instantiates the component world. Budget
+    /// (fuel/epoch) is applied per-invocation, not here.
     fn instantiate_live_slot(
         &self,
-        module: &Module,
+        component: &Component,
+        linker: &Linker<HostState>,
     ) -> Result<LiveSlot, Box<dyn std::error::Error>> {
-        let mut store = Store::new(&self.engine, PluginResourceLimiter);
-        store.limiter(|limiter| limiter as &mut dyn wasmtime::ResourceLimiter);
-        let instance = Instance::new(&mut store, module, &[])?;
+        let mut store = component::new_store(&self.engine, self.artifacts.clone());
+        let instance = component::instantiate(&mut store, component, linker)?;
         Ok(LiveSlot { store, instance })
     }
 
@@ -329,20 +358,21 @@ impl PluginPool {
     /// into the `LiveInvocation` and is dropped by the caller — this method creates
     /// its replacement so the pool size is preserved.
     ///
-    /// Fail-closed: if re-instantiation fails (it should not for a module that
+    /// Fail-closed: if re-instantiation fails (it should not for a component that
     /// already instantiated at registration), the slot is left empty and the
     /// failure is logged; the pool does not panic.
     pub fn repopulate_slot(&self, plugin_name: &str, slot_index: usize) {
-        // Resolve the module under the lock, then instantiate, then store back.
-        let module = {
+        // Resolve the component + linker under the lock, then instantiate, then
+        // store back. Cloning the Arcs releases the lock before instantiation.
+        let (component, linker) = {
             let live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
             match live.iter().find(|e| e.plugin_name == plugin_name) {
-                Some(entry) => Arc::clone(&entry.module),
+                Some(entry) => (Arc::clone(&entry.component), Arc::clone(&entry.linker)),
                 None => return,
             }
         };
 
-        let fresh = match self.instantiate_live_slot(&module) {
+        let fresh = match self.instantiate_live_slot(&component, &linker) {
             Ok(slot) => slot,
             Err(e) => {
                 tracing::error!(
