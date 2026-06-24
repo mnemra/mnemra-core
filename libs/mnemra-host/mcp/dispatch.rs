@@ -1,5 +1,5 @@
 //! MCP dispatch internals: DF-auth-check, WorkspaceCtx construction, and
-//! per-verb capability check (R-0010-c/d, R-0009-e, R-0006-b).
+//! role-based permission check (R-0010-c, R-0009-e, R-0006-b).
 //!
 //! # DF-auth-check (R-0010-c)
 //!
@@ -13,7 +13,11 @@
 //!   3. `token::lookup_by_hash(hash, pool)` — None → AUTH_FAILURE.
 //!   4. `auth::resolve::from_token(workspace_id, &scopes, token_id)` → WorkspaceCtx.
 //!   5. Classify the verb as `PluginReadVerb` or `PluginWriteVerb`.
-//!   6. `builtins::permissions::check_plugin_verb(ctx, verb)` → Ok or PERMISSION_DENIED.
+//!   6. `builtins::permissions::check_plugin_verb(ctx, verb)` → Ok or PERMISSION_DENIED (R-0009).
+//!
+//! NOTE: The per-verb capability check (R-0010-d, manifest `verbs` membership
+//! gate) lives in `server.rs::call_tool`, after `auth_and_authorize` returns
+//! and before `resolve_content_call`. This module handles only auth + role.
 //!
 //! # Security note (R-0004-h)
 //!
@@ -59,13 +63,18 @@ fn is_write_verb(verb_name: &str) -> bool {
 // DF-auth-check entry point
 // ---------------------------------------------------------------------------
 
-/// Run the full DF-auth-check for a `tools/call` request.
+/// Run the DF-auth-check and role permission check for a `tools/call` request.
+///
+/// Covers: token lookup (R-0010-c) + role-based permission check (R-0009-d/e).
+/// Does NOT cover: manifest-verbs membership gate (R-0010-d) — that check runs
+/// in `server.rs::call_tool` after this function returns Ok, before dispatch.
 ///
 /// Returns `Ok(WorkspaceCtx)` if the token resolves and the role is authorized
 /// for `verb_name`. Returns `Err(ErrorData)` with the appropriate custom code
 /// on any failure.
 ///
-/// The caller is responsible for routing to the plugin after this returns Ok.
+/// The caller is responsible for the manifest-verbs gate and plugin routing
+/// after this returns Ok.
 ///
 /// # Security (R-0004-h)
 ///
