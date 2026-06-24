@@ -73,9 +73,14 @@ use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 use rmcp::model::{CallToolRequestParams, ErrorCode, Meta};
 use rmcp::service::{serve_client, serve_server};
 use serde_json::json;
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tokio::io::duplex;
 use uuid::Uuid;
+
+use mnemra_host::mcp::server::ECHO_PLUGIN_NAME;
+use mnemra_host::plugin::pool::PluginPool;
+use wasmtime::component::Component;
 
 // ---------------------------------------------------------------------------
 // The absent contract — compile failure IS the valid red.
@@ -164,6 +169,37 @@ fn token_meta(token_str: &str) -> Meta {
     meta
 }
 
+/// Build a live `PluginPool` with the loaded `mnemra-echo` component registered
+/// (R-0016-a). `MnemraMcpServer::new` now takes the plugin pool so `call_tool`
+/// can dispatch to the typed `content` export. Tests whose request is rejected
+/// pre-dispatch (auth / permission / tools-list) still need a constructed pool,
+/// but never reach the invoke.
+fn echo_plugin_pool() -> Arc<PluginPool> {
+    let pool = PluginPool::new().expect("PluginPool::new");
+    let component =
+        Component::from_file(pool.engine(), echo_component_path()).expect("load echo component");
+    pool.register_module(ECHO_PLUGIN_NAME, "0.0.1", &component)
+        .expect("register echo component");
+    Arc::new(pool)
+}
+
+/// Path to the built `mnemra-echo` component (`wasm32-wasip2`, release), produced
+/// by `just plugin`. Resolved relative to the workspace target dir.
+fn echo_component_path() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root from libs/mnemra-host");
+    let path = root.join("target/wasm32-wasip2/release/mnemra_echo.wasm");
+    assert!(
+        path.exists(),
+        "echo component not found at {} — run `just plugin` before the e2e tests",
+        path.display()
+    );
+    path
+}
+
 // ===========================================================================
 // Test 1: Happy path — valid admin token, echo.create returns Ok
 // ===========================================================================
@@ -208,7 +244,7 @@ async fn valid_admin_token_echo_create_returns_ok() {
     // Green phase: Forge creates mnemra_host::mcp::server::MnemraMcpServer
     // implementing rmcp::ServerHandler, taking a PgPool and serving all loaded
     // plugin verbs namespaced as "<plugin>.<verb>" (R-0010-a/b).
-    let server = MnemraMcpServer::new(pool.clone());
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
     // Wire server and client over an in-process duplex transport.
     // tokio::io::duplex(4096) → (DuplexStream, DuplexStream).
@@ -297,7 +333,7 @@ async fn bogus_token_returns_distinguishable_auth_failure() {
     init(&engine, "vector").await.expect("init should succeed");
     let pool = engine.pool.as_ref();
 
-    let server = MnemraMcpServer::new(pool.clone());
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
     let (server_transport, client_transport) = duplex(4096);
 
@@ -397,7 +433,7 @@ async fn read_observer_write_denied_permission_error() {
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
 
-    let server = MnemraMcpServer::new(pool.clone());
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
     let (server_transport, client_transport) = duplex(4096);
 
@@ -500,7 +536,7 @@ async fn control_plane_verbs_absent_from_tools_list() {
 
     // No token needed: tools/list is unauthenticated (R-0010-g only checks the
     // structural content of the advertised tool set, not auth behavior on list).
-    let server = MnemraMcpServer::new(pool.clone());
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
     let (server_transport, client_transport) = duplex(4096);
 
@@ -632,7 +668,7 @@ async fn read_observer_non_read_verb_denied_permission_error() {
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
 
-    let server = MnemraMcpServer::new(pool.clone());
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
     let (server_transport, client_transport) = duplex(4096);
 
@@ -740,7 +776,7 @@ async fn read_observer_get_verb_not_denied() {
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
 
-    let server = MnemraMcpServer::new(pool.clone());
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
     let (server_transport, client_transport) = duplex(4096);
 

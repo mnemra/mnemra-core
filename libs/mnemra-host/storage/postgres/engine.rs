@@ -401,6 +401,11 @@ impl EmbeddedEngine {
             .expect("EMBEDDED_PG_VERSION is a valid semver requirement");
         let settings = SettingsBuilder::new()
             .version(version)
+            // Bump the PG command/startup timeout from the crate default (5s): under CI
+            // concurrency many embedded engines start at once and 5s blows the deadline
+            // (DatabaseInitializationError "deadline has elapsed"). Mirrors the
+            // acquire_timeout bump below — same concurrent-CI rationale.
+            .timeout(Some(Duration::from_secs(60)))
             .temporary(true)
             .build();
 

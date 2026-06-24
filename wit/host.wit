@@ -21,6 +21,56 @@ interface types {
     }
 }
 
+/// Typed content export interface — the fixed CRUD surface EVERY content plugin
+/// EXPORTS (R-0019-a, P-0013).  The host invokes one of these typed methods per
+/// MCP verb (static verb->export resolution, R-0019-c); the guest body calls back
+/// into the host `artifact` import to persist / read.
+///
+/// This is the EXPORT side (guest-implemented), distinct from the `artifact`
+/// IMPORT below (host-implemented).  The two share the JSON-as-string convention
+/// (`type json = string`) but NOT the ctx parameter: ctx is host-derived and
+/// threaded on the import side; the host carries it across the export boundary
+/// itself, so the export methods do not take a ctx (R-0019-a).
+///
+/// FENCE (R-0019-c/d): the verb->export mapping is static against this fixed
+/// interface — no runtime export registry, no dynamic verb->export resolution,
+/// no `run(string)`-style string-dispatch export.
+///
+/// R-0019-a, R-0019-e
+interface content {
+    use types.{json};
+
+    /// Create a new artifact of `type` and return its generated id (ULID).
+    ///
+    /// R-0019-a
+    @since(version = 0.0.1)
+    create: func(%type: string, frontmatter: json, body: option<string>) -> string;
+
+    /// Retrieve a single artifact by id; `none` if not found / not visible.
+    ///
+    /// R-0019-a
+    @since(version = 0.0.1)
+    get: func(id: string) -> option<string>;
+
+    /// List artifacts of `type` matching `filters`.
+    ///
+    /// R-0019-a
+    @since(version = 0.0.1)
+    %list: func(%type: string, filters: json) -> list<string>;
+
+    /// Patch an artifact's frontmatter and/or body.
+    ///
+    /// R-0019-a
+    @since(version = 0.0.1)
+    update: func(id: string, frontmatter-patch: json, body: option<string>);
+
+    /// Permanently delete an artifact.
+    ///
+    /// R-0019-a
+    @since(version = 0.0.1)
+    delete: func(id: string);
+}
+
 /// Artifact CRUD host-fns.  All write-path fns derive workspace from ctx;
 /// workspace-id never appears as a standalone parameter (R-0012-d, R-0003-d).
 ///

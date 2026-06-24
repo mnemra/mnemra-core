@@ -29,7 +29,8 @@ use crate::auth::resolve;
 use crate::auth::token;
 use crate::auth::workspace_ctx::WorkspaceCtx;
 use crate::builtins::permissions;
-use crate::mcp::errors::{AUTH_FAILURE_CODE, PERMISSION_DENIED_CODE};
+use crate::mcp::errors::{AUTH_FAILURE_CODE, NON_DISPATCHABLE_CODE, PERMISSION_DENIED_CODE};
+use crate::plugin::trap_recovery::ContentCall;
 
 // ---------------------------------------------------------------------------
 // Verb classification — fail-closed (R-0009-d, SF1, SF2)
@@ -114,4 +115,106 @@ pub async fn auth_and_authorize(
     })?;
 
     Ok(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// CC-MAPPING — static verb -> typed `content` export resolution (R-0019-a/c/d)
+// ---------------------------------------------------------------------------
+
+/// The resolved dispatch for an authenticated verb: which typed `content` call
+/// to make. Verb -> export resolution is STATIC against the fixed `content`
+/// interface (FENCE R-0019-c: no runtime export registry).
+pub struct ContentDispatch {
+    /// The typed `content` call + its marshalled arguments.
+    pub call: ContentCall,
+}
+
+/// Resolve an authenticated MCP verb to its typed `content` call, reading the
+/// MCP `arguments` map (CC-MAPPING, R-0019-a/c).
+///
+/// Slice-1 / V0 mapping (the `<plugin>.<verb>` tail selects the method):
+///   - `*.create` -> `content.create`, `{content_type -> type, payload -> frontmatter}`
+///   - `*.get`    -> `content.get`,    `{id -> id}`  (R1: `{id}` argument key)
+///   - `*.list`/`*.update`/`*.delete` -> the matching typed method (slice-1
+///     guest stubs; fully wired in T12).
+///
+/// A verb whose tail has no matching typed `content` method (e.g. a future
+/// `*.audit`) returns the R-0019-d structured non-dispatchable error. This runs
+/// AFTER the pre-dispatch permission check, so the permission outcome is
+/// unchanged (R-0019-e).
+///
+/// Argument typing: the MCP `payload` argument is mapped to the `frontmatter`
+/// JSON-as-string. A JSON string payload is carried through as its raw inner
+/// string (so it round-trips exactly on `get`); any non-string JSON value is
+/// serialized to its JSON text. The `content_type` argument defaults to
+/// `"echo_fixture"` when absent (the V0 fixture content type).
+pub fn resolve_content_call(
+    verb_name: &str,
+    arguments: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> Result<ContentDispatch, ErrorData> {
+    let tail = verb_name.rsplit('.').next().unwrap_or(verb_name);
+
+    let call = match tail {
+        "create" => {
+            let type_name = arguments
+                .and_then(|m| m.get("content_type"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("echo_fixture")
+                .to_owned();
+            let frontmatter = arguments
+                .and_then(|m| m.get("payload"))
+                .map(json_value_to_payload_string)
+                .unwrap_or_default();
+            ContentCall::Create {
+                type_name,
+                frontmatter,
+                body: None,
+            }
+        }
+        "get" => {
+            // R1: the `echo.get` argument key is `{id}` (CC-MAPPING slice-1 extension).
+            let id = arguments
+                .and_then(|m| m.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_owned();
+            ContentCall::Get { id }
+        }
+        // list/update/delete have typed `content` exports (slice-1 guest stubs)
+        // but their MCP-verb -> method argument shapes are pinned per-verb in T12,
+        // not at slice 1. No slice-1 test dispatches them through `call_tool`; they
+        // are not reachable here yet. Surfacing the R-0019-d non-dispatchable error
+        // is the honest slice-1 behavior (their CC-MAPPING is not yet pinned), and
+        // it leaves the pre-dispatch permission outcome unchanged (R-0019-e).
+        "list" | "update" | "delete" => {
+            return Err(ErrorData {
+                code: NON_DISPATCHABLE_CODE,
+                message: format!("verb '{verb_name}' is not wired at slice 1 (CC-MAPPING T12)")
+                    .into(),
+                data: None,
+            });
+        }
+        _ => {
+            // No matching typed `content` method (e.g. `*.audit`) — R-0019-d.
+            return Err(ErrorData {
+                code: NON_DISPATCHABLE_CODE,
+                message: format!("verb '{verb_name}' has no matching typed content export").into(),
+                data: None,
+            });
+        }
+    };
+
+    Ok(ContentDispatch { call })
+}
+
+/// Map an MCP `payload` JSON value to the `frontmatter` JSON-as-string.
+///
+/// A JSON string is carried through as its raw inner string so the created
+/// payload round-trips exactly on `get`; any other JSON value is serialized to
+/// its compact JSON text.
+fn json_value_to_payload_string(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
 }

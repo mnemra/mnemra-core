@@ -55,37 +55,61 @@ use mnemra_host::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT};
 use mnemra_host::plugin::pool::PluginPool;
 use mnemra_host::plugin::trap_recovery::{LimitType, PluginExecError, ResourceBudget};
 
-use wasmtime::Module;
+use wasmtime::component::Component;
 
 // ---------------------------------------------------------------------------
-// Pathological WASM fixtures (validated independently via `wasm-tools validate`)
+// CC-POOL-TESTS-REPIN — fixtures converted from core-module WAT to COMPONENT WAT
+//
+// The pool migrated from core `wasmtime::Module` to `component::Component`
+// (Task 23). These trap fixtures are therefore COMPONENTS: each wraps a core
+// module whose `run` loops/burns, lifted to a parameterless world-level
+// `run: func()` export via `canon lift`. The trap-recovery seam invokes this
+// `run` through the SAME component-instance path as the real plugin (real
+// `component::Component`, real `Store<HostState>`, real component instantiation
+// via the Linker, real component trap) — not the retired core-module seam.
+//
+// NO ASSERTION CHANGES: the trap behaviour (epoch loop / fuel burn -> Wasmtime
+// trap -> classify -> kill-and-replace -> structured error) is identical to the
+// core-module fixtures. Only the fixture CONTAINER (core module -> component) and
+// the invoke entrypoint (core `run` -> component-lifted `run`) move. Trap
+// classification is at the `wasmtime::Trap` level (epoch/fuel), which is
+// container-independent, so every R-0007-a/b/c/g assertion below is preserved.
+// Fixtures validated independently via `wasm-tools validate`.
 // ---------------------------------------------------------------------------
 
-/// Infinite-loop module for the EPOCH-deadline trap path.
+/// Infinite-loop COMPONENT for the EPOCH-deadline trap path.
 ///
-/// `run` enters an unconditional infinite loop and never returns. With the store
-/// configured for a small epoch deadline and a NON-binding fuel budget, the
-/// running epoch-tick thread drives the epoch deadline and Wasmtime raises an
+/// The inner core module's `run` enters an unconditional infinite loop and never
+/// returns; it is lifted to a world-level `run: func()` component export. With
+/// the store configured for a small epoch deadline and a NON-binding fuel budget,
+/// the running epoch-tick thread drives the epoch deadline and Wasmtime raises an
 /// epoch-interruption trap. Fuel is non-binding so the epoch deadline is the
 /// binding limit (independence from the fuel path).
-const EPOCH_LOOP_WAT: &str = r#"(module
-  (func (export "run")
-    (loop $forever
-      br $forever)))"#;
+const EPOCH_LOOP_WAT: &str = r#"(component
+  (core module $m
+    (func (export "run")
+      (loop $forever
+        br $forever)))
+  (core instance $i (instantiate $m))
+  (func (export "run") (canon lift (core func $i "run"))))"#;
 
-/// CPU-burn module for the FUEL-exhaustion trap path.
+/// CPU-burn COMPONENT for the FUEL-exhaustion trap path.
 ///
-/// `run` spins a counter upward forever, executing fuel-consuming arithmetic on
-/// every iteration WITHOUT sleeping or yielding. With a small fuel budget and a
-/// NON-binding (large) epoch deadline, the fuel budget is exhausted first and
-/// Wasmtime raises an `OutOfFuel` trap before the epoch deadline can fire
-/// (independence from the epoch path).
-const FUEL_BURN_WAT: &str = r#"(module
-  (func (export "run")
-    (local $i i64)
-    (loop $burn
-      (local.set $i (i64.add (local.get $i) (i64.const 1)))
-      (br $burn))))"#;
+/// The inner core module's `run` spins a counter upward forever, executing
+/// fuel-consuming arithmetic on every iteration WITHOUT sleeping or yielding;
+/// it is lifted to a world-level `run: func()` component export. With a small
+/// fuel budget and a NON-binding (large) epoch deadline, the fuel budget is
+/// exhausted first and Wasmtime raises an `OutOfFuel` trap before the epoch
+/// deadline can fire (independence from the epoch path).
+const FUEL_BURN_WAT: &str = r#"(component
+  (core module $m
+    (func (export "run")
+      (local $i i64)
+      (loop $burn
+        (local.set $i (i64.add (local.get $i) (i64.const 1)))
+        (br $burn))))
+  (core instance $i (instantiate $m))
+  (func (export "run") (canon lift (core func $i "run"))))"#;
 
 // Synthetic test plugin identity (anti-silent-fill: the `tasks`/`task.list`/
 // `0.2.0`/`W1` strings in the spec scenarios DO NOT EXIST — Task 20 built only
@@ -101,26 +125,28 @@ const TEST_VERB: &str = "loop";
 /// the invocation ran under (the spec scenario's `W1` is a placeholder).
 const TEST_WORKSPACE_MARKER: u128 = 0x5701; // mnemonic for "W1"
 
-/// Compile a WAT fixture into a `wasmtime::Module` on the pool's engine.
+/// Compile a component-WAT fixture into a `component::Component` on the pool's
+/// engine.
 ///
-/// The pool's engine has `consume_fuel(true)` + `epoch_interruption(true)` (per
-/// `build_engine`), and default features keep `wat` ON, so WAT text compiles
-/// directly. A compile failure here means a malformed fixture — not a test of
-/// the trap path — so we surface it loudly.
-fn compile_fixture(pool: &PluginPool, wat: &str) -> Module {
-    Module::new(pool.engine(), wat).expect("pathological WAT fixture must compile to a Module")
+/// The pool's engine has `consume_fuel(true)` + `epoch_interruption(true)` +
+/// `component-model` (per `build_engine`), and default features keep `wat` ON, so
+/// component-WAT text compiles directly. A compile failure here means a malformed
+/// fixture — not a test of the trap path — so we surface it loudly.
+fn compile_fixture(pool: &PluginPool, wat: &str) -> Component {
+    Component::new(pool.engine(), wat)
+        .expect("pathological component-WAT fixture must compile to a Component")
 }
 
-/// Build a fresh pool and register the given fixture as a live, trappable module
-/// under the synthetic test identity. Returns the pool.
+/// Build a fresh pool and register the given fixture as a live, trappable
+/// component under the synthetic test identity. Returns the pool.
 ///
-/// This exercises the PROPOSED `register_module` seam — the live-Module pool
-/// population path (production wires artifact→Module in Task 23; Task 22 builds
-/// Module→pool→invoke→trap→replace).
+/// This exercises the `register_module` seam — the live-component pool population
+/// path (production wires the built echo `.wasm` component in T11; this suite
+/// builds component-WAT -> pool -> invoke -> trap -> replace).
 fn pool_with_fixture(wat: &str) -> PluginPool {
     let pool = PluginPool::new().expect("pool must initialise");
-    let module = compile_fixture(&pool, wat);
-    pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &module)
+    let component = compile_fixture(&pool, wat);
+    pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &component)
         .expect("register_module must populate live slots for the fixture");
     pool
 }

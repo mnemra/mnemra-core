@@ -100,7 +100,9 @@ verify-lint:
     fi
 
 # Verify: tests pass
-verify-test:
+# Depends on `plugin`: the e2e tests load target/wasm32-wasip2/release/mnemra_echo.wasm,
+# which the host build does not produce — build the guest component first.
+verify-test: plugin
     #!/usr/bin/env bash
     set -euo pipefail
     if cargo test --workspace 2>&1; then
@@ -112,7 +114,8 @@ verify-test:
 
 # Verify: test-hooks feature — runs resource_limits.rs seam tests (gated behind test-hooks).
 # This is a CI gate so untrusted-path seam coverage is always exercised.
-verify-test-hooks:
+# Depends on `plugin` for the same wasm-artifact reason as verify-test.
+verify-test-hooks: plugin
     #!/usr/bin/env bash
     set -euo pipefail
     if cargo test -p mnemra-host --features test-hooks 2>&1; then
@@ -123,7 +126,8 @@ verify-test-hooks:
     fi
 
 # Verify: coverage (emit number; no threshold gate at scaffold stage)
-verify-coverage:
+# Depends on `plugin` for the same wasm-artifact reason as verify-test.
+verify-coverage: plugin
     #!/usr/bin/env bash
     set -euo pipefail
     if cargo llvm-cov --workspace 2>&1; then
@@ -137,7 +141,7 @@ verify-coverage:
 verify-build:
     #!/usr/bin/env bash
     set -euo pipefail
-    if cargo build --workspace 2>&1; then
+    if cargo build --workspace --exclude mnemra-echo 2>&1; then
         echo "GATE build PASS"
     else
         echo "GATE build FAIL"

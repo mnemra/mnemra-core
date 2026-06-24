@@ -1,82 +1,86 @@
 //! mnemra-echo — V0 reference/fixture `core: true` plugin.
 //!
-//! This plugin serves two roles:
+//! # Role: typed `content` export (R-0019-a, P-0013)
 //!
-//! 1. **Round-trip and state-persistence fixture** — the `run()` export calls
-//!    `echo.echo` and `echo.increment-counter` to demonstrate the host-fn
-//!    round-trip and per-instance state persistence that the V0.01 spike
-//!    exercises.
+//! The plugin exports the fixed typed `content` interface (`create`/`get`/
+//! `list`/`update`/`delete`) the host invokes per authenticated MCP verb. The
+//! retired `run(input: string) -> string` string-dispatch export is gone
+//! (R-0019-e). Each `content` method routes to a host `artifact` import — the
+//! guest-driven invocation model: the host invokes `content.create`, the guest
+//! body calls back into `artifact.artifact-create` to persist and obtain the id.
 //!
-//! 2. **Artifact ABI compile-bind surface** — the plugin imports the `artifact`
-//!    interface declared in `wit/host.wit` and provides compile-bind call-sites
-//!    in `artifact_ops()` that type-check against the full WIT contract (R-0003-a,
-//!    R-0003-g). These are NOT on the executed `run()` path; live execution is
-//!    Task 21 (host runtime + storage). See `manifest.toml`.
+//! # Slice 1 scope
 //!
-//! # Why artifact_ops() is not called from run()
+//! `create` and `get` are the fully-wired slice-1 methods (the walking
+//! skeleton: MCP `echo.create`/`echo.get` -> host -> guest export -> host
+//! `artifact` import -> fenced map -> typed return). `list`/`update`/`delete`
+//! are minimal typed-but-empty stubs wired in T12.
 //!
-//! The `artifact_*` host-fns are `todo!()` stubs in the host (Task 5/21 seam).
-//! Calling them at runtime would panic. The V0 compile-bind invariant is: the
-//! guest WIT world imports `artifact`, the bindings compile, and the call-sites
-//! type-check. Live execution requires the host runtime (Task 21). This is the
-//! explicit Task 19 scope: "bind artifact.* means author the WIT import +
-//! call-sites that compile-bind; it does NOT mean route an executed test path
-//! through a stubbed artifact.* host-fn."
+//! # WorkspaceCtx on the export boundary
+//!
+//! The typed `content` export takes NO `ctx` parameter — the host threads the
+//! single authoritative `WorkspaceCtx` (constructed at the dispatch site,
+//! R-0006-b) through the host's store data and reads it inside the `artifact`
+//! host-fn import body. The guest cannot supply or forge a workspace id: the
+//! `workspace-ctx` value it passes across the import boundary is a structural
+//! placeholder the host IGNORES (R-0006-e: no internal bypass; the real
+//! scoping key is host-derived, never plugin-supplied). The placeholder exists
+//! only because the import WIT signature (locked by P-0003, not re-opened here)
+//! still declares `ctx: workspace-ctx`.
 
 // Generates the guest-side bindings for `world plugin` defined in
-// `wit/echo.wit`. `export!` below registers our struct as the world's
-// `run` exporter.
+// `wit/echo.wit`. `export!` below registers our struct as the world's typed
+// `content` exporter.
 wit_bindgen::generate!({
     path: "../../wit",
     world: "plugin",
 });
 
+use exports::mnemra::host::content::Guest as ContentGuest;
 use mnemra::host::artifact;
 use mnemra::host::types::WorkspaceCtx;
 
 struct EchoPlugin;
 
-impl Guest for EchoPlugin {
-    fn run(input: String) -> String {
-        // Round-trip: ask the host to echo the input.
-        let echoed = mnemra::host::echo::echo(&input);
-        // State: ask the host for its current counter (it auto-increments).
-        let counter = mnemra::host::echo::increment_counter();
-        format!("{echoed} | counter: {counter}")
-        // Note: artifact_ops() is NOT called here — artifact.* stubs are
-        // todo!() in the host at V0. Call-sites live in artifact_ops() below,
-        // exercised once the host runtime + storage land in Task 21.
+/// The host-ignored placeholder `WorkspaceCtx` the guest passes across the
+/// `artifact` import boundary. The import WIT signature requires a `ctx`
+/// argument; the host's import body derives the real `workspace_id` from its
+/// own store data and IGNORES this value (R-0006-b/e). The guest has no access
+/// to the real workspace id and must not fabricate a meaningful one.
+fn host_supplied_ctx() -> WorkspaceCtx {
+    WorkspaceCtx {
+        workspace_id: String::new(),
     }
 }
 
-/// Compile-bind call-sites for the `artifact` host-fn interface.
-///
-/// These calls type-check against the WIT ABI declared in `wit/host.wit` and
-/// imported via `wit/echo.wit`'s `import artifact`. They are NOT called from
-/// `run()` — live execution is Task 21 (host runtime + plugin pool).
-///
-/// R-0003-a, R-0003-g: the corresponding manifest.toml `[host_fns].required`
-/// declares all five artifact.* functions, including the opt-in `artifact.delete`.
-#[allow(dead_code)]
-fn artifact_ops(ctx: &WorkspaceCtx, id: &str, frontmatter: &str, body: Option<&str>) {
-    // artifact-create: creates a new artifact of type "echo_fixture", returns id.
-    // R-0003-d: workspace context is passed via ctx (host-derived); workspace_id
-    // is not a standalone parameter — WorkspaceCtx carries it.
-    // wit_bindgen generates ctx params as &WorkspaceCtx (borrowed).
-    let _created_id = artifact::artifact_create(ctx, "echo_fixture", frontmatter, body);
+impl ContentGuest for EchoPlugin {
+    /// `content.create` — persist a new artifact via the host `artifact-create`
+    /// import and return the host-generated id (R-0019-a, guest-driven model).
+    fn create(type_name: String, frontmatter: String, body: Option<String>) -> String {
+        artifact::artifact_create(
+            &host_supplied_ctx(),
+            &type_name,
+            &frontmatter,
+            body.as_deref(),
+        )
+    }
 
-    // artifact-get: retrieve a single artifact by id.
-    let _artifact = artifact::artifact_get(ctx, id);
+    /// `content.get` — read a single artifact by id via the host `artifact-get`
+    /// import; `None` when not found / not visible in the caller's workspace.
+    fn get(id: String) -> Option<String> {
+        artifact::artifact_get(&host_supplied_ctx(), &id)
+    }
 
-    // artifact-list: list artifacts by type with optional filters.
-    let _list = artifact::artifact_list(ctx, "echo_fixture", "{}");
+    /// `content.list` — slice-1 stub (typed-but-empty); wired in T12.
+    fn list(_type_name: String, _filters: String) -> Vec<String> {
+        Vec::new()
+    }
 
-    // artifact-update: patch frontmatter and/or body.
-    artifact::artifact_update(ctx, id, frontmatter, body);
+    /// `content.update` — slice-1 stub (no-op); wired in T12.
+    fn update(_id: String, _frontmatter_patch: String, _body: Option<String>) {}
 
-    // artifact-delete: destructive op; opted-in via manifest.toml host_fns.required
-    // declaration (R-0003-g). A plugin that does not declare this cannot call it.
-    artifact::artifact_delete(ctx, id);
+    /// `content.delete` — slice-1 stub (no-op); wired in T12.
+    fn delete(_id: String) {}
 }
 
 export!(EchoPlugin);

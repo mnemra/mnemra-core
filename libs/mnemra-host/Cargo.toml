@@ -50,7 +50,13 @@ wasmtime = { version = "=45.0.2", features = ["cranelift", "component-model"] }
 # Task 21: serde + serde_derive for manifest TOML deserialization.
 # Replaces manual toml::Value traversal with typed structs (cleaner + exhaustive).
 serde = { version = "1.0", features = ["derive"] }
+# Task 23 / T6: serde_json::{Map,Value} appear in rmcp's CallToolRequestParams
+# `arguments`; the MCP-verb -> content-call resolution reads them at runtime.
+serde_json = "1.0"
 tracing = { workspace = true }
+# Task 23 / T7: real ULID generation for the artifact-create host-fn body
+# (Crockford base32, 26 chars). MIT OR Apache-2.0 (green-tier, pre-approved).
+ulid = "1.2.1"
 uuid = { version = "1.23.3", features = ["v4", "v5"] }
 
 [dev-dependencies]
