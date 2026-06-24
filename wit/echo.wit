@@ -13,14 +13,17 @@ world plugin {
     import echo;
 
     /// Artifact CRUD host-fns (declared in wit/host.wit).
-    /// Imported here so the plugin guest can compile-bind against the artifact
-    /// interface and call-sites in mnemra_echo.rs type-check against the WIT
-    /// contract. Execution is wired in Task 21 (host runtime + storage).
+    /// Imported here so the plugin guest can call back into the host to persist
+    /// and read artifacts from within its `content` export bodies (the
+    /// guest-driven invocation model: host invokes `content.create`, the guest
+    /// body calls `artifact.artifact-create`).
     ///
     /// R-0003-a: core: true plugins import artifact as part of their ABI surface.
     import artifact;
 
-    /// Plugin entry point. Host invokes this; plugin uses `echo.echo` and
-    /// `echo.increment-counter` to demonstrate the round-trip and state.
-    export run: func(input: string) -> string;
+    /// Typed content export — the fixed CRUD surface (R-0019-a, P-0013).
+    /// The host invokes one typed method per MCP verb (static verb->export
+    /// resolution, R-0019-c); `run(string) -> string` is RETIRED (R-0019-e:
+    /// no string-dispatch export).
+    export content;
 }

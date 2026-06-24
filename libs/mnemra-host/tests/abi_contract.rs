@@ -118,6 +118,17 @@ fn find_interface<'r>(
     Some(&resolve.interfaces[*iface_id])
 }
 
+/// Look up a world by name in a given package.  Returns `None` if absent.
+fn find_world<'r>(
+    resolve: &'r Resolve,
+    pkg_id: wit_parser::PackageId,
+    world_name: &str,
+) -> Option<&'r wit_parser::World> {
+    let pkg = &resolve.packages[pkg_id];
+    let world_id = pkg.worlds.get(world_name)?;
+    Some(&resolve.worlds[*world_id])
+}
+
 /// Returns true if the given `Type` resolves to a named typedef whose name
 /// matches `expected_name` within the `Resolve`.
 fn type_is_named(resolve: &Resolve, ty: &Type, expected_name: &str) -> bool {
@@ -1133,6 +1144,149 @@ fn projection_emit_signature_params() {
     assert_eq!(p2.name, "data");
 
     assert_no_workspace_id_param("projection-emit", func);
+}
+
+// ---------------------------------------------------------------------------
+// Typed `content` export interface — R-0019-a (T1: retire `run`, add `content`)
+// ---------------------------------------------------------------------------
+
+/// The `mnemra:host` package must declare a typed `content` interface with
+/// exactly the five CRUD methods from the API Contract export table.
+///
+/// Note: WIT reserves `list`, so the method is spelled `%list` in the source;
+/// the parsed function name is `list` (the `%` is an escape, not part of the
+/// identifier).
+///
+/// R-0019-a, R-0019-e
+#[test]
+fn content_interface_declares_five_crud_methods() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let iface = find_interface(&resolve, pkg_id, "content")
+        .expect("package `mnemra:host` must declare a `content` interface (R-0019-a)");
+
+    for method in ["create", "get", "list", "update", "delete"] {
+        assert!(
+            iface.functions.contains_key(method),
+            "`content` interface must declare `{method}` (R-0019-a); got: {:?}",
+            iface.functions.keys().collect::<Vec<_>>()
+        );
+    }
+
+    // FENCE (R-0019-c): no `run`-shaped string-dispatch method on the interface.
+    assert!(
+        !iface.functions.contains_key("run"),
+        "`content` interface must NOT declare a `run` string-dispatch method \
+         (FENCE R-0019-c/e)"
+    );
+}
+
+/// `content.create` must have the typed signature
+/// `(type: string, frontmatter: json, body: option<string>) -> string`.
+///
+/// Unlike the host-fn IMPORT side, the export side does NOT carry a `ctx`
+/// parameter — the host threads workspace context across the boundary itself
+/// (R-0019-a).
+///
+/// R-0019-a
+#[test]
+fn content_create_has_typed_signature_without_ctx() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let iface = find_interface(&resolve, pkg_id, "content")
+        .expect("content interface must exist (R-0019-a)");
+    let func = iface
+        .functions
+        .get("create")
+        .expect("`content.create` must exist (R-0019-a)");
+
+    // Export side has no ctx — first param is `type`, not `ctx`.
+    let p0 = func
+        .params
+        .first()
+        .expect("`content.create` must have a `type` param");
+    assert_eq!(
+        p0.name, "type",
+        "`content.create` param[0] must be `type` (no ctx on the export side, R-0019-a)"
+    );
+    assert!(
+        matches!(p0.ty, Type::String),
+        "`content.create` param `type` must be string"
+    );
+
+    let p2 = func
+        .params
+        .get(2)
+        .expect("`content.create` must have param[2] `body`");
+    assert_eq!(p2.name, "body");
+    let is_option_string = match &p2.ty {
+        Type::Id(id) => {
+            let td = &resolve.types[*id];
+            matches!(&td.kind, wit_parser::TypeDefKind::Option(Type::String))
+        }
+        _ => false,
+    };
+    assert!(
+        is_option_string,
+        "`content.create` param `body` must be `option<string>`, got {:?}",
+        p2.ty
+    );
+
+    // Return type is `string` (the generated ULID).
+    assert!(
+        matches!(func.result, Some(Type::String)),
+        "`content.create` must return `string` (the generated id), got {:?}",
+        func.result
+    );
+}
+
+/// The `plugin` world must EXPORT the `content` interface (R-0019-a) and must
+/// NOT export a `run`-shaped function (R-0019-e: `run(string)` retired).
+///
+/// This is the export-side ABI observability the plan's T1 AC requires: it pins
+/// that the component's WORLD advertises `content` and no `run`.
+///
+/// R-0019-a, R-0019-e
+#[test]
+fn plugin_world_exports_content_and_not_run() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let world = find_world(&resolve, pkg_id, "plugin")
+        .expect("package `mnemra:host` must declare a `plugin` world");
+
+    // The export is an interface export, keyed by WorldKey::Interface(id);
+    // resolve the interface name to confirm it is `content`.
+    let mut exports_content = false;
+    for (_key, item) in &world.exports {
+        if let wit_parser::WorldItem::Interface { id, .. } = item
+            && resolve.interfaces[*id].name.as_deref() == Some("content")
+        {
+            exports_content = true;
+        }
+    }
+    assert!(
+        exports_content,
+        "`plugin` world must export the `content` interface (R-0019-a); \
+         exports: {:?}",
+        world
+            .exports
+            .keys()
+            .map(|k| String::from(k.clone()))
+            .collect::<Vec<_>>()
+    );
+
+    // R-0019-e: no `run` function export anywhere in the world.
+    let exports_run = world.exports.iter().any(|(key, item)| {
+        matches!(item, wit_parser::WorldItem::Function(_))
+            && matches!(key, wit_parser::WorldKey::Name(n) if n == "run")
+    });
+    assert!(
+        !exports_run,
+        "`plugin` world must NOT export a `run` function — `run(string)` is retired \
+         (R-0019-e); exports: {:?}",
+        world
+            .exports
+            .keys()
+            .map(|k| String::from(k.clone()))
+            .collect::<Vec<_>>()
+    );
 }
 
 // ---------------------------------------------------------------------------
