@@ -41,7 +41,6 @@ use crate::abi::host_fns::FencedArtifactStore;
 use crate::plugin::component::{self, HostState};
 use crate::plugin::epoch_thread::{EpochTickThread, HealthState};
 use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, build_engine};
-use crate::plugin::runtime::PluginRuntime;
 
 // ---------------------------------------------------------------------------
 // Pool constants
@@ -54,34 +53,17 @@ pub const POOL_MIN: usize = 3;
 pub const POOL_MAX: usize = 5;
 
 // ---------------------------------------------------------------------------
-// PluginSlot — one pre-initialised instance slot
-// ---------------------------------------------------------------------------
-
-/// A pre-initialised, tenant-stateless plugin instance slot.
-///
-/// At V0, holds the plugin's `PluginRuntime` (manifest metadata + allowlists)
-/// and a placeholder for the Wasmtime component store (populated in Task 23).
-/// `tenant_state` is always reset between invocations (R-0007-d).
-pub struct PluginSlot {
-    /// Manifest metadata for this slot — allowlists, schema_version, etc.
-    pub runtime: Arc<PluginRuntime>,
-    // `component_store` is task-23 scope (wasmtime::Store<HostState>).
-    // At V0 the slot is a manifest handle + reserve for the store.
-}
-
-// ---------------------------------------------------------------------------
 // LiveSlot — a Task-22 live, trappable instance slot
 // ---------------------------------------------------------------------------
 
 /// A live, pre-instantiated, trappable plugin instance held by the pool
 /// (R-0016-a/b, R-0007-e/f).
 ///
-/// Unlike the Task-21 `PluginSlot` (a manifest handle reserved for Task-23 store
-/// wiring), a `LiveSlot` holds an ACTUAL Wasmtime `Store` + `Instance` ready to
-/// run a verb. This is what makes kill-and-replace GENUINE: the breaching
-/// invocation runs on the live instance taken from a slot, and that store (now
-/// trapped/poisoned) is dropped while a fresh instance is instantiated back into
-/// the slot synchronously (R-0016-c).
+/// Holds an ACTUAL Wasmtime `Store` + `Instance` ready to run a verb. This is
+/// what makes kill-and-replace GENUINE: the breaching invocation runs on the live
+/// instance taken from a slot, and that store (now trapped/poisoned) is dropped
+/// while a fresh instance is instantiated back into the slot synchronously
+/// (R-0016-c).
 ///
 /// Task 23 migrates this population path to the component model: the slot holds
 /// a `component::Component` instantiated via the host `Linker<HostState>`, and a
@@ -148,8 +130,6 @@ pub struct PluginPool {
     engine: Engine,
     /// The supervised epoch-tick thread. Must be healthy before any invocation.
     epoch_thread: EpochTickThread,
-    /// Per-plugin-name slot pools (Task-21 manifest-handle path).
-    slots: Mutex<Vec<PluginEntry>>,
     /// Per-plugin-name LIVE component entries (trappable path). Each holds a
     /// compiled `Component` + host `Linker` + POOL_MIN live instances usable by
     /// `invoke_with_recovery`.
@@ -158,14 +138,6 @@ pub struct PluginPool {
     /// instances share it via their `HostState` so a `create` on one instance is
     /// visible to a later `get` on another. Swapped for real `Storage` in T13.
     artifacts: FencedArtifactStore,
-}
-
-// Fields are written during `register` and will be read when Task 23 wires
-// pool dispatch (component invocation by plugin name + slot borrowing).
-#[allow(dead_code)]
-struct PluginEntry {
-    plugin_name: String,
-    slots: Vec<PluginSlot>,
 }
 
 impl PluginPool {
@@ -181,7 +153,6 @@ impl PluginPool {
         Ok(Self {
             engine,
             epoch_thread,
-            slots: Mutex::new(Vec::new()),
             live_modules: Mutex::new(Vec::new()),
             artifacts: FencedArtifactStore::new(),
         })
@@ -191,32 +162,6 @@ impl PluginPool {
     /// instances share this via their `HostState`.
     pub fn artifacts(&self) -> FencedArtifactStore {
         self.artifacts.clone()
-    }
-
-    /// Register a plugin by its manifest runtime and pre-initialise POOL_MIN slots.
-    ///
-    /// In Task 23 this will also instantiate POOL_MIN Wasmtime component stores.
-    /// At V0 each slot holds the manifest runtime as a lightweight placeholder.
-    pub fn register(
-        &self,
-        plugin_name: &str,
-        runtime: Arc<PluginRuntime>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut slots = self.slots.lock().expect("pool slot lock poisoned");
-
-        // Build POOL_MIN slots.
-        let slot_vec: Vec<PluginSlot> = (0..POOL_MIN)
-            .map(|_| PluginSlot {
-                runtime: Arc::clone(&runtime),
-            })
-            .collect();
-
-        slots.push(PluginEntry {
-            plugin_name: plugin_name.to_owned(),
-            slots: slot_vec,
-        });
-
-        Ok(())
     }
 
     /// Check the epoch-tick thread health state.
@@ -282,10 +227,9 @@ impl PluginPool {
     /// populate `POOL_MAX` live instances (R-0016-a, R-0007-e/f, R-0016-b).
     ///
     /// Each live slot is a pre-instantiated `Store<HostState>` + `Plugin` world
-    /// handle ready to run the typed `content` export. Unlike `register` (the
-    /// Task-21 manifest-handle path), these slots are genuinely trappable: a
-    /// resource-limit breach during a verb call kills the live instance and a
-    /// fresh one is instantiated synchronously (R-0016-c).
+    /// handle ready to run the typed `content` export. These slots are genuinely
+    /// trappable: a resource-limit breach during a verb call kills the live
+    /// instance and a fresh one is instantiated synchronously (R-0016-c).
     ///
     /// The host `Linker<HostState>` (host-fn imports + WASI trap-stubs) is built
     /// once per registered component and reused for every (re)instantiation.
