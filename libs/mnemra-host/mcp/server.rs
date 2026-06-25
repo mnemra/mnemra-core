@@ -297,6 +297,14 @@ impl ServerHandler for MnemraMcpServer {
                 // result (the readback path; cross-workspace get lands here).
                 Ok(CallToolResult::success(vec![]))
             }
+            Ok(ContentResult::Listed(ids)) => {
+                // `echo.list` -> each workspace-visible id as a text content item.
+                // The ids are already workspace-scoped in the fenced-list host body
+                // (R-0006-d); a cross-workspace id cannot appear here.
+                Ok(CallToolResult::success(
+                    ids.into_iter().map(Content::text).collect(),
+                ))
+            }
             Err(exec_err) => Err(rmcp::model::ErrorData {
                 code: crate::mcp::errors::PLUGIN_EXEC_CODE,
                 message: format!("plugin execution failed: {}", exec_err.code()).into(),
