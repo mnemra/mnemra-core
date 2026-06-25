@@ -71,9 +71,13 @@ impl ContentGuest for EchoPlugin {
         artifact::artifact_get(&host_supplied_ctx(), &id)
     }
 
-    /// `content.list` — slice-1 stub (typed-but-empty); wired in T12.
-    fn list(_type_name: String, _filters: String) -> Vec<String> {
-        Vec::new()
+    /// `content.list` — list ids of `type_name` artifacts via the host
+    /// `artifact-list` import (R-0019-a, guest-driven model). `filters` is passed
+    /// through to the host; predicate application is deferred (brain #1846). The
+    /// host scopes the result to the caller's workspace (R-0006-d); the guest
+    /// cannot supply or widen the scope.
+    fn list(type_name: String, filters: String) -> Vec<String> {
+        artifact::artifact_list(&host_supplied_ctx(), &type_name, &filters)
     }
 
     /// `content.update` — slice-1 stub (no-op); wired in T12.

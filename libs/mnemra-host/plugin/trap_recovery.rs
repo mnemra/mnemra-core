@@ -430,7 +430,8 @@ pub fn invoke_with_recovery(
 // ---------------------------------------------------------------------------
 
 /// Which typed `content` method to invoke, plus its marshalled arguments
-/// (CC-MAPPING: `echo.create` -> `Create`, `echo.get` -> `Get`).
+/// (CC-MAPPING: `echo.create` -> `Create`, `echo.get` -> `Get`,
+/// `echo.list` -> `List`).
 #[derive(Debug, Clone)]
 pub enum ContentCall {
     /// `content.create(type, frontmatter, body)` — returns the generated ULID.
@@ -447,6 +448,14 @@ pub enum ContentCall {
         /// The artifact id (from the MCP `id` argument).
         id: String,
     },
+    /// `content.list(type, filters)` — returns the ids visible in the workspace.
+    List {
+        /// The artifact type name (from the MCP `content_type` argument).
+        type_name: String,
+        /// The filter JSON-as-string (from the MCP `filters` argument). Threaded
+        /// through but not applied this slice (predicate logic deferred — #1846).
+        filters: String,
+    },
 }
 
 /// The typed result of a successful `content` invoke.
@@ -456,6 +465,8 @@ pub enum ContentResult {
     Created(String),
     /// `content.get` returned the stored content (or `None`).
     Got(Option<String>),
+    /// `content.list` returned the ids visible in the workspace.
+    Listed(Vec<String>),
 }
 
 /// Invoke the typed `content` export on a pooled component instance through the
@@ -495,6 +506,10 @@ pub fn invoke_content(
             .map(ContentResult::Created),
             ContentCall::Get { id } => {
                 crate::plugin::component::content_get(store, instance, id).map(ContentResult::Got)
+            }
+            ContentCall::List { type_name, filters } => {
+                crate::plugin::component::content_list(store, instance, type_name, filters)
+                    .map(ContentResult::Listed)
             }
         },
     )

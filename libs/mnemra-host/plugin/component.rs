@@ -202,14 +202,22 @@ impl mnemra::host::artifact::Host for HostState {
     ) {
     }
 
-    /// `artifact-list` — slice-1 stub; wired against the fenced map in T12.
+    /// `artifact-list` — list ids of `type_name` artifacts visible in this
+    /// workspace, scoped on `self.workspace_id` (R-0006-d). The guest-supplied
+    /// `_ctx` is ignored (R-0006-e); `filters` is threaded but not applied this
+    /// slice (predicate logic deferred — brain #1846).
     fn artifact_list(
         &mut self,
         _ctx: WitWorkspaceCtx,
-        _type_name: String,
-        _filters: String,
+        type_name: String,
+        filters: String,
     ) -> Vec<String> {
-        Vec::new()
+        crate::abi::host_fns::fenced_artifact_list(
+            &self.artifacts,
+            self.workspace_id,
+            &type_name,
+            filters,
+        )
     }
 
     /// `artifact-delete` — slice-1 stub; wired against the fenced map in T12.
@@ -333,4 +341,22 @@ pub fn content_get(
     // See `content_create`: the accessor takes `&String`, not `&str`.
     #[allow(clippy::unnecessary_to_owned)]
     content.call_get(&mut *store, &id.to_owned())
+}
+
+/// Invoke the typed `content.list` export on a raw component `Instance`
+/// (R-0019-a). Returns the ids of `type_name` artifacts visible in the caller's
+/// workspace (the guest body calls back into the host `artifact-list` import,
+/// which scopes on the host-derived `workspace_id`). `filters` is threaded but
+/// not applied this slice (predicate logic deferred — brain #1846).
+pub fn content_list(
+    store: &mut Store<HostState>,
+    instance: &Instance,
+    type_name: &str,
+    filters: &str,
+) -> wasmtime::Result<Vec<String>> {
+    let plugin = Plugin::new(&mut *store, instance)?;
+    let content = plugin.mnemra_host_content();
+    // See `content_create`: the accessor takes `&String`, not `&str`.
+    #[allow(clippy::unnecessary_to_owned)]
+    content.call_list(&mut *store, &type_name.to_owned(), &filters.to_owned())
 }

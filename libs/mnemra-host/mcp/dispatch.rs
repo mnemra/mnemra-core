@@ -144,8 +144,10 @@ pub struct ContentDispatch {
 /// Slice-1 / V0 mapping (the `<plugin>.<verb>` tail selects the method):
 ///   - `*.create` -> `content.create`, `{content_type -> type, payload -> frontmatter}`
 ///   - `*.get`    -> `content.get`,    `{id -> id}`  (R1: `{id}` argument key)
-///   - `*.list`/`*.update`/`*.delete` -> the matching typed method (slice-1
-///     guest stubs; fully wired in T12).
+///   - `*.list`   -> `content.list`,   `{content_type -> type, filters -> filters}`
+///     (T12 list slice; `filters` defaults to `"{}"`, parsed-not-applied)
+///   - `*.update`/`*.delete` -> NON_DISPATCHABLE until their per-verb CC-MAPPING
+///     is pinned (a later T12 slice).
 ///
 /// A verb whose tail has no matching typed `content` method (e.g. a future
 /// `*.audit`) returns the R-0019-d structured non-dispatchable error. This runs
@@ -189,13 +191,29 @@ pub fn resolve_content_call(
                 .to_owned();
             ContentCall::Get { id }
         }
-        // list/update/delete have typed `content` exports (slice-1 guest stubs)
-        // but their MCP-verb -> method argument shapes are pinned per-verb in T12,
-        // not at slice 1. No slice-1 test dispatches them through `call_tool`; they
-        // are not reachable here yet. Surfacing the R-0019-d non-dispatchable error
-        // is the honest slice-1 behavior (their CC-MAPPING is not yet pinned), and
-        // it leaves the pre-dispatch permission outcome unchanged (R-0019-e).
-        "list" | "update" | "delete" => {
+        "list" => {
+            // T12 list slice: `content_type` -> WIT `type` (default `"echo_fixture"`,
+            // exactly like create) and `filters` -> WIT `filters` (a JSON string,
+            // default `"{}"`). The host-fn body scopes by workspace + type only;
+            // `filters` is threaded but not applied this slice (brain #1846).
+            let type_name = arguments
+                .and_then(|m| m.get("content_type"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("echo_fixture")
+                .to_owned();
+            let filters = arguments
+                .and_then(|m| m.get("filters"))
+                .map(json_value_to_payload_string)
+                .unwrap_or_else(|| "{}".to_owned());
+            ContentCall::List { type_name, filters }
+        }
+        // update/delete have typed `content` exports (slice-1 guest stubs) but
+        // their MCP-verb -> method argument shapes are pinned per-verb in a later
+        // T12 slice, not here. No test dispatches them through `call_tool` yet;
+        // surfacing the R-0019-d non-dispatchable error is the honest behavior
+        // (their CC-MAPPING is not yet pinned), and it leaves the pre-dispatch
+        // permission outcome unchanged (R-0019-e).
+        "update" | "delete" => {
             return Err(ErrorData {
                 code: NON_DISPATCHABLE_CODE,
                 message: format!("verb '{verb_name}' is not wired at slice 1 (CC-MAPPING T12)")
