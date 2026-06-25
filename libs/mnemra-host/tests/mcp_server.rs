@@ -70,8 +70,8 @@
 use mnemra_host::auth::token::{AdminToken, generate, hash};
 use mnemra_host::schema::init::{DEFAULT_WORKSPACE_ID, init};
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use rmcp::model::{CallToolRequestParams, ErrorCode, Meta};
-use rmcp::service::{serve_client, serve_server};
+use rmcp::model::{CallToolRequestParams, ErrorCode, Meta, RawContent};
+use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -198,6 +198,70 @@ fn echo_component_path() -> PathBuf {
         path.display()
     );
     path
+}
+
+/// Extract all text content strings from a `CallToolResult`.
+///
+/// `CallToolResult.content` is `Vec<Content>` where `Content = Annotated<RawContent>`;
+/// text lives at `content.raw` → `RawContent::Text(RawTextContent { text, .. })`.
+/// Used only for create-side id DISCOVERY (the returned ULID is a text item).
+fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
+    result
+        .content
+        .iter()
+        .filter_map(|c| match &c.raw {
+            RawContent::Text(t) => Some(t.text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// True iff `s` is a well-formed ULID: 26 chars, Crockford base32 (excludes I, L, O, U).
+///
+/// No `ulid`/`regex` crate (neither is in dev-deps; adding one trips the dep-gate).
+fn is_valid_ulid(s: &str) -> bool {
+    s.len() == 26
+        && s.chars()
+            .all(|c| "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c))
+}
+
+/// Create one `echo_fixture` artifact via `echo.create` under `token`, returning its
+/// ULID id (discovered from the create result's text content).
+///
+/// `echo.create` is WIRED at this slice, so this helper succeeds — it exists so the
+/// red-phase `echo.list` tests can capture concrete ids to assert on. A panic here is
+/// a SETUP failure (wrong-reason red), and the message prints the actual create result
+/// so the return shape can be reconciled.
+async fn create_echo_fixture(
+    client: &RunningService<RoleClient, ()>,
+    token: &AdminToken,
+    marker: &str,
+) -> String {
+    let mut params = CallToolRequestParams::new("echo.create");
+    params.meta = Some(token_meta(token.as_str()));
+    params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert("payload".to_owned(), json!({ "msg": marker }));
+        m
+    });
+
+    let result = client
+        .call_tool(params)
+        .await
+        .expect("setup: echo.create is wired and must return Ok to seed list fixtures");
+
+    let texts = extract_text_content(&result);
+    texts
+        .iter()
+        .find(|t| is_valid_ulid(t.trim()))
+        .map(|t| t.trim().to_owned())
+        .unwrap_or_else(|| {
+            panic!(
+                "setup: echo.create result must carry a well-formed ULID id in text content; \
+                 got text content: {texts:?}"
+            )
+        })
 }
 
 // ===========================================================================
@@ -827,6 +891,272 @@ async fn read_observer_get_verb_not_denied() {
             // both mean the permission check passed.  Guard holds.
         }
     }
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 7 (RED): echo.list dispatches and returns created ids (T12 list slice)
+// ===========================================================================
+
+/// R-0019-c — `echo.list` dispatches to `content.list` and returns the ids of the
+/// caller workspace's artifacts of the given type.
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token in DEFAULT_WORKSPACE_ID with TWO `echo_fixture` artifacts
+///   created via `echo.create` (both ids captured)
+/// WHEN the client calls `echo.list` for content_type "echo_fixture" with empty `{}` filters
+/// THEN the call succeeds AND the returned list contains BOTH captured ids
+///   (asserted by exact-id presence — NOT merely "Ok" or "list is non-empty").
+///
+/// # Red reason
+///
+/// `echo.list` is UNWIRED at this slice — `mcp/dispatch.rs` rejects "list"
+/// (NON_DISPATCHABLE, "verb 'list' is not wired at slice 1"). The `.expect` on the
+/// list call therefore panics with that error: right-reason red. The id-presence
+/// assertions are the green contract (Forge wires `echo.list -> content.list`).
+///
+/// # Reconciliation point R-list-args (for Forge)
+///
+/// The `filters` argument key + `"{}"`-string value map to the WIT signature
+/// `content.list(type_name, filters) -> list<string>` (filters is a JSON string,
+/// `"{}"` = no filter). The manifest declares the verb but not its per-arg schema;
+/// Forge must confirm the `filters` key against the echo verb arg mapping.
+#[tokio::test]
+async fn valid_admin_token_echo_list_returns_created_ids() {
+    // R-0019-c: admin echo.list returns the ids it created.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Seed two echo_fixture artifacts; capture both ids (echo.create is wired).
+    let id_one = create_echo_fixture(&client, &token, "list_fixture_one").await;
+    let id_two = create_echo_fixture(&client, &token, "list_fixture_two").await;
+
+    // WHEN — call echo.list for the echo_fixture type with empty filters.
+    let mut list_params = CallToolRequestParams::new("echo.list");
+    list_params.meta = Some(token_meta(token.as_str()));
+    list_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert("filters".to_owned(), json!("{}"));
+        m
+    });
+
+    let list_result = client.call_tool(list_params).await.expect(
+        "R-0019-c: echo.list must return Ok and dispatch to content.list; \
+         red phase: panics because echo.list is unwired (NON_DISPATCHABLE)",
+    );
+
+    // THEN — the returned list must contain BOTH created ids.
+    // Search the serialized result body so the assertion is robust to the green
+    // encoding of `list<string>` (separate text items vs JSON array vs structured
+    // content) while remaining strong: a specific 26-char ULID present is no
+    // vacuous green.
+    let body = serde_json::to_string(&list_result).expect("serialize echo.list result");
+    assert!(
+        body.contains(&id_one),
+        "R-0019-c: echo.list result must contain created id {id_one}; got body: {body}"
+    );
+    assert!(
+        body.contains(&id_two),
+        "R-0019-c: echo.list result must contain created id {id_two}; got body: {body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 8 (RED): echo.list is workspace-scoped — tenant isolation
+// ===========================================================================
+
+/// R-0006-d — `echo.list` is workspace-scoped: it returns the caller workspace's
+/// artifacts and MUST NOT leak artifacts from another workspace.
+///
+/// # Given / When / Then
+///
+/// GIVEN one `echo_fixture` created in workspace A AND a different `echo_fixture`
+///   created in workspace B (each a fresh Uuid with its own admin token)
+/// WHEN `echo.list` is called scoped to workspace A's token
+/// THEN the result contains id_A AND does NOT contain id_B.
+///
+/// # Red reason
+///
+/// `echo.list` is unwired → NON_DISPATCHABLE; the `.expect` panics for the right
+/// reason. The isolation assertions are the green contract.
+///
+/// # Security note
+///
+/// This is THE tenant-isolation assertion for `list` (cross-workspace artifacts
+/// must not leak). Do not weaken to "Ok" or "id_A present" alone — the id_B-ABSENT
+/// half is the security guarantee.
+///
+/// # Workspace seeding
+///
+/// `admin_tokens.workspace_id` is UUID NOT NULL with no FK to a `workspaces` row
+/// (schema init migration 7). A token for a fresh Uuid4 is valid without a
+/// `workspaces` row — same approach as `mcp_slice1_e2e::cross_workspace_get_returns_none`.
+#[tokio::test]
+async fn echo_list_is_workspace_scoped() {
+    // R-0006-d: echo.list does not leak cross-workspace artifacts.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+    let (token_a, _a_id) = seed_admin_token(pool, workspace_a).await;
+    let (token_b, _b_id) = seed_admin_token(pool, workspace_b).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create one artifact in each workspace; capture both ids.
+    let id_a = create_echo_fixture(&client, &token_a, "workspace_a_fixture").await;
+    let id_b = create_echo_fixture(&client, &token_b, "workspace_b_fixture").await;
+
+    // WHEN — list under workspace A's token.
+    let mut list_params = CallToolRequestParams::new("echo.list");
+    list_params.meta = Some(token_meta(token_a.as_str()));
+    list_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert("filters".to_owned(), json!("{}"));
+        m
+    });
+
+    let list_result = client.call_tool(list_params).await.expect(
+        "R-0006-d: echo.list under workspace A must return Ok; \
+         red phase: panics because echo.list is unwired (NON_DISPATCHABLE)",
+    );
+
+    // THEN — workspace A's id present; workspace B's id MUST NOT leak.
+    let body = serde_json::to_string(&list_result).expect("serialize echo.list result");
+    assert!(
+        body.contains(&id_a),
+        "R-0006-d: workspace A's echo.list must contain its own id {id_a}; got body: {body}"
+    );
+    assert!(
+        !body.contains(&id_b),
+        "R-0006-d: tenant isolation violated — workspace A's echo.list leaked \
+         workspace B's id {id_b}; got body: {body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 9 (RED): echo.list is reachable by a ReadObserver (list is a read verb)
+// ===========================================================================
+
+/// R-0009-d — `echo.list` is a READ verb: a ReadObserver token may list.
+///
+/// # Given / When / Then
+///
+/// GIVEN an `echo_fixture` created by an admin token, and a read_observer token in
+///   the SAME workspace
+/// WHEN `echo.list` is called under the read_observer token
+/// THEN the call is NOT denied for role reasons AND returns the created id
+///   (a ReadObserver may read; update/delete reachability is deliberately NOT asserted).
+///
+/// # Red reason
+///
+/// `list` is classified as a read verb, so the read_observer permission check PASSES
+/// and the request reaches dispatch, where `echo.list` is unwired → NON_DISPATCHABLE.
+/// The `.expect` therefore panics with the "not wired" error (NOT a permission error):
+/// right-reason red. If this instead surfaced PERMISSION_DENIED, current code is
+/// mis-classifying `list` as a write — that is a FINDING, not a valid red.
+#[tokio::test]
+async fn echo_list_reachable_by_read_observer() {
+    // R-0009-d: a ReadObserver may echo.list (read verb), not denied.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (admin_token, _admin_id) = seed_admin_token(pool, workspace_id).await;
+    let (observer_token, _obs_id) = seed_read_observer_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // An admin token seeds the fixture; the read_observer then lists it.
+    let id = create_echo_fixture(&client, &admin_token, "read_observer_visible_fixture").await;
+
+    // WHEN — list under the read_observer token.
+    let mut list_params = CallToolRequestParams::new("echo.list");
+    list_params.meta = Some(token_meta(observer_token.as_str()));
+    list_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert("filters".to_owned(), json!("{}"));
+        m
+    });
+
+    let list_result = client.call_tool(list_params).await.expect(
+        "R-0009-d: read_observer echo.list (a read verb) must NOT be denied and must \
+         return Ok; red phase: panics because echo.list is unwired (NON_DISPATCHABLE), \
+         NOT because of a permission error",
+    );
+
+    // THEN — a ReadObserver may list: the created id is returned.
+    let body = serde_json::to_string(&list_result).expect("serialize echo.list result");
+    assert!(
+        body.contains(&id),
+        "R-0009-d: read_observer echo.list must return the created id {id}; got body: {body}"
+    );
 
     let _ = client.cancel().await;
     let _ = server_handle.await;

@@ -54,10 +54,9 @@ pub type Json = String;
 /// One artifact row in the fenced map (the slice-1 stub shape).
 #[derive(Debug, Clone)]
 struct StoredArtifact {
-    /// The artifact type name (e.g. `"echo_fixture"`). Stored for the T12 `list`
-    /// body (filter-by-type); not surfaced by the slice-1 `get` (which round-trips
-    /// frontmatter/body content), so it is unread until T12.
-    #[allow(dead_code)]
+    /// The artifact type name (e.g. `"echo_fixture"`). Read by
+    /// `fenced_artifact_list` for the type filter (T12); not surfaced by `get`
+    /// (which round-trips frontmatter/body content).
     type_name: String,
     /// The frontmatter JSON-as-string (the create `payload` round-trips here).
     frontmatter: String,
@@ -129,8 +128,43 @@ pub fn fenced_artifact_get(
             None => row.frontmatter.clone(),
         }
     })
-    // `type_name` is retained on the row for the T12 `list` body; not surfaced
+    // `type_name` is retained on the row for the `list` body below; not surfaced
     // by `get` (which round-trips frontmatter/body content).
+}
+
+/// `artifact-list` (T7 fenced body): return the ids of artifacts owned by
+/// `workspace_id` whose stored type matches `type_name` (R-0006-d isolation).
+///
+/// Unlike `fenced_artifact_get` (a single-key `(workspace_id, id)` lookup), this
+/// ITERATES the fenced map. The workspace scoping is therefore enforced on every
+/// entry, not by a key constructed from the caller: only entries whose key
+/// workspace component equals the host-derived `workspace_id` AND whose stored
+/// `type_name` matches are returned. A row owned by a different workspace can
+/// never leak into the result — `key.0` is the R-0006-d discriminator, exactly
+/// as in `fenced_artifact_get`. `workspace_id` is the host-derived scoping key
+/// (read from store data, never a guest-supplied value — R-0006-b/e).
+///
+/// `filters` is threaded through for wiring completeness but NOT applied this
+/// slice: scoping is `workspace_id` + `type_name` only. Predicate logic on a
+/// security verb with zero red-test coverage would be unverified, so it is
+/// deferred (see the brain #1846 marker at the filter site below).
+pub fn fenced_artifact_list(
+    store: &FencedArtifactStore,
+    workspace_id: Uuid,
+    type_name: &str,
+    _filters: Json,
+) -> Vec<String> {
+    let map = store.inner.lock().unwrap_or_else(|e| e.into_inner());
+    // WHERE-clause shape (fenced-map analogue): workspace_id = $1 AND type_name = $2.
+    // The workspace_id key component is the R-0006-d discriminator — an entry
+    // owned by a different workspace simply does not match and cannot leak.
+    map.iter()
+        .filter(|((ws, _id), row)| {
+            // filter predicate application deferred — brain #1846
+            *ws == workspace_id && row.type_name == type_name
+        })
+        .map(|((_ws, id), _row)| id.clone())
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
