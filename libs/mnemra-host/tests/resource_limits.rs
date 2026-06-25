@@ -598,3 +598,106 @@ fn health_state_does_not_panic_on_poisoned_lock() {
         "a poisoned health lock must degrade (fail-safe), not be reported as Ok"
     );
 }
+
+// ===========================================================================
+// T10 AC(c) — POOL_MAX pre-instantiation + reject-duplicate-register (R-0016-a)
+// ===========================================================================
+
+/// T10 AC(c), R-0016-a — `register_module` pre-instantiates `POOL_MAX` (5)
+/// live instances, not just `POOL_MIN` (3).
+///
+/// Given a component registered via `register_module`,
+/// When the pool is inspected via `slot_count`,
+/// Then the live instance count for that plugin == `POOL_MAX` (5).
+///
+/// Puck-locked interpretation (V0.1+ scope note): adaptive/runtime pool growth is
+/// V0.1+ scope; V0 "pool grows to POOL_MAX" means registration pre-instantiates
+/// the full ceiling (5 instances), not the floor (3). The spec range is 3–5; V0
+/// pins the ceiling at registration time, not at runtime.
+///
+/// RED: current code instantiates only `POOL_MIN` (3) slots. This test FAILS
+/// with `slot_count == 3`, not 5.
+#[test]
+fn register_module_pre_instantiates_pool_max_live_instances() {
+    use mnemra_host::plugin::pool::POOL_MAX;
+
+    // Given — a pool with the fixture registered via register_module (POOL_MIN
+    // slots populated today; the test asserts the spec-required POOL_MAX).
+    let pool = pool_with_fixture(EPOCH_LOOP_WAT);
+
+    // When — inspect the live slot count for the registered plugin.
+    let count = pool.slot_count(TEST_PLUGIN_ID);
+
+    // Then — exactly POOL_MAX (5) live instances. Do NOT use >= 3: that passes
+    // vacuously with the current broken floor. The contract is the ceiling.
+    // Right-reason red: count is 3 (POOL_MIN), asserted value is 5 (POOL_MAX).
+    assert_eq!(
+        count, POOL_MAX,
+        "register_module must pre-instantiate POOL_MAX ({POOL_MAX}) live instances \
+         (R-0016-a, T10 AC(c)); got {count} — current impl instantiates only POOL_MIN (3)"
+    );
+}
+
+/// T10 AC(c), R-0016-a — `register_module` rejects a duplicate `plugin_name`
+/// and leaves the pool state intact.
+///
+/// Given a plugin already registered via `register_module`,
+/// When `register_module` is called again with the SAME `plugin_name`,
+/// Then the second call returns `Err(...)` AND the pool's slot count is
+///   unchanged (original instances intact, no duplicate entry created).
+///
+/// # Missing-accessor note (flagged for green phase)
+///
+/// `pool.slot_count()` uses `.find()` and returns the FIRST matching entry's
+/// slot count. It cannot distinguish "one entry with N slots" from "two entries
+/// with the same name, N slots each." The count assertion below (`slots_after ==
+/// slots_before`) is therefore the strongest check possible against the current
+/// public surface — it catches a doubled slot count but NOT a duplicate
+/// zero-count entry. The green phase implementer should add:
+///
+/// ```text
+/// pub fn registered_entry_count(&self, plugin_name: &str) -> usize
+/// ```
+///
+/// returning the number of `LiveModuleEntry` records with that name, so a test
+/// can assert `== 1` (exactly one entry) after a rejected duplicate.
+///
+/// RED: current code returns `Ok` unconditionally on the second call and pushes
+/// a second `LiveModuleEntry` for the same name. The primary failing assertion
+/// is `result.is_err()`.
+#[test]
+fn register_module_rejects_duplicate_plugin_name() {
+    // Given — first registration succeeds (pool holds one entry, POOL_MIN slots).
+    let pool = pool_with_fixture(EPOCH_LOOP_WAT);
+    let slots_before = pool.slot_count(TEST_PLUGIN_ID);
+    assert!(
+        slots_before >= 3,
+        "precondition: first registration must yield at least POOL_MIN (3) slots; \
+         got {slots_before}"
+    );
+
+    // Compile a second Component instance from the same WAT (same plugin identity).
+    let component = compile_fixture(&pool, EPOCH_LOOP_WAT);
+
+    // When — attempt to register the same plugin_name a second time.
+    let result = pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &component);
+
+    // Then — second call must return Err (duplicate is rejected, R-0016-a).
+    // Right-reason red: current impl returns Ok unconditionally and pushes a
+    // second LiveModuleEntry, accepting the duplicate.
+    assert!(
+        result.is_err(),
+        "register_module must return Err when plugin '{TEST_PLUGIN_ID}' is already \
+         registered; got Ok — current impl accepts duplicates unconditionally (R-0016-a)"
+    );
+
+    // Then — slot count is unchanged (original instances intact, no doubled allocation).
+    // Limitation: slot_count cannot distinguish 1 vs 2 entries — see doc above.
+    // This assertion catches a doubling but not an empty-count duplicate entry.
+    let slots_after = pool.slot_count(TEST_PLUGIN_ID);
+    assert_eq!(
+        slots_before, slots_after,
+        "pool slot count must not change after a rejected duplicate register: \
+         before={slots_before}, after={slots_after}"
+    );
+}
