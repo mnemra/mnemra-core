@@ -279,7 +279,7 @@ impl PluginPool {
     // -----------------------------------------------------------------------
 
     /// Register a compiled `component::Component` as a live, trappable plugin and
-    /// populate `POOL_MIN` live instances (R-0016-a, R-0007-e/f, R-0016-b).
+    /// populate `POOL_MAX` live instances (R-0016-a, R-0007-e/f, R-0016-b).
     ///
     /// Each live slot is a pre-instantiated `Store<HostState>` + `Plugin` world
     /// handle ready to run the typed `content` export. Unlike `register` (the
@@ -289,26 +289,57 @@ impl PluginPool {
     ///
     /// The host `Linker<HostState>` (host-fn imports + WASI trap-stubs) is built
     /// once per registered component and reused for every (re)instantiation.
+    ///
+    /// Rejects duplicate registrations (same `plugin_name`) fail-closed via a
+    /// two-phase guard: an early-out check is performed under a short-lived lock
+    /// before instantiation (avoids wasting POOL_MAX slot builds in the common
+    /// duplicate case), and an authoritative recheck is performed under the final
+    /// push lock before the entry is committed. A concurrent duplicate that passes
+    /// the early-out is rejected at the recheck; its locally-built slots are
+    /// dropped (R-0016-a, no TOCTOU window).
     pub fn register_module(
         &self,
         plugin_name: &str,
         plugin_version: &str,
         component: &Component,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Cheap early-out: reject obvious duplicates before the (possibly slow)
+        // POOL_MAX instantiation loop. This check is an OPTIMIZATION — the
+        // authoritative guard is the recheck performed under the final lock below.
+        // Drops the lock before instantiation so the slow path does not hold it.
+        {
+            let live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+            if live.iter().any(|e| e.plugin_name == plugin_name) {
+                return Err(Box::from(format!(
+                    "plugin '{plugin_name}' is already registered"
+                )));
+            }
+        }
+
         let component = Arc::new(component.clone());
         // Build the host Linker once for this component (host-fn imports wired,
         // remaining imports trap-stubbed). Reused for every slot (re)instantiation.
         let linker = Arc::new(component::build_linker(&self.engine, &component)?);
 
-        // Pre-instantiate POOL_MIN live slots. A failure to instantiate the
+        // Pre-instantiate POOL_MAX live slots. A failure to instantiate the
         // fixture is a registration error, surfaced to the caller (fail-closed).
-        let mut slots: Vec<Option<LiveSlot>> = Vec::with_capacity(POOL_MIN);
-        for _ in 0..POOL_MIN {
+        let mut slots: Vec<Option<LiveSlot>> = Vec::with_capacity(POOL_MAX);
+        for _ in 0..POOL_MAX {
             let slot = self.instantiate_live_slot(&component, &linker)?;
             slots.push(Some(slot));
         }
 
         let mut live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        // Authoritative recheck under the final lock — closes the TOCTOU window
+        // between the early-out check and this push. A concurrent register_module
+        // for the same name that passed the early-out is rejected here; the locally-
+        // built `slots` Vec is dropped on return (the loser's instantiated work is
+        // discarded, which is correct and intended).
+        if live.iter().any(|e| e.plugin_name == plugin_name) {
+            return Err(Box::from(format!(
+                "plugin '{plugin_name}' is already registered"
+            )));
+        }
         live.push(LiveModuleEntry {
             plugin_name: plugin_name.to_owned(),
             plugin_version: plugin_version.to_owned(),
