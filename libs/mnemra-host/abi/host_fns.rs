@@ -167,6 +167,67 @@ pub fn fenced_artifact_list(
         .collect()
 }
 
+/// `artifact-update` (T7 fenced body): merge `frontmatter_patch` into the stored
+/// frontmatter and (when `body` is `Some`) replace the body, for the artifact
+/// keyed `(workspace_id, id)` in the CALLER's workspace (R-0006-d isolation).
+///
+/// WHERE-clause shape (fenced-map analogue): `workspace_id = $1 AND id = $2`. The
+/// `workspace_id` key component is the host-derived (R-0006-b/e) discriminator —
+/// an `(workspace_id, id)` not present in the caller's workspace simply MISSES, so
+/// the update is a SILENT NO-OP and nothing is modified. A different workspace's
+/// artifact is keyed under a different `workspace_id` and is therefore unreachable:
+/// workspace B updating A's id is a no-op and A's artifact is left intact
+/// (cross-tenant WRITE isolation).
+///
+/// Merge semantics: patch keys overwrite/add; keys absent from the patch are
+/// PRESERVED. `body`: `Some(b)` replaces the stored body; `None` leaves it
+/// unchanged. Both the stored frontmatter and the patch are parsed DEFENSIVELY —
+/// `create`'s `json_value_to_payload_string` can store a non-object value (a raw
+/// string) for a non-object payload, so this NEVER `unwrap()`s a parse and never
+/// panics (a non-object/malformed base falls back to an empty object; a
+/// non-object/malformed patch contributes no keys).
+pub fn fenced_artifact_update(
+    store: &FencedArtifactStore,
+    workspace_id: Uuid,
+    id: &str,
+    frontmatter_patch: Json,
+    body: Option<String>,
+) {
+    let mut map = store.inner.lock().unwrap_or_else(|e| e.into_inner());
+    // Single-key `(workspace_id, id)` lookup, exactly as `fenced_artifact_get`. A
+    // miss (absent id, or an id owned by a different workspace) yields `None` here,
+    // so the whole body is skipped — the no-op-on-miss tenant-isolation behavior.
+    if let Some(row) = map.get_mut(&(workspace_id, id.to_owned())) {
+        row.frontmatter = merge_frontmatter(&row.frontmatter, &frontmatter_patch);
+        // `Some` replaces the stored body; `None` leaves the existing body intact.
+        if let Some(new_body) = body {
+            row.body = Some(new_body);
+        }
+    }
+}
+
+/// JSON-merge `patch` over `stored`, returning compact JSON object text.
+///
+/// Defensive (no-panic, advisor-flagged): the base is `stored` parsed as a JSON
+/// object, falling back to an empty object when `stored` is not object-shaped
+/// (a raw string from `create`'s non-object payload path). The patch contributes
+/// keys only when it parses as a JSON object; patch keys overwrite/add, base keys
+/// absent from the patch are preserved. Neither parse is ever `unwrap()`ed.
+fn merge_frontmatter(stored: &str, patch: &str) -> String {
+    use serde_json::{Map, Value};
+
+    let mut base: Map<String, Value> = match serde_json::from_str::<Value>(stored) {
+        Ok(Value::Object(m)) => m,
+        _ => Map::new(),
+    };
+    if let Ok(Value::Object(patch_map)) = serde_json::from_str::<Value>(patch) {
+        for (k, v) in patch_map {
+            base.insert(k, v);
+        }
+    }
+    Value::Object(base).to_string()
+}
+
 // ---------------------------------------------------------------------------
 // artifact interface
 // ---------------------------------------------------------------------------

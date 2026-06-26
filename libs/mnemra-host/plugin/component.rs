@@ -192,14 +192,24 @@ impl mnemra::host::artifact::Host for HostState {
         crate::abi::host_fns::fenced_artifact_get(&self.artifacts, self.workspace_id, &id)
     }
 
-    /// `artifact-update` — slice-1 stub; wired against the fenced map in T12.
+    /// `artifact-update` — merge the frontmatter patch + (optionally) replace the
+    /// body in the fenced map, workspace-scoped on `self.workspace_id` (R-0006-d).
+    /// The guest-supplied `_ctx` is ignored (R-0006-e); a missing/cross-workspace
+    /// target is a silent no-op (the fenced `(workspace_id, id)` lookup misses).
     fn artifact_update(
         &mut self,
         _ctx: WitWorkspaceCtx,
-        _id: String,
-        _frontmatter_patch: String,
-        _body: Option<String>,
+        id: String,
+        frontmatter_patch: String,
+        body: Option<String>,
     ) {
+        crate::abi::host_fns::fenced_artifact_update(
+            &self.artifacts,
+            self.workspace_id,
+            &id,
+            frontmatter_patch,
+            body,
+        )
     }
 
     /// `artifact-list` — list ids of `type_name` artifacts visible in this
@@ -359,4 +369,28 @@ pub fn content_list(
     // See `content_create`: the accessor takes `&String`, not `&str`.
     #[allow(clippy::unnecessary_to_owned)]
     content.call_list(&mut *store, &type_name.to_owned(), &filters.to_owned())
+}
+
+/// Invoke the typed `content.update` export on a raw component `Instance`
+/// (R-0019-a). The guest body calls back into the host `artifact-update` import,
+/// which merges the frontmatter patch and (when `body` is `Some`) replaces the
+/// body in the fenced map, scoped on the host-derived `workspace_id` (R-0006-d).
+/// `update` is void; this returns `()` on success (or any trap).
+pub fn content_update(
+    store: &mut Store<HostState>,
+    instance: &Instance,
+    id: &str,
+    frontmatter_patch: &str,
+    body: Option<&str>,
+) -> wasmtime::Result<()> {
+    let plugin = Plugin::new(&mut *store, instance)?;
+    let content = plugin.mnemra_host_content();
+    // See `content_create`: the accessor takes `&String`, not `&str`.
+    #[allow(clippy::unnecessary_to_owned)]
+    content.call_update(
+        &mut *store,
+        &id.to_owned(),
+        &frontmatter_patch.to_owned(),
+        body,
+    )
 }
