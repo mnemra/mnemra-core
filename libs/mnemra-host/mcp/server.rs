@@ -305,6 +305,12 @@ impl ServerHandler for MnemraMcpServer {
                     ids.into_iter().map(Content::text).collect(),
                 ))
             }
+            Ok(ContentResult::Updated) => {
+                // `echo.update` is void — an empty-content success result (like the
+                // `Got(None)` readback). The merge/persist happened host-side; a
+                // missing/cross-workspace target was a silent no-op (R-0006-d).
+                Ok(CallToolResult::success(vec![]))
+            }
             Err(exec_err) => Err(rmcp::model::ErrorData {
                 code: crate::mcp::errors::PLUGIN_EXEC_CODE,
                 message: format!("plugin execution failed: {}", exec_err.code()).into(),

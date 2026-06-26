@@ -146,8 +146,11 @@ pub struct ContentDispatch {
 ///   - `*.get`    -> `content.get`,    `{id -> id}`  (R1: `{id}` argument key)
 ///   - `*.list`   -> `content.list`,   `{content_type -> type, filters -> filters}`
 ///     (T12 list slice; `filters` defaults to `"{}"`, parsed-not-applied)
-///   - `*.update`/`*.delete` -> NON_DISPATCHABLE until their per-verb CC-MAPPING
-///     is pinned (a later T12 slice).
+///   - `*.update` -> `content.update`, `{id -> id, frontmatter_patch -> frontmatter-patch,
+///     body -> body}` (T12 update slice; all three read via `.as_str()`,
+///     `frontmatter_patch` defaults to `"{}"`, `body` is `Some` iff the key is present)
+///   - `*.delete` -> NON_DISPATCHABLE until its per-verb CC-MAPPING is pinned
+///     (a later T12 slice).
 ///
 /// A verb whose tail has no matching typed `content` method (e.g. a future
 /// `*.audit`) returns the R-0019-d structured non-dispatchable error. This runs
@@ -207,13 +210,42 @@ pub fn resolve_content_call(
                 .unwrap_or_else(|| "{}".to_owned());
             ContentCall::List { type_name, filters }
         }
-        // update/delete have typed `content` exports (slice-1 guest stubs) but
-        // their MCP-verb -> method argument shapes are pinned per-verb in a later
-        // T12 slice, not here. No test dispatches them through `call_tool` yet;
-        // surfacing the R-0019-d non-dispatchable error is the honest behavior
-        // (their CC-MAPPING is not yet pinned), and it leaves the pre-dispatch
-        // permission outcome unchanged (R-0019-e).
-        "update" | "delete" => {
+        "update" => {
+            // T12 update slice: `id` -> WIT id; `frontmatter_patch` -> WIT
+            // frontmatter-patch (a JSON-text string, default `"{}"`); `body` ->
+            // WIT body=option<string>. All three are read via `.as_str()` (the MCP
+            // layer passes them as JSON *string* values, NOT objects — so they are
+            // NOT routed through `json_value_to_payload_string` the way create's
+            // object `payload` is). `body` is `Some` when the key is PRESENT and
+            // `None` when the key is ABSENT — that absence is how the MCP layer
+            // signals the WIT `body=None` (leave the existing body unchanged).
+            let id = arguments
+                .and_then(|m| m.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_owned();
+            let frontmatter_patch = arguments
+                .and_then(|m| m.get("frontmatter_patch"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("{}")
+                .to_owned();
+            let body = arguments
+                .and_then(|m| m.get("body"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_owned());
+            ContentCall::Update {
+                id,
+                frontmatter_patch,
+                body,
+            }
+        }
+        // `delete` has a typed `content` export (slice-1 guest stub) but its
+        // MCP-verb -> method argument shape is pinned in a later T12 slice, not
+        // here. No test dispatches it through `call_tool` yet; surfacing the
+        // R-0019-d non-dispatchable error is the honest behavior (its CC-MAPPING is
+        // not yet pinned), and it leaves the pre-dispatch permission outcome
+        // unchanged (R-0019-e).
+        "delete" => {
             return Err(ErrorData {
                 code: NON_DISPATCHABLE_CODE,
                 message: format!("verb '{verb_name}' is not wired at slice 1 (CC-MAPPING T12)")

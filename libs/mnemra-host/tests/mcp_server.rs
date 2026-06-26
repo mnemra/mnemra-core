@@ -19,6 +19,9 @@
 //! | control_plane_verbs_absent_from_tools_list                   | R-0010-g                 |
 //! | read_observer_non_read_verb_denied_permission_error (RED)    | R-0009-d/e               |
 //! | read_observer_get_verb_not_denied (regression guard)         | R-0009-d                 |
+//! | valid_admin_token_echo_update_merges_and_persists (RED)      | R-0019-c                 |
+//! | echo_update_cannot_modify_another_workspace_artifact (RED)   | R-0006-d                 |
+//! | echo_update_absent_body_preserves_existing_body (RED)        | R-0019-c                 |
 //!
 //! # RED-phase design
 //!
@@ -1156,6 +1159,465 @@ async fn echo_list_reachable_by_read_observer() {
     assert!(
         body.contains(&id),
         "R-0009-d: read_observer echo.list must return the created id {id}; got body: {body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 10 (RED): echo.update merges frontmatter + replaces body, persists
+//   (T12 update slice — R-0019-c happy path, STRONG)
+// ===========================================================================
+
+/// R-0019-c — `echo.update` dispatches to `content.update`, MERGES the
+/// frontmatter-patch into the existing frontmatter (patch keys overwrite/add;
+/// untouched keys are preserved), replaces the body, and persists — observable
+/// via a follow-on `echo.get`.
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token and an `echo_fixture` created via `echo.create` with a
+///   two-field frontmatter payload `{"title": <orig>, "keep": <kept>}` (id captured)
+/// WHEN `echo.update` is called with that id, `frontmatter_patch` = `{"title": <new>}`
+///   (a JSON string), and `body` = Some(<new body>)
+/// THEN the update call succeeds AND a subsequent `echo.get` of that id shows:
+///   - the patched value `<new>` present (the patch was applied),
+///   - the untouched field value `<kept>` STILL present (MERGE, not replace),
+///   - the new body present (the body was replaced),
+///   - and the old `<orig>` value ABSENT (the field was overwritten, not duplicated).
+///
+/// # Assertion strength
+///
+/// Asserting `is_ok()` alone would green vacuously. The two-field payload makes
+/// MERGE observable: a replace-semantics (wrong) implementation would drop the
+/// untouched `keep` field, failing the `survives` assertion; a no-op (wrong)
+/// implementation would fail the `newtitle` / `newbody` assertions. Distinctive
+/// marker values (`*_t12u` suffix) make the substring checks robust against
+/// accidental collisions in the serialized result envelope.
+///
+/// # Red reason
+///
+/// `echo.update` is UNWIRED at this slice — `mcp/dispatch.rs` rejects the verb
+/// with the structured non-dispatchable error (-4003 NON_DISPATCHABLE,
+/// "verb 'echo.update' is not wired at slice 1"). The `.expect` on the update
+/// call therefore panics with that error: right-reason red. (A -4005
+/// VERB_NOT_EXPOSED here would be a manifest gap, NOT a valid red — see report.)
+/// The merge/persist assertions are the green contract (Forge wires
+/// `echo.update -> content.update`).
+///
+/// # Reconciliation point R-update-args (for Forge)
+///
+/// MCP arg keys are pinned by the T12 dispatch: `id`, `frontmatter_patch`
+/// (a JSON string — mirroring the `json`=string WIT type and the `filters`
+/// precedent in the list tests), and optional `body`. NOTE the asymmetry:
+/// `echo.create` passes its `payload`→`frontmatter` arg as a JSON OBJECT
+/// (`json!({...})`), whereas this test passes `frontmatter_patch` as a JSON
+/// STRING per the pin. Forge must confirm the host accepts the JSON-string form
+/// for `frontmatter_patch` (or reconcile to the object form create uses).
+///
+/// # verify: []
+///
+/// `verify: []` by design — this test reds today (echo.update unwired); the
+/// just recipe runs after the green phase lands.
+#[tokio::test]
+async fn valid_admin_token_echo_update_merges_and_persists() {
+    // R-0019-c: admin echo.update merges frontmatter, replaces body, persists.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create an echo_fixture with a TWO-FIELD frontmatter so MERGE is observable.
+    // (Inline rather than via create_echo_fixture, which only writes one field.)
+    let mut create_params = CallToolRequestParams::new("echo.create");
+    create_params.meta = Some(token_meta(token.as_str()));
+    create_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert(
+            "payload".to_owned(),
+            json!({"title": "origtitle_t12u", "keep": "keepfield_t12u"}),
+        );
+        m
+    });
+    let create_result = client
+        .call_tool(create_params)
+        .await
+        .expect("setup: echo.create (wired) must return Ok to seed the update fixture");
+    let texts = extract_text_content(&create_result);
+    let id = texts
+        .iter()
+        .find(|t| is_valid_ulid(t.trim()))
+        .map(|t| t.trim().to_owned())
+        .unwrap_or_else(|| {
+            panic!("setup: echo.create must return a well-formed ULID id; got: {texts:?}")
+        });
+
+    // WHEN — echo.update with a frontmatter patch (JSON string) + a replacement body.
+    // frontmatter_patch overwrites `title` only; `keep` must survive the merge.
+    let patch = json!({"title": "newtitle_t12u"}).to_string();
+    let mut update_params = CallToolRequestParams::new("echo.update");
+    update_params.meta = Some(token_meta(token.as_str()));
+    update_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m.insert("frontmatter_patch".to_owned(), json!(patch));
+        m.insert("body".to_owned(), json!("newbody_t12u"));
+        m
+    });
+
+    // The dispatch-success assertion: echo.update must return Ok. While the verb
+    // is unwired this panics with -4003 NON_DISPATCHABLE — the right-reason red.
+    let _update_result = client.call_tool(update_params).await.expect(
+        "R-0019-c: echo.update must return Ok and dispatch to content.update; \
+         red phase: panics because echo.update is unwired (NON_DISPATCHABLE -4003)",
+    );
+
+    // THEN — read back via echo.get and assert the MERGE + body replacement.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m
+    });
+    let get_result = client
+        .call_tool(get_params)
+        .await
+        .expect("R-0019-c: echo.get of the updated id must return Ok");
+
+    // Search the serialized get result — robust to the green encoding of the
+    // artifact (text item / structured content) while remaining strong on values.
+    let body = serde_json::to_string(&get_result).expect("serialize echo.get result");
+    assert!(
+        body.contains("newtitle_t12u"),
+        "R-0019-c: echo.update must apply the patch — patched title 'newtitle_t12u' \
+         must be present after update; got body: {body}"
+    );
+    assert!(
+        body.contains("keepfield_t12u"),
+        "R-0019-c: echo.update must MERGE (not replace) — the untouched field value \
+         'keepfield_t12u' must survive the patch; got body: {body}"
+    );
+    assert!(
+        body.contains("newbody_t12u"),
+        "R-0019-c: echo.update must replace the body — 'newbody_t12u' must be present; \
+         got body: {body}"
+    );
+    assert!(
+        !body.contains("origtitle_t12u"),
+        "R-0019-c: echo.update must OVERWRITE the patched field — the old title \
+         'origtitle_t12u' must be absent after the patch; got body: {body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 11 (RED): echo.update cannot modify another workspace's artifact
+//   (T12 update slice — R-0006-d tenant WRITE isolation — THE security assertion)
+// ===========================================================================
+
+/// R-0006-d — `echo.update` is workspace-scoped on WRITE: a token in workspace B
+/// MUST NOT modify an artifact owned by workspace A. The fenced `(workspace_id, id)`
+/// lookup misses under B, so the update is a silent no-op that returns success;
+/// A's artifact is left untouched.
+///
+/// # Given / When / Then
+///
+/// GIVEN an `echo_fixture` created in workspace A (fresh Uuid, admin token) with a
+///   known payload (id_A captured), and a separate admin token for a different
+///   fresh Uuid workspace B
+/// WHEN workspace B's token calls `echo.update` on id_A with a `frontmatter_patch`
+///   that WOULD change a field (`{"title": "hijacked_t12u"}`)
+/// THEN BOTH hold:
+///   (a) the update call from B DISPATCHES successfully (Ok — a no-op success,
+///       NOT an error), AND
+///   (b) an `echo.get` of id_A under WORKSPACE A's token still returns the ORIGINAL
+///       content — the `hijacked_t12u` value is ABSENT (B could not modify A).
+///
+/// # Why the dispatch-success half is required (right-reason red)
+///
+/// While `echo.update` is unwired it returns -4003 NON_DISPATCHABLE, so the
+/// explicit `.expect` on B's update call panics → the test reds for the right
+/// reason ("update not wired"). WITHOUT asserting dispatch-success, an unwired
+/// update would no-op and leave A unchanged, so the isolation half (b) alone
+/// would pass VACUOUSLY at red. The (a) half is therefore load-bearing for a
+/// non-vacuous red. (A -4005 VERB_NOT_EXPOSED here is a manifest gap, not a
+/// valid red — see report.)
+///
+/// # Security note
+///
+/// The security guarantee is carried by the `!contains("hijacked_t12u")` half.
+/// The `contains(<original marker>)` half is a vacuity guard only (B's patch
+/// touches `title`, so the original `msg` field survives regardless) — do not
+/// read it as the isolation assertion.
+///
+/// # Workspace seeding
+///
+/// `admin_tokens.workspace_id` is UUID NOT NULL with no FK to a `workspaces` row
+/// (schema init migration 7) — a token for a fresh Uuid4 is valid without a
+/// `workspaces` row (same approach as `cross_workspace_get_returns_none` and
+/// `echo_list_is_workspace_scoped`).
+///
+/// # verify: []
+///
+/// `verify: []` by design — this test reds today (echo.update unwired).
+#[tokio::test]
+async fn echo_update_cannot_modify_another_workspace_artifact() {
+    // R-0006-d: echo.update is tenant-isolated on write — B cannot modify A.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+    let (token_a, _a_id) = seed_admin_token(pool, workspace_a).await;
+    let (token_b, _b_id) = seed_admin_token(pool, workspace_b).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create an artifact in workspace A with a known, distinctive marker.
+    let id_a = create_echo_fixture(&client, &token_a, "origmsg_ws_a_t12u").await;
+
+    // WHEN — workspace B's token attempts to update workspace A's artifact.
+    let patch = json!({"title": "hijacked_t12u"}).to_string();
+    let mut update_params = CallToolRequestParams::new("echo.update");
+    update_params.meta = Some(token_meta(token_b.as_str()));
+    update_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id_a));
+        m.insert("frontmatter_patch".to_owned(), json!(patch));
+        m
+    });
+
+    // (a) dispatch-success MUST hold explicitly — a cross-workspace update is a
+    // no-op that returns Ok (the fenced (workspace_id, id) lookup misses, nothing
+    // is modified). While the verb is unwired this panics with -4003
+    // NON_DISPATCHABLE — the right-reason red. This half is required so the
+    // isolation half below cannot pass vacuously at red.
+    let _b_update = client.call_tool(update_params).await.expect(
+        "R-0006-d: cross-workspace echo.update must DISPATCH successfully (no-op success, \
+         NOT an error); red phase: panics because echo.update is unwired \
+         (NON_DISPATCHABLE -4003) — this is the right-reason red",
+    );
+
+    // (b) THE security assertion: read id_A back UNDER WORKSPACE A's token; B's
+    // patch must NOT have landed on A's artifact.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token_a.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id_a));
+        m
+    });
+    let get_result = client
+        .call_tool(get_params)
+        .await
+        .expect("R-0006-d: echo.get of id_A under workspace A's token must return Ok");
+
+    let body = serde_json::to_string(&get_result).expect("serialize echo.get result");
+    assert!(
+        !body.contains("hijacked_t12u"),
+        "R-0006-d: tenant WRITE isolation violated — workspace B modified workspace A's \
+         artifact (the 'hijacked_t12u' patch value leaked into A); got body: {body}"
+    );
+    // Vacuity guard only (NOT the security assertion): A's original content survives.
+    assert!(
+        body.contains("origmsg_ws_a_t12u"),
+        "R-0006-d: workspace A's original content must survive a cross-workspace update \
+         attempt; expected original marker 'origmsg_ws_a_t12u' present; got body: {body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 12 (RED): echo.update with body absent (body=None) preserves the existing
+//   body (T12 update slice — R-0019-c, body=None branch)
+// ===========================================================================
+
+/// R-0019-c — `echo.update` with NO `body` argument (WIT `body: option<string>` =
+/// None) must LEAVE the artifact's existing body unchanged — it must NOT clear or
+/// empty the body. This pins the `body=None` branch so green cannot ship a
+/// body-always-overwritten implementation as a silent green.
+///
+/// # Establishing a non-empty body (why via update, not create)
+///
+/// At slice 1, `echo.create` maps `{content_type, payload}` → `content.create(type,
+/// frontmatter, body=None)` (CC-MAPPING, plan line 64) — create CANNOT set a body.
+/// So the known body is established the same way Test 10 establishes one: a first
+/// `echo.update` carrying `body = Some("origbody_t12u")`. A second `echo.update`
+/// then patches frontmatter only (no `body` arg), and the original body must
+/// survive. This also models the real scenario the branch protects: a
+/// metadata-only update must not wipe a body written by an earlier write.
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token; an `echo_fixture` whose body has been set to "origbody_t12u"
+///   (create → first `echo.update` with body=Some("origbody_t12u")); id captured
+/// WHEN `echo.update` is called with that id and a `frontmatter_patch`
+///   `{"title":"patched_nobody_t12u"}` and the `body` key OMITTED entirely
+///   (absent `body` is how the MCP layer signals `body=None`)
+/// THEN the call succeeds AND a subsequent `echo.get` shows BOTH: the patched
+///   frontmatter value `patched_nobody_t12u` present, AND the original body
+///   `origbody_t12u` STILL present (absent body left the existing body unchanged,
+///   not cleared/emptied).
+///
+/// # Red reason
+///
+/// `echo.update` is UNWIRED at this slice — the FIRST update (which establishes the
+/// body) reds at the update call with -4003 NON_DISPATCHABLE ("verb 'echo.update'
+/// is not wired at slice 1"), the same right-reason red as Tests 10 and 11. The
+/// body-preservation assertions are the green contract.
+///
+/// # verify: []
+///
+/// `verify: []` by design — this test reds today (echo.update unwired).
+#[tokio::test]
+async fn echo_update_absent_body_preserves_existing_body() {
+    // R-0019-c: echo.update with body absent (None) preserves the existing body.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create an echo_fixture (body=None at create per CC-MAPPING).
+    let mut create_params = CallToolRequestParams::new("echo.create");
+    create_params.meta = Some(token_meta(token.as_str()));
+    create_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert("payload".to_owned(), json!({"title": "orig_t12u"}));
+        m
+    });
+    let create_result = client
+        .call_tool(create_params)
+        .await
+        .expect("setup: echo.create (wired) must return Ok to seed the body fixture");
+    let texts = extract_text_content(&create_result);
+    let id = texts
+        .iter()
+        .find(|t| is_valid_ulid(t.trim()))
+        .map(|t| t.trim().to_owned())
+        .unwrap_or_else(|| {
+            panic!("setup: echo.create must return a well-formed ULID id; got: {texts:?}")
+        });
+
+    // Establish a known, non-empty body via a first echo.update (mirrors Test 10).
+    // While echo.update is unwired this reds HERE with -4003 — the right-reason red.
+    let seed_patch = json!({"seeded": "yes_t12u"}).to_string();
+    let mut seed_body_params = CallToolRequestParams::new("echo.update");
+    seed_body_params.meta = Some(token_meta(token.as_str()));
+    seed_body_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m.insert("frontmatter_patch".to_owned(), json!(seed_patch));
+        m.insert("body".to_owned(), json!("origbody_t12u"));
+        m
+    });
+    let _seed_result = client.call_tool(seed_body_params).await.expect(
+        "R-0019-c: echo.update (establishing the body) must return Ok and dispatch to \
+         content.update; red phase: panics because echo.update is unwired \
+         (NON_DISPATCHABLE -4003) — same right-reason red as Tests 10/11",
+    );
+
+    // WHEN — echo.update patches frontmatter only, with the `body` key OMITTED
+    // (absent body signals body=None: the existing body must be left unchanged).
+    let patch = json!({"title": "patched_nobody_t12u"}).to_string();
+    let mut update_params = CallToolRequestParams::new("echo.update");
+    update_params.meta = Some(token_meta(token.as_str()));
+    update_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m.insert("frontmatter_patch".to_owned(), json!(patch));
+        // NOTE: no `body` key inserted — this is how the MCP layer signals body=None.
+        m
+    });
+    let _update_result = client.call_tool(update_params).await.expect(
+        "R-0019-c: echo.update with body absent must return Ok; red phase: \
+         panics because echo.update is unwired (NON_DISPATCHABLE -4003)",
+    );
+
+    // THEN — read back: patched frontmatter present AND original body preserved.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m
+    });
+    let get_result = client
+        .call_tool(get_params)
+        .await
+        .expect("R-0019-c: echo.get of the updated id must return Ok");
+
+    let body = serde_json::to_string(&get_result).expect("serialize echo.get result");
+    assert!(
+        body.contains("patched_nobody_t12u"),
+        "R-0019-c: echo.update must apply the frontmatter patch even when body is absent — \
+         'patched_nobody_t12u' must be present; got body: {body}"
+    );
+    assert!(
+        body.contains("origbody_t12u"),
+        "R-0019-c: echo.update with body absent (body=None) must PRESERVE the existing body — \
+         'origbody_t12u' must STILL be present (not cleared/emptied); got body: {body}"
     );
 
     let _ = client.cancel().await;

@@ -11,10 +11,10 @@
 //!
 //! # Slice 1 scope
 //!
-//! `create` and `get` are the fully-wired slice-1 methods (the walking
-//! skeleton: MCP `echo.create`/`echo.get` -> host -> guest export -> host
-//! `artifact` import -> fenced map -> typed return). `list`/`update`/`delete`
-//! are minimal typed-but-empty stubs wired in T12.
+//! `create`/`get`/`list`/`update` are the fully-wired methods (the walking
+//! skeleton: MCP verb -> host -> guest export -> host `artifact` import -> fenced
+//! map -> typed return). `delete` remains a minimal typed-but-empty stub wired in
+//! a later T12 slice.
 //!
 //! # WorkspaceCtx on the export boundary
 //!
@@ -80,8 +80,19 @@ impl ContentGuest for EchoPlugin {
         artifact::artifact_list(&host_supplied_ctx(), &type_name, &filters)
     }
 
-    /// `content.update` — slice-1 stub (no-op); wired in T12.
-    fn update(_id: String, _frontmatter_patch: String, _body: Option<String>) {}
+    /// `content.update` — merge the frontmatter patch + (optionally) replace the
+    /// body via the host `artifact-update` import (R-0019-a, guest-driven model).
+    /// `body=None` leaves the existing body unchanged. The host scopes the target
+    /// to the caller's workspace (R-0006-d); a missing/cross-workspace target is a
+    /// silent no-op. The guest cannot supply or widen the workspace scope.
+    fn update(id: String, frontmatter_patch: String, body: Option<String>) {
+        artifact::artifact_update(
+            &host_supplied_ctx(),
+            &id,
+            &frontmatter_patch,
+            body.as_deref(),
+        )
+    }
 
     /// `content.delete` — slice-1 stub (no-op); wired in T12.
     fn delete(_id: String) {}
