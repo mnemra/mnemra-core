@@ -456,6 +456,20 @@ pub enum ContentCall {
         /// through but not applied this slice (predicate logic deferred — #1846).
         filters: String,
     },
+    /// `content.update(id, frontmatter_patch, body)` — merge the frontmatter
+    /// patch into the stored frontmatter and (when `body` is `Some`) replace the
+    /// body; returns nothing (the WIT `update` is void).
+    Update {
+        /// The artifact id (from the MCP `id` argument).
+        id: String,
+        /// The frontmatter patch JSON-as-string (from the MCP `frontmatter_patch`
+        /// argument). JSON-merged into the stored frontmatter: patch keys
+        /// overwrite/add; keys absent from the patch are preserved.
+        frontmatter_patch: String,
+        /// The optional new body. `Some` replaces the stored body; `None` (the MCP
+        /// `body` key ABSENT) leaves the stored body unchanged.
+        body: Option<String>,
+    },
 }
 
 /// The typed result of a successful `content` invoke.
@@ -467,6 +481,8 @@ pub enum ContentResult {
     Got(Option<String>),
     /// `content.list` returned the ids visible in the workspace.
     Listed(Vec<String>),
+    /// `content.update` completed (the WIT `update` is void — no payload).
+    Updated,
 }
 
 /// Invoke the typed `content` export on a pooled component instance through the
@@ -511,6 +527,18 @@ pub fn invoke_content(
                 crate::plugin::component::content_list(store, instance, type_name, filters)
                     .map(ContentResult::Listed)
             }
+            ContentCall::Update {
+                id,
+                frontmatter_patch,
+                body,
+            } => crate::plugin::component::content_update(
+                store,
+                instance,
+                id,
+                frontmatter_patch,
+                body.as_deref(),
+            )
+            .map(|()| ContentResult::Updated),
         },
     )
 }
