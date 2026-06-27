@@ -1,0 +1,44 @@
+spec_type = "code"
+
+[audit_chain.intent]
+ref = "../intent/ci-flake-tier1-serialize.md"
+version = "de320c4b58a3f06699de875a548ebcbe9e44108c"
+locked_at = 2026-06-26T18:03:46Z
+
+[audit_chain.frame]
+ref = "../intent/ci-flake-tier1-serialize-frame.md"
+version = "2004d97083865629a18e9e998c0da2c880ec7661"
+internal_conformance = "pass"
+locked_at = 2026-06-26T18:04:53Z
+
+[audit_chain.frame.generated_against]
+intent_version = "de320c4b58a3f06699de875a548ebcbe9e44108c"
+
+[audit_chain.spec]
+ref = "./2026-06-26-ci-flake-tier1-serialize.md"
+version = "f2b6b6ec3a723a07cd24e68a47685531cd98d0c2"
+internal_conformance = "pass"
+locked_at = 2026-06-26T18:53:21Z
+
+[audit_chain.spec.generated_against]
+intent_version = "de320c4b58a3f06699de875a548ebcbe9e44108c"
+frame_version = "2004d97083865629a18e9e998c0da2c880ec7661"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true

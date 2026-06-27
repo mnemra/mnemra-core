@@ -67,6 +67,17 @@ plugin-wit: plugin
 # No recipe has --fix side effects.
 # ---------------------------------------------------------------------------
 
+# PG-touching integration test binaries (14 members).
+# Defined once; all three verify-* recipes reference this variable so the list
+# stays in sync (R-0022: identical serialization directive across all recipes).
+# These binaries run at --test-threads 1 to prevent concurrent embedded-Postgres
+# teardown races (SIGABRT / signal 6, #1852 / Tier-1 CI-flake fix).
+PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test storage_contract_postgres --test tenancy_isolation"
+
+# Non-PG integration test binaries (12 members).
+# These run at the default thread count — serialization is scoped to PG tests only (R-0021).
+NONPG_TEST_FLAGS := "--test abi_contract --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test storage_contract --test workspace_ctx"
+
 # Verify: compile-check (type-level correctness)
 verify-type:
     #!/usr/bin/env bash
@@ -102,10 +113,18 @@ verify-lint:
 # Verify: tests pass
 # Depends on `plugin`: the e2e tests load target/wasm32-wasip2/release/mnemra_echo.wasm,
 # which the host build does not produce — build the guest component first.
+#
+# PG-touching integration tests run at --test-threads 1 to prevent the concurrent
+# embedded-Postgres teardown race (SIGABRT / signal 6, #1852).  Non-PG integration
+# tests, lib unit tests, and other workspace packages run at the default thread
+# count (R-0021: serialization is scoped to the PG group only).
 verify-test: plugin
     #!/usr/bin/env bash
     set -euo pipefail
-    if cargo test --workspace 2>&1; then
+    if cargo test -p mnemra-host {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
+        && cargo test -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
+        && cargo test -p mnemra-host --lib 2>&1 \
+        && cargo test --workspace --exclude mnemra-host 2>&1; then
         echo "GATE test PASS"
     else
         echo "GATE test FAIL"
@@ -115,10 +134,14 @@ verify-test: plugin
 # Verify: test-hooks feature — runs resource_limits.rs seam tests (gated behind test-hooks).
 # This is a CI gate so untrusted-path seam coverage is always exercised.
 # Depends on `plugin` for the same wasm-artifact reason as verify-test.
+#
+# PG serialization mirrors verify-test (R-0022: identical directive in all three recipes).
 verify-test-hooks: plugin
     #!/usr/bin/env bash
     set -euo pipefail
-    if cargo test -p mnemra-host --features test-hooks 2>&1; then
+    if cargo test -p mnemra-host --features test-hooks {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
+        && cargo test -p mnemra-host --features test-hooks {{NONPG_TEST_FLAGS}} 2>&1 \
+        && cargo test -p mnemra-host --features test-hooks --lib 2>&1; then
         echo "GATE test-hooks PASS"
     else
         echo "GATE test-hooks FAIL"
@@ -127,10 +150,17 @@ verify-test-hooks: plugin
 
 # Verify: coverage (emit number; no threshold gate at scaffold stage)
 # Depends on `plugin` for the same wasm-artifact reason as verify-test.
+#
+# PG serialization mirrors verify-test via --no-report accumulation + final report
+# (R-0022: identical directive in all three recipes).
 verify-coverage: plugin
     #!/usr/bin/env bash
     set -euo pipefail
-    if cargo llvm-cov --workspace 2>&1; then
+    if cargo llvm-cov --no-report -p mnemra-host {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
+        && cargo llvm-cov --no-report -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
+        && cargo llvm-cov --no-report -p mnemra-host --lib 2>&1 \
+        && cargo llvm-cov --no-report --workspace --exclude mnemra-host 2>&1 \
+        && cargo llvm-cov report 2>&1; then
         echo "GATE coverage PASS"
     else
         echo "GATE coverage FAIL"
