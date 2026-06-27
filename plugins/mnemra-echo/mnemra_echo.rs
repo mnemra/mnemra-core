@@ -94,8 +94,13 @@ impl ContentGuest for EchoPlugin {
         )
     }
 
-    /// `content.delete` — slice-1 stub (no-op); wired in T12.
-    fn delete(_id: String) {}
+    /// `content.delete` — remove an artifact via the host `artifact-delete` import
+    /// (R-0019-a, guest-driven model). The host scopes the target to the caller's
+    /// workspace (R-0006-d); a missing/cross-workspace target is a silent no-op.
+    /// The guest cannot supply or widen the workspace scope.
+    fn delete(id: String) {
+        artifact::artifact_delete(&host_supplied_ctx(), &id)
+    }
 }
 
 export!(EchoPlugin);

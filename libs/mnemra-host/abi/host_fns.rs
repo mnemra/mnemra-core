@@ -228,6 +228,24 @@ fn merge_frontmatter(stored: &str, patch: &str) -> String {
     Value::Object(base).to_string()
 }
 
+/// `artifact-delete` (T7 fenced body): remove the artifact keyed
+/// `(workspace_id, id)` from the fenced map; a MISSING entry is a silent
+/// no-op (R-0006-d isolation).
+///
+/// WHERE-clause shape (fenced-map analogue): `workspace_id = $1 AND id = $2`.
+/// The `workspace_id` key component is the host-derived (R-0006-b/e) discriminator
+/// — an `(workspace_id, id)` not present in the caller's workspace simply MISSES,
+/// so the delete is a SILENT NO-OP and nothing is modified. A different workspace's
+/// artifact is keyed under a different `workspace_id` and is therefore unreachable:
+/// workspace B deleting A's id computes key `(workspace_B, id_A)`, misses, no-ops
+/// → A's artifact survives (cross-tenant WRITE isolation, R-0006-d).
+pub fn fenced_artifact_delete(store: &FencedArtifactStore, workspace_id: Uuid, id: &str) {
+    let mut map = store.inner.lock().unwrap_or_else(|e| e.into_inner());
+    // Single-key `(workspace_id, id)` remove. A miss (absent id, or id owned by a
+    // different workspace) is a no-op — remove returns None, which we discard.
+    map.remove(&(workspace_id, id.to_owned()));
+}
+
 // ---------------------------------------------------------------------------
 // artifact interface
 // ---------------------------------------------------------------------------

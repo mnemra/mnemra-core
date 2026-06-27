@@ -230,8 +230,13 @@ impl mnemra::host::artifact::Host for HostState {
         )
     }
 
-    /// `artifact-delete` — slice-1 stub; wired against the fenced map in T12.
-    fn artifact_delete(&mut self, _ctx: WitWorkspaceCtx, _id: String) {}
+    /// `artifact-delete` — remove from the fenced map, workspace-scoped on
+    /// `self.workspace_id` (R-0006-d). The guest-supplied `_ctx` is ignored
+    /// (R-0006-e); a missing/cross-workspace target is a silent no-op (the fenced
+    /// `(workspace_id, id)` lookup misses).
+    fn artifact_delete(&mut self, _ctx: WitWorkspaceCtx, id: String) {
+        crate::abi::host_fns::fenced_artifact_delete(&self.artifacts, self.workspace_id, &id)
+    }
 }
 
 impl mnemra::host::echo::Host for HostState {
@@ -393,4 +398,21 @@ pub fn content_update(
         &frontmatter_patch.to_owned(),
         body,
     )
+}
+
+/// Invoke the typed `content.delete` export on a raw component `Instance`
+/// (R-0019-a). The guest body calls back into the host `artifact-delete` import,
+/// which removes the artifact keyed `(workspace_id, id)` from the fenced map;
+/// a missing/cross-workspace target is a silent no-op (R-0006-d).
+/// `delete` is void; this returns `()` on success (or any trap).
+pub fn content_delete(
+    store: &mut Store<HostState>,
+    instance: &Instance,
+    id: &str,
+) -> wasmtime::Result<()> {
+    let plugin = Plugin::new(&mut *store, instance)?;
+    let content = plugin.mnemra_host_content();
+    // See `content_create`: the accessor takes `&String`, not `&str`.
+    #[allow(clippy::unnecessary_to_owned)]
+    content.call_delete(&mut *store, &id.to_owned())
 }
