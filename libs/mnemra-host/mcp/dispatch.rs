@@ -149,8 +149,7 @@ pub struct ContentDispatch {
 ///   - `*.update` -> `content.update`, `{id -> id, frontmatter_patch -> frontmatter-patch,
 ///     body -> body}` (T12 update slice; all three read via `.as_str()`,
 ///     `frontmatter_patch` defaults to `"{}"`, `body` is `Some` iff the key is present)
-///   - `*.delete` -> NON_DISPATCHABLE until its per-verb CC-MAPPING is pinned
-///     (a later T12 slice).
+///   - `*.delete` -> `content.delete`, `{id -> id}` (T12 delete slice).
 ///
 /// A verb whose tail has no matching typed `content` method (e.g. a future
 /// `*.audit`) returns the R-0019-d structured non-dispatchable error. This runs
@@ -239,19 +238,16 @@ pub fn resolve_content_call(
                 body,
             }
         }
-        // `delete` has a typed `content` export (slice-1 guest stub) but its
-        // MCP-verb -> method argument shape is pinned in a later T12 slice, not
-        // here. No test dispatches it through `call_tool` yet; surfacing the
-        // R-0019-d non-dispatchable error is the honest behavior (its CC-MAPPING is
-        // not yet pinned), and it leaves the pre-dispatch permission outcome
-        // unchanged (R-0019-e).
+        // `delete` -> `content.delete`, `{id -> id}` (T12 delete slice).
+        // Argument shape mirrors `get`: `id` is the only argument, read via
+        // `.as_str()` (the MCP layer passes it as a JSON string value).
         "delete" => {
-            return Err(ErrorData {
-                code: NON_DISPATCHABLE_CODE,
-                message: format!("verb '{verb_name}' is not wired at slice 1 (CC-MAPPING T12)")
-                    .into(),
-                data: None,
-            });
+            let id = arguments
+                .and_then(|m| m.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_owned();
+            ContentCall::Delete { id }
         }
         _ => {
             // No matching typed `content` method (e.g. `*.audit`) — R-0019-d.

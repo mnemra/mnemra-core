@@ -470,6 +470,12 @@ pub enum ContentCall {
         /// `body` key ABSENT) leaves the stored body unchanged.
         body: Option<String>,
     },
+    /// `content.delete(id)` — remove the artifact; a missing or cross-workspace
+    /// artifact is a silent no-op (the fenced-map key misses). Returns nothing.
+    Delete {
+        /// The artifact id (from the MCP `id` argument).
+        id: String,
+    },
 }
 
 /// The typed result of a successful `content` invoke.
@@ -483,6 +489,8 @@ pub enum ContentResult {
     Listed(Vec<String>),
     /// `content.update` completed (the WIT `update` is void — no payload).
     Updated,
+    /// `content.delete` completed (the WIT `delete` is void — no payload).
+    Deleted,
 }
 
 /// Invoke the typed `content` export on a pooled component instance through the
@@ -539,6 +547,10 @@ pub fn invoke_content(
                 body.as_deref(),
             )
             .map(|()| ContentResult::Updated),
+            ContentCall::Delete { id } => {
+                crate::plugin::component::content_delete(store, instance, id)
+                    .map(|()| ContentResult::Deleted)
+            }
         },
     )
 }

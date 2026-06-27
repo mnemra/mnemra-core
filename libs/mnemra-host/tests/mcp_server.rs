@@ -22,12 +22,16 @@
 //! | valid_admin_token_echo_update_merges_and_persists (RED)      | R-0019-c                 |
 //! | echo_update_cannot_modify_another_workspace_artifact (RED)   | R-0006-d                 |
 //! | echo_update_absent_body_preserves_existing_body (RED)        | R-0019-c                 |
+//! | valid_admin_token_echo_delete_removes (RED)                  | R-0019-c                 |
+//! | echo_delete_cannot_remove_another_workspace_artifact (RED)   | R-0006-d                 |
 //!
 //! # RED-phase design
 //!
-//! All four behavioral tests FAIL TO COMPILE because `mnemra_host::mcp::*` does
-//! not exist yet. That is the correct red: the mnemra dispatch path is the absent
-//! contract; the rmcp API used here is grounded against rmcp 1.7 real symbols.
+//! The behavioral tests exercise the live MCP dispatch path via an rmcp client
+//! over the in-memory duplex transport. Tests for wired verbs (create, get, list,
+//! update) compile and pass; the delete tests red because `echo.delete` is the
+//! remaining unwired arm in `mcp/dispatch.rs` — it returns `NON_DISPATCHABLE -4003`
+//! until the T12 delete-slice green phase lands.
 //!
 //! # rmcp API grounding (Step 0) — verified against rmcp 1.7.0 source
 //!
@@ -1618,6 +1622,254 @@ async fn echo_update_absent_body_preserves_existing_body() {
         body.contains("origbody_t12u"),
         "R-0019-c: echo.update with body absent (body=None) must PRESERVE the existing body — \
          'origbody_t12u' must STILL be present (not cleared/emptied); got body: {body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 13 (RED): echo.delete removes the artifact (T12 delete-slice)
+//   (R-0019-c happy path, STRONG observable outcome)
+// ===========================================================================
+
+/// R-0019-c — `echo.delete` dispatches to `content.delete` and removes the
+/// artifact from the caller's workspace — observable via a subsequent `echo.get`
+/// that returns absent/None.
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token for DEFAULT_WORKSPACE_ID with one `echo_fixture` created
+///   via `echo.create` (id captured, marker "todelete_t12d")
+/// WHEN the admin calls `echo.delete` with that id
+/// THEN the delete call succeeds AND a subsequent `echo.get` for that id returns
+///   absent (the artifact marker "todelete_t12d" is no longer retrievable).
+///
+/// # Assertion strength
+///
+/// Asserting `is_ok()` on delete alone would green vacuously. The post-delete
+/// `echo.get` assertion pins the OBSERVABLE OUTCOME: the artifact must actually
+/// be removed, not merely "delete returned Ok". The marker string `todelete_t12d`
+/// in the create payload makes the absent assertion robust against accidental
+/// matches. When wired, `echo.delete` returns an empty success
+/// (`CallToolResult::success(vec![])`); the green contract is asserted via the
+/// absence of the marker in the subsequent get, not via the delete result payload.
+///
+/// # Right-reason red
+///
+/// `echo.delete` is UNWIRED at this slice — `mcp/dispatch.rs` rejects "delete"
+/// with the structured non-dispatchable error (-4003 NON_DISPATCHABLE,
+/// "verb 'echo.delete' is not wired at slice 1 (CC-MAPPING T12)"). The
+/// `.expect` on the delete call therefore panics with that error: right-reason
+/// red. (A -4005 VERB_NOT_EXPOSED here would be a manifest gap, NOT a valid red.)
+/// The post-delete absent assertion is the green contract (Forge wires
+/// `echo.delete -> content.delete`).
+///
+/// # verify: []
+///
+/// `verify: []` by design — this test reds today (echo.delete unwired); the
+/// just recipe runs after the green phase lands.
+#[tokio::test]
+async fn valid_admin_token_echo_delete_removes() {
+    // R-0019-c: admin echo.delete removes the artifact; verified via echo.get absent.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create an echo_fixture with a distinctive marker; capture its id.
+    // echo.create is wired — a panic here is a SETUP failure (wrong-reason red).
+    let id = create_echo_fixture(&client, &token, "todelete_t12d").await;
+
+    // WHEN — call echo.delete with the captured id.
+    let mut delete_params = CallToolRequestParams::new("echo.delete");
+    delete_params.meta = Some(token_meta(token.as_str()));
+    delete_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m
+    });
+
+    // The dispatch-success assertion: echo.delete must return Ok. While the verb
+    // is unwired this panics with -4003 NON_DISPATCHABLE — the right-reason red.
+    let _delete_result = client.call_tool(delete_params).await.expect(
+        "R-0019-c: echo.delete must return Ok and dispatch to content.delete; \
+         red phase: panics because echo.delete is unwired (NON_DISPATCHABLE -4003)",
+    );
+
+    // THEN — the artifact must no longer be retrievable via echo.get.
+    // After a successful delete, echo.get for the removed id returns absent/None:
+    // either an error response (not-found) or an Ok with empty content.
+    // In either case, the original marker must NOT appear in the result.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id));
+        m
+    });
+
+    let get_after_delete = client.call_tool(get_params).await;
+    match get_after_delete {
+        Err(_) => {
+            // Any error means the artifact is no longer retrievable — the delete
+            // worked. This is an acceptable "absent" outcome (not-found error path).
+        }
+        Ok(result) => {
+            // Ok with content: the artifact marker must be absent (deleted, not returned).
+            let body = serde_json::to_string(&result).expect("serialize echo.get result");
+            assert!(
+                !body.contains("todelete_t12d"),
+                "R-0019-c: echo.delete must remove the artifact — the marker \
+                 'todelete_t12d' must be absent from echo.get after delete; \
+                 got body: {body}"
+            );
+        }
+    }
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 14 (RED): echo.delete cannot remove another workspace's artifact
+//   (T12 delete-slice — R-0006-d tenant WRITE isolation — THE security assertion)
+// ===========================================================================
+
+/// R-0006-d — `echo.delete` is workspace-scoped on WRITE: a token in workspace B
+/// MUST NOT delete an artifact owned by workspace A. The fenced `(workspace_id, id)`
+/// lookup misses under B, so the delete is a silent no-op that returns success;
+/// A's artifact is left untouched.
+///
+/// # Given / When / Then
+///
+/// GIVEN an `echo_fixture` created in workspace A (fresh Uuid, admin token) with
+///   marker "ws_a_artifact_t12d" (id_A captured), and a separate admin token for
+///   a different fresh Uuid workspace B
+/// WHEN workspace B's token calls `echo.delete` with id_A
+/// THEN BOTH hold:
+///   (a) the delete call from B DISPATCHES successfully (Ok — a no-op success,
+///       NOT an error; `workspace_id` is host-derived from B's ctx, so the lookup
+///       `(workspace_B, id_A)` misses → miss=no-op → Ok), AND
+///   (b) `echo.get` of id_A under WORKSPACE A's token still returns the artifact
+///       with its original marker (A's artifact was NOT deleted by B).
+///
+/// # Why the dispatch-success half is required (right-reason red)
+///
+/// While `echo.delete` is unwired it returns -4003 NON_DISPATCHABLE, so the
+/// explicit `.expect` on B's delete call panics → the test reds for the right
+/// reason ("delete not wired"). WITHOUT asserting dispatch-success, an unwired
+/// delete would no-op and leave A unchanged, so the isolation half (b) alone
+/// would pass VACUOUSLY at red. The (a) half is therefore load-bearing for a
+/// non-vacuous red.
+///
+/// # Security note
+///
+/// The security guarantee is carried by the `contains("ws_a_artifact_t12d")` half:
+/// A's original marker must still be present after B's delete attempt.
+/// A cross-tenant no-op delete MUST NOT silently remove A's artifact.
+///
+/// # Workspace seeding
+///
+/// `admin_tokens.workspace_id` is UUID NOT NULL with no FK to a `workspaces` row
+/// (schema init migration 7) — a token for a fresh Uuid4 is valid without a
+/// `workspaces` row (same approach as `cross_workspace_get_returns_none` and
+/// `echo_list_is_workspace_scoped`).
+///
+/// # verify: []
+///
+/// `verify: []` by design — this test reds today (echo.delete unwired).
+#[tokio::test]
+async fn echo_delete_cannot_remove_another_workspace_artifact() {
+    // R-0006-d: echo.delete is tenant-isolated on write — B cannot delete A.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+    let (token_a, _a_id) = seed_admin_token(pool, workspace_a).await;
+    let (token_b, _b_id) = seed_admin_token(pool, workspace_b).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create an artifact in workspace A with a known, distinctive marker.
+    let id_a = create_echo_fixture(&client, &token_a, "ws_a_artifact_t12d").await;
+
+    // WHEN — workspace B's token attempts to delete workspace A's artifact.
+    let mut delete_params = CallToolRequestParams::new("echo.delete");
+    delete_params.meta = Some(token_meta(token_b.as_str()));
+    delete_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id_a));
+        m
+    });
+
+    // (a) dispatch-success MUST hold explicitly — a cross-workspace delete is a
+    // no-op that returns Ok (the fenced (workspace_id, id_A) lookup misses under B).
+    // While the verb is unwired this panics with -4003 NON_DISPATCHABLE — the
+    // right-reason red. This half is required so the isolation half below cannot
+    // pass vacuously at red.
+    let _b_delete = client.call_tool(delete_params).await.expect(
+        "R-0006-d: cross-workspace echo.delete must DISPATCH successfully (no-op success, \
+         NOT an error); red phase: panics because echo.delete is unwired \
+         (NON_DISPATCHABLE -4003) — this is the right-reason red",
+    );
+
+    // (b) THE security assertion: read id_A back UNDER WORKSPACE A's token;
+    // A's artifact must still be present — B could not delete it.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token_a.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id_a));
+        m
+    });
+    let get_result = client
+        .call_tool(get_params)
+        .await
+        .expect("R-0006-d: echo.get of id_A under workspace A's token must return Ok");
+
+    let body = serde_json::to_string(&get_result).expect("serialize echo.get result");
+    assert!(
+        body.contains("ws_a_artifact_t12d"),
+        "R-0006-d: tenant WRITE isolation violated — workspace B deleted workspace A's \
+         artifact (the marker 'ws_a_artifact_t12d' is absent from A's get result); \
+         got body: {body}"
     );
 
     let _ = client.cancel().await;
