@@ -1,5 +1,5 @@
-# Run all checks (host only — plugins build to wasm32-wasip2 separately)
-check:
+# Run all checks (builds the plugin first so integration tests can load the wasm component)
+check: plugin
     cargo fmt --check
     cargo clippy --workspace --exclude mnemra-echo -- -D warnings
     cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings
