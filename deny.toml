@@ -1,0 +1,45 @@
+# deny.toml — cargo-deny license allowlist (Green-tier only)
+# Task #1881: allow `cargo deny check licenses` to pass for this repo.
+#
+# Green-tier licenses permitted here:
+#   MIT, Apache-2.0 (+ LLVM-exception), BSD variants, ISC, CC0-1.0,
+#   Unicode-3.0, PostgreSQL, Unlicense, Zlib, 0BSD.
+#
+# OR-expressions in the dependency tree are satisfied by a permissive
+# alternative already in `allow`, so these identifiers are intentionally
+# absent: copyleft GPL-2.0-only and LGPL-2.1-or-later (resolved via a
+# Green-tier alternative), and BSL-1.0 (itself permissive — its crates
+# ryu/whoami resolve via Apache-2.0/MIT).
+
+[licenses]
+# Confidence threshold for license-text inference (0.8 is a reasonable
+# balance between false-positives and missing detections).
+confidence-threshold = 0.8
+
+allow = [
+    # MIT family
+    "MIT",
+    "MIT-0",
+
+    # Apache family
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+
+    # BSD family
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-1-Clause",
+    "0BSD",
+
+    # Other permissive
+    "ISC",  # Green; forward-looking — not in the resolved tree yet (#1881)
+    "CC0-1.0",
+    "Unlicense",
+    "Zlib",
+
+    # Unicode license (unicode-ident, icu_* crates — appears in AND expressions)
+    "Unicode-3.0",
+
+    # PostgreSQL license (postgresql_embedded/archive/extensions — appears in AND expressions)
+    "PostgreSQL",
+]
