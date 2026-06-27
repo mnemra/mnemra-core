@@ -311,6 +311,12 @@ impl ServerHandler for MnemraMcpServer {
                 // missing/cross-workspace target was a silent no-op (R-0006-d).
                 Ok(CallToolResult::success(vec![]))
             }
+            Ok(ContentResult::Deleted) => {
+                // `echo.delete` is void — an empty-content success result. The
+                // delete happened host-side; a missing/cross-workspace target was a
+                // silent no-op (R-0006-d, miss=no-op).
+                Ok(CallToolResult::success(vec![]))
+            }
             Err(exec_err) => Err(rmcp::model::ErrorData {
                 code: crate::mcp::errors::PLUGIN_EXEC_CODE,
                 message: format!("plugin execution failed: {}", exec_err.code()).into(),
