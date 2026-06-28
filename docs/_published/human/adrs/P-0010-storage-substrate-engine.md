@@ -5,7 +5,7 @@ primary-audience: agent
 ---
 
 ---
-status: "proposed"
+status: "accepted"
 date: "2026-06-08"
 decision-makers: ["the maintainer"]
 consulted: ["the researcher", "the orchestrator"]
@@ -18,9 +18,9 @@ superseded_by: null
 
 ## Status
 
-`proposed`
+`accepted`
 
-The decisions this record holds (D1 through D8) were ratified by the maintainer on 2026-06-07. Escalation E1, which covered D8's reach into the observability hypertables, was settled on 2026-06-09 (re-derive now, pointing at the [observability baseline](../architecture/overview.md#observability); [P-0004-observability-shape](P-0004-observability-shape.md) is now `deprecated` with no successor ADR). This is an [ADR](../glossary.md#adr), an Architecture Decision Record that captures a decision along with its context, the alternatives that were ruled out, and the consequences. Its own lifecycle status stays `proposed` until it clears the WS-E-2 review gate (code-and-security review, then canon-conformance review). At that point it moves to `accepted`, the same path the sibling ADRs took once their review pass completed, and the same lifecycle described in the [ADR README](README.md). It folds the ratified decisions into the WS-E-2 designed tier before that increment merges. It reframes [P-0001-storage-layout](P-0001-storage-layout.md): the layout choice itself is unchanged, but its Postgres-specific parts now sit as the Postgres implementation under this substrate decision. It also reframes the substrate-hard-lock language in the [Frame](../intent/mnemra-core-frame.md) and the [Architecture Overview](../architecture/overview.md). It doesn't override a `DEFAULTS.md` baseline entry. (`DEFAULTS.md` is the project's frozen architectural baseline; a deviation from it would become a separate P-ADR, not the case here.)
+The decisions this record holds (D1 through D8) were ratified by the maintainer on 2026-06-07. Escalation E1, which covered D8's reach into the observability hypertables, was settled on 2026-06-09 (re-derive now, pointing at the [observability baseline](../architecture/overview.md#observability); [P-0004-observability-shape](P-0004-observability-shape.md) is now `deprecated` with no successor ADR). This is an [ADR](../glossary.md#adr), an Architecture Decision Record that captures a decision along with its context, the alternatives that were ruled out, and the consequences. It cleared the WS-E-2 review gate and moved to `accepted` on 2026-06-28. The canon-conformance half passed through a substance-level reconciliation against the eight ratified decisions (D1 through D8) — all aligned, with no contradictions, and with each decision's named instrument and trip-wire present — together with a design-time two-adapter soundness check on the `Storage` trait. The code-and-security half is satisfied by the per-task code-and-security reviews under which these decisions were implemented across Tasks 1 through 22. The maintainer ratified the result. This is the same path the sibling ADRs took once their review pass completed, and the same lifecycle described in the [ADR README](README.md). It folds the ratified decisions into the WS-E-2 designed tier before that increment merges. It reframes [P-0001-storage-layout](P-0001-storage-layout.md): the layout choice itself is unchanged, but its Postgres-specific parts now sit as the Postgres implementation under this substrate decision. It also reframes the substrate-hard-lock language in the [Frame](../intent/mnemra-core-frame.md) and the [Architecture Overview](../architecture/overview.md). It doesn't override a `DEFAULTS.md` baseline entry. (`DEFAULTS.md` is the project's frozen architectural baseline; a deviation from it would become a separate P-ADR, not the case here.)
 
 ## Context and Problem Statement
 
