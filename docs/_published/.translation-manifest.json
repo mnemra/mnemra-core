@@ -74,8 +74,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "1503830e28beb41df5bd3582c66ab045070142de1651a9c6eed208bb2155098b",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "9ef1cc0d2619c00ab9938dfa8935a4e92f8b691cbb83d581fe136a9c2da5f321",
+      "translated_at": "2026-06-28T23:04:52Z"
     },
     "adrs/P-0011-logging-facade.md": {
       "primary_audience": "agent",
