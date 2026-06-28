@@ -4006,7 +4006,7 @@ primary-audience: agent
 ---
 
 ---
-status: "proposed"
+status: "accepted"
 date: "2026-06-08"
 decision-makers: ["the maintainer"]
 consulted: ["the researcher", "the orchestrator"]
@@ -4019,9 +4019,9 @@ superseded_by: null
 
 ## Status
 
-`proposed`
+`accepted`
 
-The *decisions* this ADR records (D1–D8) were ratified by the maintainer 2026-06-07; escalation E1 (D8's observability-hypertable reach) was dispositioned 2026-06-09 (re-derive now → the [observability baseline](../architecture/overview.md#observability); [P-0004-observability-shape](P-0004-observability-shape.md) is `deprecated`, no successor ADR). The *ADR* is `proposed` until it clears the WS-E-2 review gate (code+security review, canon-conformance review); it moves to `accepted` at that point, consistent with the lifecycle in the [ADR README](README.md) and with how the sibling ADRs were accepted only after their review pass. It folds the ratified decisions into the WS-E-2 designed tier before that increment merges. It reframes [P-0001-storage-layout](P-0001-storage-layout.md) (the layout choice is unchanged; its Postgres-specifics become the Postgres implementation under this substrate decision) and the substrate-hard-lock framing in the [Frame](../intent/mnemra-core-frame.md) and [Architecture Overview](../architecture/overview.md). It does not override a `DEFAULTS.md` baseline entry.
+The *decisions* this ADR records (D1–D8) were ratified by the maintainer 2026-06-07; escalation E1 (D8's observability-hypertable reach) was dispositioned 2026-06-09 (re-derive now → the [observability baseline](../architecture/overview.md#observability); [P-0004-observability-shape](P-0004-observability-shape.md) is `deprecated`, no successor ADR). The *ADR* cleared the WS-E-2 review gate and moved to `accepted` on 2026-06-28: the **canon-conformance** half passed via a substance-level reconciliation against the eight ratified decisions D1–D8 (all aligned, zero contradictions; named instruments and trip-wires present, deferred items deferred, skipped item skipped) plus a design-time two-adapter soundness check on the `Storage` trait, and the **code+security** half is satisfied by the per-task Warden reviews under which these decisions were implemented across Tasks 1–22. The maintainer ratified the result. This is consistent with the lifecycle in the [ADR README](README.md) and with how the sibling ADRs were accepted only after their review pass. It folds the ratified decisions into the WS-E-2 designed tier before that increment merges. It reframes [P-0001-storage-layout](P-0001-storage-layout.md) (the layout choice is unchanged; its Postgres-specifics become the Postgres implementation under this substrate decision) and the substrate-hard-lock framing in the [Frame](../intent/mnemra-core-frame.md) and [Architecture Overview](../architecture/overview.md). It does not override a `DEFAULTS.md` baseline entry.
 
 ## Context and Problem Statement
 
