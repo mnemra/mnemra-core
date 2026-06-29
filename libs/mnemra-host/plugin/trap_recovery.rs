@@ -27,6 +27,22 @@
 //! (`lock().unwrap_or_else(|e| e.into_inner())`), slot access uses `.get(..)`, and
 //! trap classification is an exhaustive `match` with a fail-closed default.
 //!
+//! # Panic-safe seam (T13-g HIGH-2 / MEDIUM-1)
+//!
+//! WIT host-fn return types are fixed by the interface (e.g. `String`,
+//! `Option<String>`, void). The only way a host-fn can signal an error to the
+//! caller is to `panic!`. Without protection those panics unwind out of
+//! `call(...)` into `invoke_through_recovery`, skipping `repopulate_slot` and
+//! permanently draining the pool slot (DoS — HIGH-2). They also escape the
+//! `spawn_blocking` boundary and surface raw DB internals in the MCP response
+//! via `JoinError::Display` (MEDIUM-1).
+//!
+//! `invoke_through_recovery` now wraps `call(...)` in
+//! `std::panic::catch_unwind(AssertUnwindSafe(...))`. Caught panics are:
+//! - Converted to `PluginExecError { code: "plugin_invocation_failed" }` with
+//!   the panic payload DISCARDED (no sqlx/Postgres text reaches the client).
+//! - Followed unconditionally by `repopulate_slot` (pool size preserved).
+//!
 //! # Store-config split (epoch ⇆ fuel independence)
 //!
 //! `build_engine()` sets `consume_fuel(true)`, so a `Store` with no explicit fuel
@@ -237,6 +253,10 @@ fn classify_trap(err: &wasmtime::Error) -> Option<LimitType> {
 // invoke_through_recovery — the SINGLE kill-and-replace seam (R-0007-e/f, R-0016-c)
 // ---------------------------------------------------------------------------
 
+// A future `panic = "abort"` would turn the catch_unwind below into dead code,
+// silently converting the fail-closed seam into a process abort. Fail the build instead.
+const _: () = assert!(cfg!(panic = "unwind"));
+
 /// The one take -> bind-ws -> budget -> invoke -> repopulate -> classify -> emit
 /// seam, generic over the export call. BOTH the production typed-`content`
 /// dispatch path (`invoke_content`) and the resource-limit trap-recovery path
@@ -261,6 +281,7 @@ fn invoke_through_recovery<R>(
     verb: &str,
     budget: ResourceBudget,
     workspace_id: uuid::Uuid,
+    pg_pool_opt: Option<&sqlx::PgPool>,
     call: impl FnOnce(&mut Store<HostState>, &Instance) -> Result<R, wasmtime::Error>,
 ) -> Result<R, PluginExecError> {
     // Take the live instance OUT of a populated slot. The slot is now empty —
@@ -302,6 +323,13 @@ fn invoke_through_recovery<R>(
     // breach. (Trap fixtures never read it; binding here is harmless for them.)
     // ========================================================================
     live.store.data_mut().set_workspace_id(workspace_id);
+    // T13: bind the Postgres pool for artifact host-fn persistence. `None` for
+    // resource-limit trap fixtures (`invoke_with_recovery` path) that never call
+    // artifact host-fns. The pool is not stored across invocations (pool is set
+    // fresh per-dispatch from `invoke_content`'s caller-supplied reference).
+    if let Some(p) = pg_pool_opt {
+        live.store.data_mut().set_pool(p.clone());
+    }
 
     // Apply the per-invocation budget to the live slot's store. `set_fuel` can
     // fail only if fuel metering is disabled on the engine (it is enabled in
@@ -326,22 +354,61 @@ fn invoke_through_recovery<R>(
     }
     live.store.set_epoch_deadline(budget.epoch_deadline);
 
-    // Run the export. The instance + store were taken from the slot; a trap here
-    // poisons THIS store (the genuine live entry), dropped at end of scope. This
-    // is the breaching invocation.
-    let call_result = call(&mut live.store, &live.instance);
+    // Run the export through a panic-safe seam (HIGH-2, MEDIUM-1, T13-g).
+    //
+    // Host-fn bodies (artifact_create/update/delete/get/list in component.rs)
+    // panic on DB errors to signal failure from within a WIT return-type that
+    // provides no other error channel. Without `catch_unwind`, that panic
+    // propagates out of `call(...)`, skips `repopulate_slot`, permanently
+    // drains the pool slot (DoS — HIGH-2), and leaks the raw sqlx/Postgres
+    // error string into the MCP response via JoinError::Display (MEDIUM-1).
+    //
+    // `catch_unwind` catches those panics before they escape this function.
+    // The slot is then repopulated regardless of outcome (R-0016-c). The caught
+    // panic payload is intentionally DISCARDED — it is never embedded in the
+    // returned `PluginExecError`, so no internal DB detail reaches the client.
+    //
+    // `AssertUnwindSafe` is correct here: `live.store`/`live.instance` are
+    // dropped at end of scope after the catch (poisoned stores are never reused),
+    // and no partially-mutated state is observed after the catch.
+    let call_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        call(&mut live.store, &live.instance)
+    }));
 
-    // GENUINE kill-and-replace (R-0016-c): whatever the outcome, instantiate a
-    // fresh live instance back into the slot synchronously — before this function
-    // returns. The trapped `live.store`/`live.instance` are dropped when `live`
-    // goes out of scope. The pool size is therefore unchanged across the call.
+    // GENUINE kill-and-replace (R-0016-c): whatever the outcome — success, trap,
+    // OR host-fn panic — instantiate a fresh live instance back into the slot
+    // synchronously before this function returns. The old store/instance are
+    // dropped when `live` goes out of scope. Pool size is unchanged.
     pool.repopulate_slot(plugin_name, slot_index);
+
+    // Unwrap the two-layer result: outer = panic/no-panic, inner = wasmtime trap.
+    let call_result = match call_result {
+        Ok(inner) => inner,
+        Err(_panic_payload) => {
+            // A host-fn panicked (e.g. DB error in artifact_create/update/delete).
+            // The panic payload is dropped here — it is NOT included in the error
+            // returned to the caller (scrubbing, MEDIUM-1). The slot is already
+            // repopulated above (HIGH-2 / R-0016-c).
+            tracing::warn!(
+                event = "plugin_host_fn_panic",
+                plugin_id = %plugin_id,
+                verb,
+                "plugin host-fn panicked — slot killed and replaced, panic payload scrubbed"
+            );
+            return Err(PluginExecError {
+                code: "plugin_invocation_failed",
+                plugin: plugin_id,
+                verb: verb.to_owned(),
+                violation: None,
+            });
+        }
+    };
 
     match call_result {
         Ok(value) => Ok(value),
         Err(err) => {
-            // A trap (or other call error) occurred. Classify it. (The slot was
-            // already repopulated above — kill-and-replace is complete.)
+            // A Wasmtime trap (or other call error) occurred. Classify it. (The
+            // slot was already repopulated above — kill-and-replace is complete.)
             let limit_type = classify_trap(&err);
 
             match limit_type {
@@ -422,7 +489,17 @@ pub fn invoke_with_recovery(
     budget: ResourceBudget,
     workspace_id: uuid::Uuid,
 ) -> Result<Output, PluginExecError> {
-    invoke_through_recovery(pool, plugin_name, verb, budget, workspace_id, run_verb)
+    // Pass `None` for the pool — resource-limit trap fixtures never invoke
+    // artifact host-fns, so no PgPool is needed on this path (T13).
+    invoke_through_recovery(
+        pool,
+        plugin_name,
+        verb,
+        budget,
+        workspace_id,
+        None,
+        run_verb,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -508,6 +585,7 @@ pub fn invoke_content(
     call: ContentCall,
     budget: ResourceBudget,
     workspace_id: uuid::Uuid,
+    pg_pool: &sqlx::PgPool,
 ) -> Result<ContentResult, PluginExecError> {
     invoke_through_recovery(
         pool,
@@ -515,6 +593,7 @@ pub fn invoke_content(
         verb,
         budget,
         workspace_id,
+        Some(pg_pool),
         |store, instance| match &call {
             ContentCall::Create {
                 type_name,
@@ -553,6 +632,110 @@ pub fn invoke_content(
             }
         },
     )
+}
+
+// ---------------------------------------------------------------------------
+// White-box unit tests — panic-safe seam (HIGH-2 / MEDIUM-1, T13-g)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin::pool::{POOL_MAX, PluginPool};
+    use wasmtime::component::Component;
+
+    /// Plugin ID used only in this test module — must not collide with integration
+    /// test fixtures ("burn", "echo").
+    const PANIC_TEST_PLUGIN: &str = "panic_seam_test";
+    const PANIC_TEST_VERSION: &str = "0.0.1";
+    /// Arbitrary verb label; the seam does not inspect it.
+    const PANIC_TEST_VERB: &str = "create";
+
+    /// A minimal no-op component: exports the bare `run: func()` symbol used by
+    /// `invoke_with_recovery`. No WIT imports — the host linker satisfies only what
+    /// the component actually imports, so this compiles and instantiates cleanly.
+    const NOOP_WAT: &str = r#"(component
+  (core module $m
+    (func (export "run")))
+  (core instance $i (instantiate $m))
+  (func (export "run") (canon lift (core func $i "run"))))"#;
+
+    fn pool_with_noop() -> PluginPool {
+        let pool = PluginPool::new().expect("pool must initialise");
+        let component =
+            Component::new(pool.engine(), NOOP_WAT).expect("noop WAT component must compile");
+        pool.register_module(PANIC_TEST_PLUGIN, PANIC_TEST_VERSION, &component)
+            .expect("register_module must succeed for noop component");
+        pool
+    }
+
+    /// HIGH-2 + MEDIUM-1 white-box: a host-fn panic leaves the pool slot
+    /// replenished and the returned error is scrubbed of DB internals.
+    ///
+    /// The `call` closure simulates an `artifact_update` panicking with a payload
+    /// that contains raw DB text — exactly the strings that would surface in the
+    /// MCP response before this fix. Asserts:
+    ///
+    /// 1. `slot_count` equals `POOL_MAX` after the invoke (kill-and-replace ran
+    ///    correctly — HIGH-2 / R-0016-c).
+    /// 2. `invoke_through_recovery` returned `Err` (panic did not become Ok).
+    /// 3. The error code is `"plugin_invocation_failed"` (generic scrubbed code).
+    /// 4. The error's `Display` does NOT contain any of the forbidden DB tokens
+    ///    (`echo_fixture`, `sqlx`, `constraint`, `column`) — MEDIUM-1 scrub.
+    #[test]
+    fn host_fn_panic_repopulates_slot_and_scrubs_error() {
+        let pool = pool_with_noop();
+        assert_eq!(
+            pool.slot_count(PANIC_TEST_PLUGIN),
+            POOL_MAX,
+            "pool should be fully populated before invoke"
+        );
+
+        // The panic payload contains raw DB internals — exactly the strings
+        // Warden flagged as MEDIUM-1 forbidden content.
+        let result: Result<(), PluginExecError> = invoke_through_recovery(
+            &pool,
+            PANIC_TEST_PLUGIN,
+            PANIC_TEST_VERB,
+            ResourceBudget::default(),
+            uuid::Uuid::nil(),
+            None,
+            |_store, _instance| {
+                panic!(
+                    "artifact_update UPDATE failed: sqlx DB error — relation \
+                     \"echo_fixture\" violates constraint; column frontmatter \
+                     invalid input syntax for type json"
+                )
+            },
+        );
+
+        // 1. Slot was repopulated (HIGH-2 / R-0016-c): pool size unchanged.
+        assert_eq!(
+            pool.slot_count(PANIC_TEST_PLUGIN),
+            POOL_MAX,
+            "HIGH-2: pool slot must be repopulated after a host-fn panic"
+        );
+
+        // 2. A panicking host-fn surfaces as Err, never Ok.
+        let err = result.expect_err("panicking host-fn must surface as Err");
+
+        // 3. Error code is the generic scrubbed code, not the raw panic payload.
+        assert_eq!(
+            err.code(),
+            "plugin_invocation_failed",
+            "HIGH-2/MEDIUM-1: error code must be the scrubbed generic string"
+        );
+
+        // 4. Error Display must not expose any of the forbidden DB token strings.
+        let display = err.to_string();
+        for forbidden in &["echo_fixture", "sqlx", "constraint", "column"] {
+            assert!(
+                !display.contains(forbidden),
+                "MEDIUM-1: error Display must not expose '{}'; got: {display}",
+                forbidden
+            );
+        }
+    }
 }
 
 /// Call the world-level `run` export on a pre-instantiated component `instance`

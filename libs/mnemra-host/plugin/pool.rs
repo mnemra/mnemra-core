@@ -37,7 +37,6 @@ use std::sync::{Arc, Mutex};
 use wasmtime::component::{Component, Instance, Linker};
 use wasmtime::{Engine, Store};
 
-use crate::abi::host_fns::FencedArtifactStore;
 use crate::plugin::component::{self, HostState};
 use crate::plugin::epoch_thread::{EpochTickThread, HealthState};
 use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, build_engine};
@@ -134,10 +133,6 @@ pub struct PluginPool {
     /// compiled `Component` + host `Linker` + POOL_MIN live instances usable by
     /// `invoke_with_recovery`.
     live_modules: Mutex<Vec<LiveModuleEntry>>,
-    /// The shared, process-wide fenced artifact store (T7, Branch-2 stub). All
-    /// instances share it via their `HostState` so a `create` on one instance is
-    /// visible to a later `get` on another. Swapped for real `Storage` in T13.
-    artifacts: FencedArtifactStore,
 }
 
 impl PluginPool {
@@ -154,14 +149,7 @@ impl PluginPool {
             engine,
             epoch_thread,
             live_modules: Mutex::new(Vec::new()),
-            artifacts: FencedArtifactStore::new(),
         })
-    }
-
-    /// A handle to the pool's shared fenced artifact store (T7). All pooled
-    /// instances share this via their `HostState`.
-    pub fn artifacts(&self) -> FencedArtifactStore {
-        self.artifacts.clone()
     }
 
     /// Check the epoch-tick thread health state.
@@ -320,7 +308,7 @@ impl PluginPool {
         component: &Component,
         linker: &Linker<HostState>,
     ) -> Result<LiveSlot, Box<dyn std::error::Error>> {
-        let mut store = component::new_store(&self.engine, self.artifacts.clone());
+        let mut store = component::new_store(&self.engine);
         let instance = component::instantiate(&mut store, component, linker)?;
         Ok(LiveSlot { store, instance })
     }
