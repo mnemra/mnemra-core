@@ -260,6 +260,7 @@ impl ServerHandler for MnemraMcpServer {
         // is bound onto the store inside `invoke_content` at the single dispatch
         // site (R-0006-b); the guest never supplies it (R-0006-e).
         let plugin_pool = Arc::clone(&self.plugin_pool);
+        let pg_pool = self.pool.clone();
         let verb = request.name.to_string();
         let invoke_result = tokio::task::spawn_blocking(move || {
             invoke_content(
@@ -269,15 +270,28 @@ impl ServerHandler for MnemraMcpServer {
                 dispatch.call,
                 ResourceBudget::default(),
                 workspace_id,
+                &pg_pool,
             )
         })
         .await
-        .map_err(|join_err| rmcp::model::ErrorData {
-            // A join error means the blocking task panicked — surface as internal,
-            // never swallow it into a fake success.
-            code: rmcp::model::ErrorCode::INTERNAL_ERROR,
-            message: format!("plugin dispatch task failed: {join_err}").into(),
-            data: None,
+        .map_err(|join_err| {
+            // A join error means the blocking task panicked with an exception
+            // outside the `catch_unwind` seam in `invoke_through_recovery`.
+            // Host-fn panics (DB errors, None-pool) are caught by that seam and
+            // never reach here; this path fires only for infrastructure panics.
+            // Log the raw join_err server-side for diagnostics; do NOT embed it
+            // in the client-facing message — it may contain internal detail
+            // (MEDIUM-1 / scrub discipline).
+            tracing::error!(
+                event = "plugin_dispatch_task_panic",
+                error = %join_err,
+                "plugin dispatch blocking task panicked outside the recovery seam"
+            );
+            rmcp::model::ErrorData {
+                code: rmcp::model::ErrorCode::INTERNAL_ERROR,
+                message: "plugin dispatch task failed: internal error".into(),
+                data: None,
+            }
         })?;
 
         // Map the typed return into a `CallToolResult` (R2). On a plugin

@@ -24,6 +24,8 @@
 //! | echo_update_absent_body_preserves_existing_body (RED)        | R-0019-c                 |
 //! | valid_admin_token_echo_delete_removes (RED)                  | R-0019-c                 |
 //! | echo_delete_cannot_remove_another_workspace_artifact (RED)   | R-0006-d                 |
+//! | update_with_malformed_patch_fails_closed (RED-2)             | HIGH-1 (Warden)          |
+//! | db_error_message_is_scrubbed_of_sqlx_detail (RED-2)          | MEDIUM-1 (Warden)        |
 //!
 //! # RED-phase design
 //!
@@ -1871,6 +1873,1100 @@ async fn echo_delete_cannot_remove_another_workspace_artifact() {
          artifact (the marker 'ws_a_artifact_t12d' is absent from A's get result); \
          got body: {body}"
     );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// T13 RED tests (dispatch #1150): Swap fenced in-memory stub → real
+//   echo_fixture persistence (R-0012-a, R-0001-a, R-0006-d, R-0019-e)
+// ===========================================================================
+//
+// # T13 acceptance criteria (reconciled, committed brain 9c47b97)
+//
+// These tests assert that artifact host-fn bodies persist to the P-0001
+// per-artifact-type `echo_fixture` table (direct sqlx) rather than the T7
+// fenced in-memory `FencedArtifactStore`. Every test FAILS against the current
+// implementation for the RIGHT reason: a direct sqlx `SELECT FROM echo_fixture`
+// finds no row where the fenced map was written, OR a direct echo_fixture row
+// (seeded via sqlx) is not touched by the fenced-map host body.
+//
+// # R-ID mapping (T13 additions)
+//
+// | Test function                                         | R-ID(s)                        |
+// |-------------------------------------------------------|--------------------------------|
+// | create_persists_a_real_echo_fixture_row (RED)         | R-0012-a, R-0001-a, R-0019-e   |
+// | cross_workspace_isolation_at_echo_fixture_table (RED) | R-0006-d                       |
+// | create_survives_fresh_db_query (RED)                  | R-0001-a                       |
+// | crud_update_reflected_in_echo_fixture_table (RED)     | R-0019-e, R-0012-a             |
+// | crud_delete_removes_echo_fixture_row (RED)            | R-0019-e, R-0012-a             |
+//
+// # Cross-dispatch context for Forge (green phase)
+//
+// ## echo_fixture table columns asserted in these tests
+//
+// | Column              | Type    | Asserted how                                   |
+// |---------------------|---------|------------------------------------------------|
+// | id                  | TEXT    | SELECT WHERE id = $1 (row presence / absence)  |
+// | workspace_id        | UUID    | SELECT WHERE workspace_id = $2 (isolation)     |
+// | frontmatter         | JSONB   | frontmatter::text contains marker substring    |
+// | body                | TEXT    | not asserted in T13 red (covered by T12 tests) |
+//
+// ## CHECK constraints Forge's INSERT must satisfy (R-0001-c)
+//
+// - `frontmatter ? 'id'` — Forge's artifact_create must inject the generated
+//   ULID as the `id` key in the frontmatter JSONB BEFORE INSERT. The test
+//   payloads include `frontmatter_version` but NOT `id` (the caller cannot
+//   know the ULID in advance). Forge must set frontmatter['id'] = ULID.
+//   NOTE: the `id` COLUMN and `frontmatter->>'id'` are asserted independently
+//   (artifact_machinery.rs uses different values for each); these tests do not
+//   assert their equality.
+// - `frontmatter ? 'frontmatter_version'` — all test echo.create payloads
+//   carry `"frontmatter_version": 1`. Direct-seeded rows use SEEDED_FRONTMATTER
+//   which includes both required keys.
+//
+// ## HostState-PgPool precondition (Forge must address before green)
+//
+// `HostState` (`plugin/component.rs`) currently holds `FencedArtifactStore` +
+// `workspace_id` — NO `PgPool`. Forge must thread a `PgPool` (or a typed
+// artifact-store handle wrapping it) into `HostState` so the
+// `artifact::Host for HostState` import bodies can run sqlx against
+// `echo_fixture`. `MnemraMcpServer` already holds `pool: PgPool`; Forge
+// threads it down the dispatch path into `HostState` at `invoke_content`
+// call time.
+
+/// Directly query `echo_fixture` for a row with the given id and workspace_id.
+/// Returns `(id_text, workspace_id_uuid, frontmatter_as_text)` if found.
+///
+/// Used by all T13 persistence assertions. The frontmatter is fetched as text
+/// (sqlx 0.9 does not enable the `json` feature in this Cargo.toml — JSONB
+/// is cast to `::text` and inspected via string operations).
+///
+/// A panic from this helper is a SETUP error (wrong column name, type mismatch)
+/// — NOT the red assertion. Only the subsequent `assert!` call is the red.
+async fn fetch_echo_fixture_row(
+    pool: &sqlx::PgPool,
+    id: &str,
+    workspace_id: Uuid,
+) -> Option<(String, Uuid, String)> {
+    sqlx::query_as(
+        "SELECT id, workspace_id, frontmatter::text
+         FROM echo_fixture
+         WHERE id = $1 AND workspace_id = $2",
+    )
+    .bind(id)
+    .bind(workspace_id)
+    .fetch_optional(pool)
+    .await
+    .expect(
+        "fetch_echo_fixture_row: SELECT must not error \
+         (echo_fixture table exists from schema init step 4)",
+    )
+}
+
+/// Frontmatter used by direct-seeded echo_fixture rows (tests 18/19).
+/// Satisfies both CHECK constraints:
+///   - `frontmatter ? 'id'`                   — satisfied
+///   - `frontmatter ? 'frontmatter_version'`  — satisfied
+const SEEDED_FRONTMATTER: &str =
+    r#"{"id": "T13TESTULID000000000000", "frontmatter_version": 1, "status": "open"}"#;
+
+/// Directly INSERT a row into `echo_fixture` (for seeding the update/delete tests).
+/// Mirrors the `insert_fixture_row` helper in `artifact_machinery.rs`.
+///
+/// A panic here is a SETUP error (the test harness is broken, not the
+/// implementation). The seeded row is NOT written to the `FencedArtifactStore`
+/// — it exists only in Postgres. This lets the update/delete table assertions
+/// execute even though the T13 red for `create` would fail first in a joint
+/// sequence.
+async fn seed_echo_fixture_row(pool: &sqlx::PgPool, id: &str, workspace_id: Uuid) {
+    sqlx::query(
+        "INSERT INTO echo_fixture (id, workspace_id, type, frontmatter)
+         VALUES ($1, $2, 'echo_fixture', $3::jsonb)",
+    )
+    .bind(id)
+    .bind(workspace_id)
+    .bind(SEEDED_FRONTMATTER)
+    .execute(pool)
+    .await
+    .unwrap_or_else(|e| {
+        panic!(
+            "seed_echo_fixture_row: INSERT failed for id={id} — \
+             setup error, not a T13 test failure: {e}"
+        )
+    });
+}
+
+// ===========================================================================
+// Test 15 (RED): echo.create persists a real echo_fixture row
+//   AC#1 (R-0012-a, R-0001-a) + AC#4 happy-path re-target (R-0019-e)
+// ===========================================================================
+
+/// R-0012-a, R-0001-a, R-0019-e — echo.create must persist to echo_fixture.
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token for DEFAULT_WORKSPACE_ID
+/// WHEN `echo.create` is called with an echo_fixture payload (including
+///   `frontmatter_version: 1` required by the `frontmatter ? 'frontmatter_version'`
+///   CHECK constraint; Forge must inject `id = <generated ULID>` to satisfy
+///   `frontmatter ? 'id'`)
+/// THEN (1) the returned ULID identifies a real row in the `echo_fixture` table —
+///       `SELECT WHERE id = $ulid AND workspace_id = $ws` finds the row, AND
+///      (2) the frontmatter text contains the create payload marker, AND
+///      (3) a follow-on `echo.get` returns content containing the marker
+///       (re-targeted per AC#4 — reads from Postgres, not the fenced map).
+///
+/// # Not asserted: frontmatter->>'id' == returned ULID
+///
+/// The `id` COLUMN must equal the returned ULID (certain). The frontmatter
+/// key `'id'` is a CHECK-constraint requirement but its value is Forge's design
+/// choice — `artifact_machinery.rs` uses column-id and frontmatter-id
+/// independently, so equality is not a schema invariant these tests assert.
+///
+/// # Why is_ok() alone does not discriminate
+///
+/// `echo.create` already returns Ok in the current fenced-map impl. The direct
+/// sqlx `SELECT` is the discriminating assertion: it passes only after Forge
+/// writes an INSERT INTO echo_fixture.
+///
+/// # Red reason
+///
+/// `SELECT id, workspace_id, frontmatter::text FROM echo_fixture
+///  WHERE id = $ulid AND workspace_id = $ws` finds NO row — the current host
+/// body writes to FencedArtifactStore only. The `assert!(row.is_some(), …)`
+/// panics: right-reason red.
+#[tokio::test]
+async fn create_persists_a_real_echo_fixture_row() {
+    // R-0012-a, R-0001-a: echo.create must write to the echo_fixture table.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — echo.create with frontmatter_version in the payload.
+    // Satisfies CHECK (frontmatter ? 'frontmatter_version').
+    // Forge must inject id = <generated ULID> into frontmatter to satisfy
+    // CHECK (frontmatter ? 'id') — the caller cannot know the ULID in advance.
+    let mut params = CallToolRequestParams::new("echo.create");
+    params.meta = Some(token_meta(token.as_str()));
+    params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert(
+            "payload".to_owned(),
+            json!({"frontmatter_version": 1, "msg": "t13_create_real_row"}),
+        );
+        m
+    });
+
+    let create_result = client
+        .call_tool(params)
+        .await
+        .expect("echo.create with valid admin token must return Ok (verb is wired)");
+
+    let texts = extract_text_content(&create_result);
+    let ulid = texts
+        .iter()
+        .find(|t| is_valid_ulid(t.trim()))
+        .map(|t| t.trim().to_owned())
+        .unwrap_or_else(|| {
+            panic!("setup: echo.create must return a well-formed ULID; got texts: {texts:?}")
+        });
+
+    // THEN (1) — the ULID must identify a real row in echo_fixture.
+    // RIGHT-REASON RED: fenced create wrote to FencedArtifactStore; echo_fixture
+    // has no row. The assert panics with "row was absent".
+    let row = fetch_echo_fixture_row(pool, &ulid, workspace_id).await;
+    assert!(
+        row.is_some(),
+        "R-0012-a, R-0001-a: create_persists_a_real_echo_fixture_row: \
+         echo.create must write to the echo_fixture table. \
+         SELECT id, workspace_id, frontmatter FROM echo_fixture \
+         WHERE id = '{ulid}' AND workspace_id = '{workspace_id}' found no row. \
+         Current impl writes FencedArtifactStore only (not echo_fixture). \
+         Right-reason red: Forge must swap artifact_create body to sqlx \
+         INSERT INTO echo_fixture."
+    );
+
+    let (_id_col, _ws_col, frontmatter_text) = row.unwrap();
+
+    // THEN (2) — the frontmatter must contain the create payload marker.
+    assert!(
+        frontmatter_text.contains("t13_create_real_row"),
+        "R-0019-e: echo_fixture frontmatter must round-trip the create payload; \
+         expected 't13_create_real_row' in frontmatter; got: {frontmatter_text}"
+    );
+
+    // THEN (3) — echo.get must read back content from Postgres (AC#4 re-target).
+    // After Forge's green: echo.get reads from echo_fixture, not the fenced map.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(ulid));
+        m
+    });
+    let get_result = client
+        .call_tool(get_params)
+        .await
+        .expect("R-0019-e: echo.get must return Ok");
+
+    let get_body = serde_json::to_string(&get_result).expect("serialize get result");
+    assert!(
+        get_body.contains("t13_create_real_row"),
+        "R-0019-e: echo.get must return content from Postgres; \
+         expected payload marker 't13_create_real_row' in result; got: {get_body}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 16 (RED): WHERE-clause workspace scoping at the echo_fixture table (AC#2)
+// ===========================================================================
+
+/// R-0006-d — every echo_fixture read path must include
+///   `WHERE workspace_id = ctx.workspace_id()` (P-0006 application-layer isolation).
+///
+/// # Given / When / Then
+///
+/// GIVEN an `echo_fixture` artifact created under workspace A's admin token
+/// WHEN (a) queried directly via sqlx for workspace A → row MUST exist, AND
+///      (b) queried directly via sqlx for workspace B → row MUST be absent
+///          (WHERE workspace_id = workspace_B finds nothing), AND
+///      (c) `echo.get` under workspace B's token → returns empty (not-found)
+/// THEN workspace isolation holds at the echo_fixture table level.
+///
+/// # Why assertion (a) is the right-reason red
+///
+/// Assertion (a) fails first: the current fenced create does not write to
+/// echo_fixture, so `SELECT WHERE workspace_id = workspace_A` finds nothing.
+/// Assertion (b) passes vacuously (no rows at all). After Forge's green:
+/// (a) passes (row exists), (b) passes (WHERE workspace_id = workspace_B
+/// correctly excludes workspace A's row), (c) passes (Postgres read is scoped).
+///
+/// # Security note
+///
+/// The (b) half is the table-level isolation guarantee. A cross-workspace id
+/// that exists in echo_fixture must NOT be visible to workspace B's queries —
+/// enforced by the mandatory `workspace_id` WHERE clause.
+#[tokio::test]
+async fn cross_workspace_isolation_at_echo_fixture_table() {
+    // R-0006-d: echo_fixture reads are workspace-scoped; B cannot see A's row.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+    let (token_a, _a_id) = seed_admin_token(pool, workspace_a).await;
+    let (token_b, _b_id) = seed_admin_token(pool, workspace_b).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // Create an artifact under workspace A with frontmatter_version and a
+    // distinctive marker. Both CHECK-constraint keys present.
+    let mut create_params = CallToolRequestParams::new("echo.create");
+    create_params.meta = Some(token_meta(token_a.as_str()));
+    create_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert(
+            "payload".to_owned(),
+            json!({"frontmatter_version": 1, "msg": "t13_ws_a_marker"}),
+        );
+        m
+    });
+    let create_result = client
+        .call_tool(create_params)
+        .await
+        .expect("setup: echo.create (wired) must return Ok for workspace A");
+    let texts = extract_text_content(&create_result);
+    let id_a = texts
+        .iter()
+        .find(|t| is_valid_ulid(t.trim()))
+        .map(|t| t.trim().to_owned())
+        .unwrap_or_else(|| panic!("setup: echo.create must return a ULID; got: {texts:?}"));
+
+    // THEN (a) — workspace A's echo_fixture row MUST EXIST (RIGHT-REASON RED).
+    // Fails now: fenced create did not write to echo_fixture.
+    let row_for_a = fetch_echo_fixture_row(pool, &id_a, workspace_a).await;
+    assert!(
+        row_for_a.is_some(),
+        "R-0006-d: cross_workspace_isolation_at_echo_fixture_table: \
+         workspace A's echo.create must persist to echo_fixture. \
+         SELECT WHERE id = '{id_a}' AND workspace_id = '{workspace_a}' found no row. \
+         Current impl writes FencedArtifactStore only. Right-reason red."
+    );
+
+    // THEN (b) — the same id is NOT visible for workspace B in echo_fixture.
+    // WHERE workspace_id = workspace_B must exclude workspace A's row.
+    // Vacuously passes now (no rows exist); correctly enforced after Forge's green.
+    let row_for_b = fetch_echo_fixture_row(pool, &id_a, workspace_b).await;
+    assert!(
+        row_for_b.is_none(),
+        "R-0006-d: tenant isolation violated at the echo_fixture table: \
+         workspace B's SELECT (WHERE workspace_id = '{workspace_b}') returned \
+         workspace A's row (id = '{id_a}'). \
+         The artifact_get body must include WHERE workspace_id = ctx.workspace_id()."
+    );
+
+    // THEN (c) — echo.get under workspace B's token must not return workspace A's content.
+    let mut get_params = CallToolRequestParams::new("echo.get");
+    get_params.meta = Some(token_meta(token_b.as_str()));
+    get_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(id_a));
+        m
+    });
+    let get_result = client.call_tool(get_params).await;
+
+    let b_sees_content = match &get_result {
+        Ok(r) => {
+            let body = serde_json::to_string(r).unwrap_or_default();
+            body.contains("t13_ws_a_marker")
+        }
+        Err(_) => false, // not-found error means isolation holds
+    };
+    assert!(
+        !b_sees_content,
+        "R-0006-d: workspace B's echo.get must not return workspace A's artifact content; \
+         marker 't13_ws_a_marker' must be absent from workspace B's get result"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 17 (RED): echo.create persists and survives a fresh DB query (AC#3)
+// ===========================================================================
+
+/// R-0001-a — created artifacts persist across transactions (real Postgres, not RAM).
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token for DEFAULT_WORKSPACE_ID
+/// WHEN `echo.create` is called and the ULID is captured
+/// THEN a FRESH sqlx query (a connection/tx distinct from the create dispatch
+///   path) finds the row in `echo_fixture` — proving real Postgres persistence,
+///   not in-process memory state.
+///
+/// # What distinguishes this from test 15
+///
+/// Test 15 queries via the same pool after the MCP create call. Here the
+/// emphasis is on provability: the `FencedArtifactStore` is an in-process
+/// `Arc<Mutex<HashMap>>` that survives across pooled connections in the same
+/// test binary — a direct sqlx `SELECT` is provably NOT the fenced map. If
+/// `artifact_create` wrote only to the in-memory store, the SELECT finds
+/// nothing. After Forge's committed INSERT, the SELECT finds the row.
+///
+/// # Red reason
+///
+/// `SELECT id FROM echo_fixture WHERE id = $ulid` finds NO row — the current
+/// host body wrote to FencedArtifactStore only. The `assert!(persisted.is_some())`
+/// panics: right-reason red.
+#[tokio::test]
+async fn create_survives_fresh_db_query() {
+    // R-0001-a: created artifacts persist to Postgres, not just in-process memory.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — echo.create; capture the returned ULID.
+    let mut params = CallToolRequestParams::new("echo.create");
+    params.meta = Some(token_meta(token.as_str()));
+    params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("content_type".to_owned(), json!("echo_fixture"));
+        m.insert(
+            "payload".to_owned(),
+            json!({"frontmatter_version": 1, "msg": "t13_fresh_query_test"}),
+        );
+        m
+    });
+
+    let create_result = client
+        .call_tool(params)
+        .await
+        .expect("echo.create with valid admin token must return Ok (verb is wired)");
+
+    let texts = extract_text_content(&create_result);
+    let ulid = texts
+        .iter()
+        .find(|t| is_valid_ulid(t.trim()))
+        .map(|t| t.trim().to_owned())
+        .unwrap_or_else(|| {
+            panic!("setup: echo.create must return a well-formed ULID; got texts: {texts:?}")
+        });
+
+    // THEN — query echo_fixture through a fresh pool connection.
+    // The pool provides a new connection from the pool; if artifact_create
+    // wrote only to the in-memory fenced map, this SELECT finds nothing.
+    //
+    // RIGHT-REASON RED: finds no row; Forge must commit INSERT INTO echo_fixture.
+    let persisted: Option<(String,)> = sqlx::query_as("SELECT id FROM echo_fixture WHERE id = $1")
+        .bind(&ulid)
+        .fetch_optional(pool)
+        .await
+        .expect(
+            "create_survives_fresh_db_query: SELECT must not error \
+                 (echo_fixture table exists from schema init step 4)",
+        );
+
+    assert!(
+        persisted.is_some(),
+        "R-0001-a: create_survives_fresh_db_query: \
+         echo.create must persist to Postgres (not just the in-process fenced map). \
+         SELECT id FROM echo_fixture WHERE id = '{ulid}' found no row. \
+         FencedArtifactStore is in-process memory only. \
+         Right-reason red: Forge must commit sqlx INSERT INTO echo_fixture \
+         in the artifact_create host body."
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 18 (RED): echo.update patch reflected in echo_fixture table (AC#4 update)
+// ===========================================================================
+
+/// R-0019-e, R-0012-a — echo.update must write the patch to the echo_fixture table.
+///
+/// # Given / When / Then
+///
+/// GIVEN an echo_fixture row seeded DIRECTLY in the DB via sqlx (the row exists
+///   in the table, NOT in the `FencedArtifactStore`), with original frontmatter
+///   status = "open" (from SEEDED_FRONTMATTER)
+/// WHEN `echo.update` is called with a frontmatter_patch `{"status": "done_t13u"}`
+///   for the seeded id under the workspace's admin token
+/// THEN the echo_fixture table's frontmatter for that row shows "done_t13u"
+///   (the patch was applied) — verified by direct sqlx SELECT.
+///
+/// # Why direct-seed (advisor guidance)
+///
+/// Using a directly-seeded row ensures this test's red assertion executes even
+/// though the T13 echo.create red (test 15) would fail first in a joint
+/// sequence. The seeded row EXISTS in echo_fixture; the fenced-map echo.update
+/// with an id NOT in the fenced map returns Ok but does not touch echo_fixture.
+/// The table assertion then fails for the right reason.
+///
+/// # Red reason
+///
+/// `fenced_artifact_update` performs a `map.get_mut(&(workspace_id, id))` lookup.
+/// The seeded id is NOT in the fenced map, so the update is a silent no-op;
+/// echo_fixture's frontmatter remains `"status": "open"`. The assertion
+/// `frontmatter_text.contains("done_t13u")` FAILS — right-reason red.
+/// After Forge's green: `artifact_update` runs
+/// `UPDATE echo_fixture SET frontmatter = … WHERE id = $1 AND workspace_id = $2`,
+/// the frontmatter reflects the patch, and the assertion passes.
+#[tokio::test]
+async fn crud_update_reflected_in_echo_fixture_table() {
+    // R-0019-e: echo.update must apply the patch to the echo_fixture table.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    // Seed a row directly in echo_fixture (NOT in the fenced map).
+    // This lets the update assertion execute independently of the create red (test 15).
+    let seeded_id = "T13UPDATETEST0000000000001";
+    seed_echo_fixture_row(pool, seeded_id, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — echo.update with a frontmatter_patch that should change 'status'.
+    // The fenced map has no entry for seeded_id → returns Ok (silent no-op).
+    // The echo_fixture row is NOT updated.
+    let patch = json!({"status": "done_t13u"}).to_string();
+    let mut update_params = CallToolRequestParams::new("echo.update");
+    update_params.meta = Some(token_meta(token.as_str()));
+    update_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(seeded_id));
+        m.insert("frontmatter_patch".to_owned(), json!(patch));
+        m
+    });
+
+    // The fenced-map update returns Ok even for a no-op (miss = silent no-op).
+    let _update_result = client
+        .call_tool(update_params)
+        .await
+        .expect("R-0019-e: echo.update must return Ok");
+
+    // THEN — the echo_fixture table must show the patched frontmatter.
+    // RIGHT-REASON RED: fenced-map update no-oped; frontmatter still shows "open".
+    let row = fetch_echo_fixture_row(pool, seeded_id, workspace_id).await;
+    assert!(
+        row.is_some(),
+        "crud_update_reflected_in_echo_fixture_table: seeded row must be present \
+         (setup check — a panic here means seed_echo_fixture_row failed)"
+    );
+    let (_id_col, _ws_col, frontmatter_text) = row.unwrap();
+
+    assert!(
+        frontmatter_text.contains("done_t13u"),
+        "R-0019-e: crud_update_reflected_in_echo_fixture_table: \
+         echo.update must apply the frontmatter patch to the echo_fixture table. \
+         Expected frontmatter to contain 'done_t13u' after echo.update with \
+         patch {{\"status\": \"done_t13u\"}}. \
+         Current impl: fenced-map update no-oped (id '{seeded_id}' not in fenced map); \
+         echo_fixture frontmatter unchanged from seeded value: {frontmatter_text}. \
+         Right-reason red: Forge must run \
+         UPDATE echo_fixture SET frontmatter = … WHERE id = $1 AND workspace_id = $2."
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 19 (RED): echo.delete removes the echo_fixture row (AC#4 delete)
+// ===========================================================================
+
+/// R-0019-e, R-0012-a — echo.delete must remove the row from the echo_fixture table.
+///
+/// # Given / When / Then
+///
+/// GIVEN an echo_fixture row seeded DIRECTLY in the DB via sqlx (row exists in
+///   the table, NOT in the `FencedArtifactStore`) for the workspace
+/// WHEN `echo.delete` is called with the seeded id under the workspace's token
+/// THEN the echo_fixture row is GONE — confirmed by direct sqlx SELECT.
+///
+/// # Why direct-seed (advisor guidance)
+///
+/// Same reasoning as test 18: direct seeding lets the delete assertion execute
+/// independently of the T13 create red. The fenced-map echo.delete with a
+/// seeded id returns Ok but does NOT remove the echo_fixture row.
+///
+/// # Red reason
+///
+/// `fenced_artifact_delete` runs `map.remove(&(workspace_id, id))`. The seeded
+/// id is NOT in the fenced map, so `map.remove` is a no-op (returns None) —
+/// the echo_fixture row is left untouched. The `assert!(after_delete.is_none())`
+/// assertion FAILS (row still present) — right-reason red.
+/// After Forge's green: `artifact_delete` runs
+/// `DELETE FROM echo_fixture WHERE id = $1 AND workspace_id = $2`, the row is
+/// removed, and the assertion passes.
+#[tokio::test]
+async fn crud_delete_removes_echo_fixture_row() {
+    // R-0019-e: echo.delete must remove the row from the echo_fixture table.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    // Seed a row directly in echo_fixture (NOT in the fenced map).
+    let seeded_id = "T13DELETETEST0000000000001";
+    seed_echo_fixture_row(pool, seeded_id, workspace_id).await;
+
+    // Verify the seeded row IS present before the delete (setup guard).
+    let before_delete = fetch_echo_fixture_row(pool, seeded_id, workspace_id).await;
+    assert!(
+        before_delete.is_some(),
+        "crud_delete_removes_echo_fixture_row setup: seeded row must be present \
+         before echo.delete (a panic here means seed_echo_fixture_row failed)"
+    );
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — echo.delete with the seeded id.
+    // The fenced map has no entry for seeded_id → delete is a silent no-op.
+    let mut delete_params = CallToolRequestParams::new("echo.delete");
+    delete_params.meta = Some(token_meta(token.as_str()));
+    delete_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(seeded_id));
+        m
+    });
+
+    // The fenced-map delete returns Ok even for a no-op (miss = silent no-op).
+    let _delete_result = client
+        .call_tool(delete_params)
+        .await
+        .expect("R-0019-e: echo.delete must return Ok (even a no-op fenced delete returns Ok)");
+
+    // THEN — the echo_fixture row must be GONE (RIGHT-REASON RED).
+    // The fenced-map delete no-oped; the echo_fixture row is still present.
+    let after_delete = fetch_echo_fixture_row(pool, seeded_id, workspace_id).await;
+    assert!(
+        after_delete.is_none(),
+        "R-0019-e: crud_delete_removes_echo_fixture_row: \
+         echo.delete must remove the row from the echo_fixture table. \
+         SELECT WHERE id = '{seeded_id}' AND workspace_id = '{workspace_id}' \
+         still found a row after echo.delete. \
+         Current impl: fenced-map delete no-oped (id not in fenced map); \
+         echo_fixture row was not removed. \
+         Right-reason red: Forge must run \
+         DELETE FROM echo_fixture WHERE id = $1 AND workspace_id = $2."
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// RED-2 tests (dispatch #1153): Fail-closed DB error paths (HIGH-1, MEDIUM-1)
+// ===========================================================================
+//
+// # Coverage
+//
+// Warden (dispatch #1153 pre-work) found two fail-OPEN error paths in the T13
+// artifact host-fn bodies. These tests pin the fail-CLOSED contract so Forge
+// (green-2) has a failing test to target.
+//
+// | Test function                                          | Finding  |
+// |--------------------------------------------------------|----------|
+// | update_with_malformed_patch_fails_closed (RED-2)       | HIGH-1   |
+// | db_error_message_is_scrubbed_of_sqlx_detail (RED-2)    | MEDIUM-1 |
+//
+// # Delete error path assessment
+//
+// HIGH-1 also names echo.delete. However, the DELETE path cannot be made to
+// error via black-box client input:
+//   - `DELETE FROM echo_fixture WHERE id = $1 AND workspace_id = $2` has no JSONB
+//     operations or CHECK constraints; all parameters are simple text/UUID binds.
+//   - A delete targeting a non-existent (or cross-workspace) id is a silent no-op
+//     (0 rows affected), NOT a database error.
+//   - workspace_id is host-derived from the authenticated token (not client-
+//     controllable).
+// Delete's error path is white-box-only (Forge unit test + Warden code review).
+// Only echo.update is covered by RED-2 black-box tests; this assessment is the
+// cross-dispatch note for Forge.
+//
+// # Malformed-patch trigger (cross-dispatch contract for Forge)
+//
+// Both tests use the same input trigger:
+//   MCP argument: `frontmatter_patch = json!("not_a_json_object_t13w2")`
+//
+// Trace through the call stack:
+//   1. `dispatch.rs::resolve_content_call` extracts via `.as_str()`:
+//      inner string = `not_a_json_object_t13w2` (not valid JSON).
+//   2. `artifact_update` (component.rs) binds to `$1::jsonb` in:
+//        UPDATE echo_fixture SET frontmatter = frontmatter || $1::jsonb ...
+//   3. PostgreSQL CAST: `'not_a_json_object_t13w2'::jsonb` →
+//      ERROR: invalid input syntax for type json
+//   4. Current impl: `.map_err(|e| { warn!(...); })` swallows the error;
+//      `artifact_update` returns `()` (void); WIT content.update returns
+//      normally; invoke_content returns Ok(ContentResult::Updated);
+//      MCP response is SUCCESS.
+//
+// After Forge's fix: DB error propagated → MCP response is ERROR.
+//
+// # Right-reason failure (both RED-2 tests)
+//
+// Both tests assert the MCP result is Err. Today it is Ok (error swallowed).
+// The primary failing assertion in each test is:
+//   - Test 20: `assert!(result.is_err(), "HIGH-1: ...")`
+//   - Test 21: `result.expect_err("MEDIUM-1: ...")`
+// Neither is a compile error; neither is a setup panic. Both fail because the
+// current implementation returns a success result when it should return an error.
+
+// ===========================================================================
+// Test 20 (RED-2): echo.update with malformed frontmatter_patch fails closed
+//   HIGH-1 — fail-open swallow-success error path
+// ===========================================================================
+
+/// HIGH-1 — `echo.update` with a malformed `frontmatter_patch` must return an
+/// MCP error (fail-closed), NOT a fake success that conceals a rejected write.
+///
+/// # Given / When / Then
+///
+/// GIVEN an admin token for DEFAULT_WORKSPACE_ID and an `echo_fixture` row
+///   seeded directly in the DB via sqlx (SEEDED_FRONTMATTER: `"status": "open"`)
+/// WHEN `echo.update` is called with `frontmatter_patch = json!("not_a_json_object_t13w2")`
+///   (a JSON string argument whose inner value is not valid JSON), targeting the
+///   seeded id `T13W2UPDATE000000000000001`
+/// THEN (a) the MCP call returns an Err result (NOT a success/Updated), AND
+///      (b) the echo_fixture row is UNCHANGED — frontmatter still contains "open"
+///          (the failed UPDATE is atomic: no partial write from a Postgres CAST error).
+///
+/// # Malformed-patch trigger
+///
+/// `json!("not_a_json_object_t13w2")` as the `frontmatter_patch` MCP argument:
+///   - The argument VALUE is a JSON string; `.as_str()` in dispatch.rs extracts
+///     the inner string `not_a_json_object_t13w2` (not quoted, not valid JSON).
+///   - The UPDATE query binds it to `$1::jsonb`:
+///       `frontmatter || 'not_a_json_object_t13w2'::jsonb`
+///   - PostgreSQL CAST ERROR: "invalid input syntax for type json"
+///   - Current impl: `.map_err(warn)` in `artifact_update` swallows the error,
+///     returns `()` → the WIT guest sees a successful return → MCP returns Ok.
+///   - After Forge fix: error propagated → MCP returns Err.
+///
+/// # Right-reason red
+///
+/// `result.is_err()` FAILS because the current impl returns `Ok(success)`.
+/// This is the correct right-reason: the error is swallowed, not propagated.
+/// The row-unchanged assertion (b) PASSES today (the CAST error prevents any
+/// write). Assertion (b) is the atomicity contract for Forge's fix.
+///
+/// # Cross-dispatch contract for Forge (green-2)
+///
+/// - Seeded row id: `T13W2UPDATE000000000000001`, workspace_id: DEFAULT_WORKSPACE_ID
+/// - Trigger: `frontmatter_patch = json!("not_a_json_object_t13w2")` →
+///   Postgres CAST fails at `$1::jsonb`
+/// - MCP result must be Err (not Ok/Updated)
+/// - Row frontmatter must be unchanged (SEEDED_FRONTMATTER, "open" status present)
+/// - Forge must propagate the DB error through artifact_update → WIT → MCP error.
+///   The Postgres CAST failure is already atomic (no partial write); Forge only
+///   needs to surface the error rather than swallow it.
+#[tokio::test]
+async fn update_with_malformed_patch_fails_closed() {
+    // HIGH-1: echo.update with malformed frontmatter_patch must fail closed.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    // Seed a row directly in echo_fixture (same pattern as T13 tests 18/19).
+    // Direct seeding ensures this test executes independently of T13 create reds.
+    // SEEDED_FRONTMATTER has "status": "open" — the row-unchanged assertion (b)
+    // checks this survives the failed update.
+    let seeded_id = "T13W2UPDATE000000000000001";
+    seed_echo_fixture_row(pool, seeded_id, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — echo.update with a malformed frontmatter_patch.
+    //
+    // The `frontmatter_patch` MCP argument is a JSON string value whose inner
+    // string `not_a_json_object_t13w2` is NOT valid JSON. dispatch.rs extracts
+    // the inner string via `.and_then(|v| v.as_str())` and passes it directly
+    // to the SQL bind for `$1::jsonb`:
+    //   UPDATE echo_fixture SET frontmatter = frontmatter || $1::jsonb ...
+    // PostgreSQL: 'not_a_json_object_t13w2'::jsonb → CAST ERROR.
+    // Current artifact_update: .map_err(warn) swallows → returns void → SUCCESS.
+    let mut update_params = CallToolRequestParams::new("echo.update");
+    update_params.meta = Some(token_meta(token.as_str()));
+    update_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(seeded_id));
+        // NOT a valid JSON object: the inner string is a plain identifier, not JSON.
+        // dispatch.rs passes this via .as_str() → binds to $1::jsonb → CAST ERROR.
+        m.insert(
+            "frontmatter_patch".to_owned(),
+            json!("not_a_json_object_t13w2"),
+        );
+        m
+    });
+
+    let result = client.call_tool(update_params).await;
+
+    // THEN (a) — the MCP call must return Err (fail-closed).
+    //
+    // RIGHT-REASON RED: current impl swallows the Postgres CAST error and returns
+    // Ok(success). This assertion FAILS today for the correct behavioral reason.
+    // The error path: artifact_update.map_err(warn) → () → WIT void return →
+    // invoke_content Ok(Updated) → call_tool Ok(success).
+    // Forge must: propagate the DB error so call_tool returns Err.
+    assert!(
+        result.is_err(),
+        "HIGH-1: update_with_malformed_patch_fails_closed: \
+         echo.update with a malformed frontmatter_patch must return MCP Err, not Ok. \
+         Input: frontmatter_patch = json!(\"not_a_json_object_t13w2\") → \
+         dispatch.rs extracts inner string 'not_a_json_object_t13w2' via .as_str() → \
+         SQL: frontmatter || 'not_a_json_object_t13w2'::jsonb → \
+         Postgres CAST ERROR (invalid input syntax for type json). \
+         Current impl: artifact_update swallows via .map_err(warn), returns void; \
+         WIT content.update returns normally; invoke_content returns Ok(Updated); \
+         MCP response is Ok(success). \
+         Right-reason red: error swallowed, not propagated. \
+         Forge must surface the DB error as a MCP Err response."
+    );
+
+    // THEN (b) — the echo_fixture row must be UNCHANGED (atomicity contract).
+    //
+    // This assertion PASSES today (the Postgres CAST error aborts the entire UPDATE
+    // before any row modification occurs). It pins the atomicity contract: Forge's
+    // fail-closed fix must not introduce partial writes.
+    let row = fetch_echo_fixture_row(pool, seeded_id, workspace_id).await;
+    assert!(
+        row.is_some(),
+        "HIGH-1 atomicity (setup guard): seeded row must still exist after a failed \
+         update — if the row is absent, the setup failed, not the test"
+    );
+    let (_id_col, _ws_col, frontmatter_text) = row.unwrap();
+    assert!(
+        frontmatter_text.contains("open"),
+        "HIGH-1 atomicity: echo_fixture row frontmatter must be UNCHANGED after the \
+         failed update — SEEDED_FRONTMATTER 'open' status must still be present. \
+         A partial or committed write would be a data-integrity violation. \
+         Got frontmatter: {frontmatter_text}"
+    );
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+}
+
+// ===========================================================================
+// Test 21 (RED-2): DB error message is scrubbed of raw sqlx/Postgres detail
+//   MEDIUM-1 — internal seam detail must not leak into client-facing MCP error
+// ===========================================================================
+
+/// MEDIUM-1 — The MCP error returned for a DB error must NOT contain raw
+/// sqlx/Postgres internals (table name, crate name, constraint names,
+/// column names, SQL text fragments).
+///
+/// # Given / When / Then
+///
+/// GIVEN the same malformed-`frontmatter_patch` trigger as HIGH-1: admin token,
+///   an `echo_fixture` row seeded directly in the DB (id `T13W2SCRUB0000000000000001`)
+/// WHEN `echo.update` is called with `frontmatter_patch = json!("not_a_json_object_t13w2")`
+/// THEN (a) the MCP call returns an Err (same right-reason red as HIGH-1:
+///          current impl swallows the DB error and returns success), AND
+///      (b) the error message (ErrorData.message + data fields serialized)
+///          does NOT contain: `echo_fixture`, `sqlx`, `constraint`, `column`,
+///          or SQL text fragments (`UPDATE echo`, `frontmatter ||`).
+///
+/// # Right-reason red
+///
+/// The primary failing assertion is `result.expect_err(...)` — which panics
+/// because the current impl returns Ok (error swallowed). The scrubbing
+/// assertions in the match arm are the GREEN contract: they run only after
+/// Forge makes the error propagate to the MCP response.
+///
+/// # Cross-dispatch contract for Forge (green-2)
+///
+/// After HIGH-1 is fixed (error propagated), the error message visible to the
+/// MCP client MUST be generic/structured — NOT a raw sqlx or Postgres dump.
+/// Acceptable error message: `"plugin execution failed: plugin_invocation_failed"`
+/// or similar opaque code string.
+/// NOT acceptable: any message or data field containing `"echo_fixture"`,
+/// `"sqlx"`, `"constraint"`, `"column"`, or SQL fragments from the UPDATE query.
+///
+/// The structural scan covers `ErrorData.message` and `ErrorData.data` (via
+/// full JSON serialization of the ErrorData) so both fields are checked.
+#[tokio::test]
+async fn db_error_message_is_scrubbed_of_sqlx_detail() {
+    // MEDIUM-1: DB error message must not expose raw sqlx/Postgres internals.
+    // GIVEN
+    let engine = start_engine().await;
+    init(&engine, "vector").await.expect("init should succeed");
+    let pool = engine.pool.as_ref();
+
+    let workspace_id = DEFAULT_WORKSPACE_ID;
+    let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
+
+    // Same direct-seed pattern as update_with_malformed_patch_fails_closed.
+    // Fresh id to avoid any cross-test state (each test has its own embedded engine).
+    let seeded_id = "T13W2SCRUB0000000000000001";
+    seed_echo_fixture_row(pool, seeded_id, workspace_id).await;
+
+    let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match serve_server(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+    let client = serve_client((), client_transport)
+        .await
+        .expect("client init failed");
+
+    // WHEN — same malformed-patch trigger as HIGH-1.
+    // `frontmatter_patch = json!("not_a_json_object_t13w2")` →
+    // dispatch.rs extracts inner string → Postgres CAST ERROR → swallowed.
+    let mut update_params = CallToolRequestParams::new("echo.update");
+    update_params.meta = Some(token_meta(token.as_str()));
+    update_params.arguments = Some({
+        let mut m = serde_json::Map::new();
+        m.insert("id".to_owned(), json!(seeded_id));
+        // Same non-JSON-object trigger: inner string not valid JSON → CAST ERROR.
+        m.insert(
+            "frontmatter_patch".to_owned(),
+            json!("not_a_json_object_t13w2"),
+        );
+        m
+    });
+
+    let result = client.call_tool(update_params).await;
+
+    // THEN (a) — must be Err.
+    //
+    // RIGHT-REASON RED: current impl returns Ok (error swallowed — same reason as
+    // HIGH-1). `expect_err` panics with the message below.
+    // The scrubbing assertions in the match arm are the GREEN contract; they run
+    // only after Forge propagates the DB error to the MCP response.
+    let err = result.expect_err(
+        "MEDIUM-1: db_error_message_is_scrubbed_of_sqlx_detail: \
+         echo.update with malformed patch must return MCP Err, not Ok. \
+         Right-reason red: current artifact_update swallows the Postgres CAST error \
+         via .map_err(warn), returns void; MCP returns Ok(success). \
+         Forge must propagate the error before message scrubbing can be verified. \
+         (Same root cause as HIGH-1: update_with_malformed_patch_fails_closed.)",
+    );
+
+    // THEN (b) — the client-facing error must NOT expose raw DB internals.
+    //
+    // Only reached after Forge's HIGH-1 fix (error propagated to MCP).
+    // Structural check: serialize the full ErrorData and scan for forbidden tokens.
+    // Covers both ErrorData.message and ErrorData.data fields.
+    match err {
+        rmcp::ServiceError::McpError(ref error_data) => {
+            let msg = error_data.message.as_ref();
+
+            // Serialize the full ErrorData (message + data) for a comprehensive scan.
+            let serialized = serde_json::to_string(error_data)
+                .unwrap_or_else(|_| error_data.message.to_string());
+
+            // Table name must not leak (reveals internal schema layout).
+            assert!(
+                !serialized.contains("echo_fixture"),
+                "MEDIUM-1: MCP error must NOT expose table name 'echo_fixture'; \
+                 got error message: {msg}"
+            );
+            // Crate name must not leak (reveals implementation stack).
+            assert!(
+                !serialized.contains("sqlx"),
+                "MEDIUM-1: MCP error must NOT expose crate name 'sqlx'; \
+                 got error message: {msg}"
+            );
+            // Constraint keyword must not leak (reveals DB schema constraints).
+            assert!(
+                !serialized.contains("constraint"),
+                "MEDIUM-1: MCP error must NOT expose 'constraint' \
+                 (Postgres constraint name or keyword); got error message: {msg}"
+            );
+            // Column keyword must not leak (reveals DB column names).
+            assert!(
+                !serialized.contains("column"),
+                "MEDIUM-1: MCP error must NOT expose 'column' \
+                 (Postgres column reference); got error message: {msg}"
+            );
+            // SQL text fragments must not leak (reveal the UPDATE query shape).
+            assert!(
+                !serialized.contains("UPDATE echo"),
+                "MEDIUM-1: MCP error must NOT expose SQL fragment 'UPDATE echo'; \
+                 got error message: {msg}"
+            );
+            assert!(
+                !serialized.contains("frontmatter ||"),
+                "MEDIUM-1: MCP error must NOT expose SQL fragment 'frontmatter ||'; \
+                 got error message: {msg}"
+            );
+        }
+        _other => {
+            // A non-McpError (transport / service error): the scrubbing contract
+            // applies to the McpError data surface. A non-McpError path here is
+            // acceptable for this assertion — the error did not reach the client
+            // as structured MCP data, so no internal seam detail leaked via that
+            // channel. The HIGH-1 test covers the shape of the returned error code.
+        }
+    }
 
     let _ = client.cancel().await;
     let _ = server_handle.await;
