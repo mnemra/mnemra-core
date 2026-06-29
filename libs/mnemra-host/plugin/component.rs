@@ -43,7 +43,8 @@ use uuid::Uuid;
 use wasmtime::component::{Component, Instance, Linker};
 use wasmtime::{ResourceLimiter, Store};
 
-use crate::abi::host_fns::FencedArtifactStore;
+use sqlx::PgPool;
+
 use crate::plugin::limits::MEMORY_MAX_BYTES;
 
 // ---------------------------------------------------------------------------
@@ -79,35 +80,27 @@ pub use mnemra::host::types::WorkspaceCtx as WitWorkspaceCtx;
 ///
 /// `workspace_id` is the authoritative, host-derived scoping key set at the
 /// dispatch site; the host-fn import bodies read it from here, never from a
-/// guest-supplied argument (R-0006-e). `artifacts` is the shared T7 fenced map
-/// (process-wide so a `create` on one pooled instance is visible to a later
-/// `get` on another). `HostState` implements `ResourceLimiter` so the 64 MiB
-/// ceiling rides the store unchanged from the pre-component `PluginResourceLimiter`.
+/// guest-supplied argument (R-0006-e). `pool` is the Postgres connection pool
+/// for artifact persistence (T13), set per-invocation via `set_pool`.
+/// `HostState` implements `ResourceLimiter` so the 64 MiB ceiling rides the
+/// store unchanged from the pre-component `PluginResourceLimiter`.
 pub struct HostState {
     /// Host-derived workspace scoping key (R-0006-b). Defaults to nil and is set
     /// per-invocation at the dispatch site before the export is called.
     workspace_id: Uuid,
-    /// The shared fenced in-memory artifact store (T7, Branch-2 stub).
-    artifacts: FencedArtifactStore,
+    /// Postgres connection pool for artifact persistence (T13). `None` for
+    /// resource-limit trap fixture instances that never invoke artifact host-fns.
+    pool: Option<PgPool>,
 }
 
 impl HostState {
-    /// Construct host state for an invocation under `workspace_id`, sharing the
-    /// given fenced artifact store.
-    pub fn new(workspace_id: Uuid, artifacts: FencedArtifactStore) -> Self {
-        Self {
-            workspace_id,
-            artifacts,
-        }
-    }
-
-    /// Construct host state with no bound workspace (nil UUID). Used at pool
-    /// pre-instantiation time, before a request assigns the real workspace at
-    /// the dispatch site (R-0006-b).
-    pub fn unbound(artifacts: FencedArtifactStore) -> Self {
+    /// Construct host state with no bound workspace (nil UUID) and no pool.
+    /// Used at pool pre-instantiation time, before a request assigns the real
+    /// workspace and pool at the dispatch site (R-0006-b).
+    pub fn unbound() -> Self {
         Self {
             workspace_id: Uuid::nil(),
-            artifacts,
+            pool: None,
         }
     }
 
@@ -117,14 +110,15 @@ impl HostState {
         self.workspace_id = workspace_id;
     }
 
+    /// Bind the Postgres pool for artifact persistence (T13). Called at the
+    /// dispatch site alongside `set_workspace_id`.
+    pub fn set_pool(&mut self, pool: PgPool) {
+        self.pool = Some(pool);
+    }
+
     /// The host-derived workspace scoping key (R-0006-c accessor discipline).
     pub fn workspace_id(&self) -> Uuid {
         self.workspace_id
-    }
-
-    /// A handle to the shared fenced artifact store.
-    pub fn artifacts(&self) -> &FencedArtifactStore {
-        &self.artifacts
     }
 }
 
@@ -166,36 +160,186 @@ impl mnemra::host::types::Host for HostState {}
 // so would let a plugin choose its own workspace and breach tenant isolation.
 // The scoping key is host-derived, never plugin-supplied.
 impl mnemra::host::artifact::Host for HostState {
-    /// `artifact-create` — persist via the fenced map and return a real ULID.
+    /// `artifact-create` — INSERT into `echo_fixture` and return the generated
+    /// ULID (T13, AC#1). Injects the ULID into `frontmatter['id']` to satisfy
+    /// CHECK (frontmatter ? 'id'). The `_body` param is unused at create
+    /// (CC-MAPPING: body=None; body column defaults to NULL).
     ///
-    /// The `_ctx` argument is the guest-supplied placeholder and is IGNORED
-    /// (R-0006-e); the real scoping key is `self.workspace_id` (R-0006-b/d).
+    /// Fail-closed (T13-g MEDIUM-2): the None-pool path panics rather than
+    /// fabricating a ULID that was never persisted. The panic is caught by the
+    /// `catch_unwind` seam in `invoke_through_recovery` and surfaces as a
+    /// structured `PluginExecError`, never as a fake-success response.
     fn artifact_create(
         &mut self,
         _ctx: WitWorkspaceCtx,
         type_name: String,
         frontmatter: String,
-        body: Option<String>,
+        _body: Option<String>,
     ) -> String {
-        crate::abi::host_fns::fenced_artifact_create(
-            &self.artifacts,
-            self.workspace_id,
-            &type_name,
-            frontmatter,
-            body,
-        )
+        let pool = match self.pool.as_ref() {
+            Some(p) => p.clone(),
+            None => {
+                // PgPool not bound — we cannot persist the artifact. Panicking is
+                // the only way to signal failure from a WIT `String` return type.
+                // The `catch_unwind` seam in `invoke_through_recovery` catches this
+                // panic, repopulates the pool slot, and returns a scrubbed error to
+                // the MCP caller (MEDIUM-2, T13-g fail-closed).
+                panic!(
+                    "artifact_create: PgPool not bound on HostState — \
+                     cannot persist artifact, fail closed (T13-g MEDIUM-2)"
+                );
+            }
+        };
+        let workspace_id = self.workspace_id;
+        let id = ulid::Ulid::new().to_string();
+        // Inject the generated ULID as frontmatter['id'] to satisfy
+        // CHECK (frontmatter ? 'id') — the caller cannot know the ULID in advance.
+        // Build the JSONB-safe frontmatter map from the caller-supplied string.
+        //
+        // Two cases:
+        // 1. `frontmatter` is a valid JSON object string (the common case from
+        //    mcp_server tests that pass `json!({...})` payloads) — parse and use
+        //    as-is; `id` + `frontmatter_version` are injected below.
+        // 2. `frontmatter` is a non-JSON or non-object string (e.g. the e2e test
+        //    passes a bare string like "slice1_e2e_payload_..." via dispatch.rs
+        //    `json_value_to_payload_string`) — wrap it under the `"content"` key
+        //    so it survives the JSONB round-trip. The stored JSON becomes
+        //    `{"content":"<string>","id":"...","frontmatter_version":1}` which
+        //    satisfies the CHECK constraints AND preserves the payload for `get`.
+        let fm_with_id = {
+            let mut map: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&frontmatter)
+                    .unwrap_or_else(|_| {
+                        let mut m = serde_json::Map::new();
+                        m.insert(
+                            "content".to_owned(),
+                            serde_json::Value::String(frontmatter.clone()),
+                        );
+                        m
+                    });
+            map.insert("id".to_owned(), serde_json::Value::String(id.clone()));
+            map.entry("frontmatter_version".to_owned())
+                .or_insert(serde_json::Value::Number(serde_json::Number::from(1u64)));
+            serde_json::Value::Object(map).to_string()
+        };
+        let id2 = id.clone();
+        tokio::runtime::Handle::current().block_on(async move {
+            sqlx::query(
+                "INSERT INTO echo_fixture (id, workspace_id, type, frontmatter) \
+                 VALUES ($1, $2, $3, $4::jsonb)",
+            )
+            .bind(&id2)
+            .bind(workspace_id)
+            .bind(&type_name)
+            .bind(&fm_with_id)
+            .execute(&pool)
+            .await
+            .unwrap_or_else(|e| panic!("artifact_create INSERT failed: {e}"))
+        });
+        id
     }
 
-    /// `artifact-get` — read back from the fenced map, workspace-scoped on
-    /// `self.workspace_id` (R-0006-d). The guest-supplied `_ctx` is ignored.
+    /// `artifact-get` — SELECT from `echo_fixture` WHERE id = $1 AND
+    /// workspace_id = $2 (T13, AC#4, R-0006-d). Returns frontmatter text, or
+    /// `frontmatter\nbody` when body is present and non-empty.
+    ///
+    /// Fail-closed (T13-g): a real DB error panics (caught by the seam in
+    /// `invoke_through_recovery`) rather than silently returning `None` (which
+    /// would be indistinguishable from a legitimate "not found"). A legitimate
+    /// `Ok(None)` (row absent or cross-workspace) is returned as `None`.
     fn artifact_get(&mut self, _ctx: WitWorkspaceCtx, id: String) -> Option<String> {
-        crate::abi::host_fns::fenced_artifact_get(&self.artifacts, self.workspace_id, &id)
+        let pool = match self.pool.as_ref() {
+            Some(p) => p.clone(),
+            None => {
+                tracing::warn!(
+                    event = "artifact_get_no_pool",
+                    "PgPool not set on HostState — artifact_get returning None"
+                );
+                return None;
+            }
+        };
+        let workspace_id = self.workspace_id;
+        tokio::runtime::Handle::current().block_on(async move {
+            let row: Option<(String, Option<String>)> = sqlx::query_as(
+                "SELECT frontmatter::text, body \
+                 FROM echo_fixture \
+                 WHERE id = $1 AND workspace_id = $2",
+            )
+            .bind(&id)
+            .bind(workspace_id)
+            .fetch_optional(&pool)
+            .await
+            // Distinguish a real DB error (panic → seam catches → structured error)
+            // from a legitimate not-found/cross-workspace result (Ok(None)).
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    event = "artifact_get_error",
+                    error = %e,
+                    "artifact_get SELECT failed — fail closed (T13-g)"
+                );
+                panic!("artifact_get SELECT failed: {e}")
+            });
+            row.map(|(frontmatter_text, body)| match body {
+                Some(b) if !b.is_empty() => format!("{frontmatter_text}\n{b}"),
+                _ => frontmatter_text,
+            })
+        })
     }
 
-    /// `artifact-update` — merge the frontmatter patch + (optionally) replace the
-    /// body in the fenced map, workspace-scoped on `self.workspace_id` (R-0006-d).
-    /// The guest-supplied `_ctx` is ignored (R-0006-e); a missing/cross-workspace
-    /// target is a silent no-op (the fenced `(workspace_id, id)` lookup misses).
+    /// `artifact-list` — SELECT ids from `echo_fixture` WHERE workspace_id = $1
+    /// AND type = $2 (T13, R-0006-d). `_filters` deferred — brain #1846.
+    ///
+    /// Fail-closed (T13-g): a real DB error panics (caught by the seam in
+    /// `invoke_through_recovery`) rather than silently returning an empty vec
+    /// (which would be indistinguishable from a legitimate "no results"). A
+    /// legitimate `Ok(vec![])` (no matching rows) is returned as-is.
+    fn artifact_list(
+        &mut self,
+        _ctx: WitWorkspaceCtx,
+        type_name: String,
+        _filters: String,
+    ) -> Vec<String> {
+        let pool = match self.pool.as_ref() {
+            Some(p) => p.clone(),
+            None => {
+                tracing::warn!(
+                    event = "artifact_list_no_pool",
+                    "PgPool not set on HostState — artifact_list returning empty vec"
+                );
+                return vec![];
+            }
+        };
+        let workspace_id = self.workspace_id;
+        tokio::runtime::Handle::current().block_on(async move {
+            let rows: Vec<(String,)> =
+                sqlx::query_as("SELECT id FROM echo_fixture WHERE workspace_id = $1 AND type = $2")
+                    .bind(workspace_id)
+                    .bind(&type_name)
+                    .fetch_all(&pool)
+                    .await
+                    // Distinguish a real DB error (panic → seam catches → structured error)
+                    // from a legitimate empty result (Ok(vec![])).
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(
+                            event = "artifact_list_error",
+                            error = %e,
+                            "artifact_list SELECT failed — fail closed (T13-g)"
+                        );
+                        panic!("artifact_list SELECT failed: {e}")
+                    });
+            rows.into_iter().map(|(id,)| id).collect()
+        })
+    }
+
+    /// `artifact-update` — merge `frontmatter_patch` (jsonb `||`) and COALESCE
+    /// `body` WHERE id = $3 AND workspace_id = $4 (T13, R-0006-d). A
+    /// missing/cross-workspace target is a no-op (0 rows affected, no error).
+    ///
+    /// Fail-closed (T13-g HIGH-1): DB errors (e.g. malformed JSONB patch causing
+    /// a Postgres CAST error) now panic rather than being swallowed. The panic is
+    /// caught by the `catch_unwind` seam in `invoke_through_recovery`, the pool
+    /// slot is repopulated, and a structured error is returned to the MCP caller.
+    /// The seam discards the panic payload, so no sqlx/table detail leaks.
     fn artifact_update(
         &mut self,
         _ctx: WitWorkspaceCtx,
@@ -203,39 +347,80 @@ impl mnemra::host::artifact::Host for HostState {
         frontmatter_patch: String,
         body: Option<String>,
     ) {
-        crate::abi::host_fns::fenced_artifact_update(
-            &self.artifacts,
-            self.workspace_id,
-            &id,
-            frontmatter_patch,
-            body,
-        )
+        let pool = match self.pool.as_ref() {
+            Some(p) => p.clone(),
+            None => {
+                tracing::warn!(
+                    event = "artifact_update_no_pool",
+                    "PgPool not set on HostState — artifact_update is a no-op"
+                );
+                return;
+            }
+        };
+        let workspace_id = self.workspace_id;
+        tokio::runtime::Handle::current().block_on(async move {
+            sqlx::query(
+                "UPDATE echo_fixture \
+                 SET frontmatter = frontmatter || $1::jsonb, \
+                     body = COALESCE($2, body), \
+                     updated_at = now() \
+                 WHERE id = $3 AND workspace_id = $4",
+            )
+            .bind(&frontmatter_patch)
+            .bind(body)
+            .bind(&id)
+            .bind(workspace_id)
+            .execute(&pool)
+            .await
+            // DB error → panic (caught by seam, slot repopulated, scrubbed error
+            // to caller). A 0-row result (missing/cross-workspace) is Ok — no-op.
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    event = "artifact_update_error",
+                    error = %e,
+                    "artifact_update UPDATE failed — fail closed (T13-g HIGH-1)"
+                );
+                panic!("artifact_update UPDATE failed: {e}")
+            });
+        });
     }
 
-    /// `artifact-list` — list ids of `type_name` artifacts visible in this
-    /// workspace, scoped on `self.workspace_id` (R-0006-d). The guest-supplied
-    /// `_ctx` is ignored (R-0006-e); `filters` is threaded but not applied this
-    /// slice (predicate logic deferred — brain #1846).
-    fn artifact_list(
-        &mut self,
-        _ctx: WitWorkspaceCtx,
-        type_name: String,
-        filters: String,
-    ) -> Vec<String> {
-        crate::abi::host_fns::fenced_artifact_list(
-            &self.artifacts,
-            self.workspace_id,
-            &type_name,
-            filters,
-        )
-    }
-
-    /// `artifact-delete` — remove from the fenced map, workspace-scoped on
-    /// `self.workspace_id` (R-0006-d). The guest-supplied `_ctx` is ignored
-    /// (R-0006-e); a missing/cross-workspace target is a silent no-op (the fenced
-    /// `(workspace_id, id)` lookup misses).
+    /// `artifact-delete` — DELETE FROM echo_fixture WHERE id = $1 AND
+    /// workspace_id = $2 (T13, R-0006-d). A missing/cross-workspace target is
+    /// a no-op (0 rows affected, no error).
+    ///
+    /// Fail-closed (T13-g): DB errors panic (caught by the seam in
+    /// `invoke_through_recovery`, slot repopulated, scrubbed error to MCP caller).
+    /// A 0-row result (missing/cross-workspace target) is Ok — no-op.
     fn artifact_delete(&mut self, _ctx: WitWorkspaceCtx, id: String) {
-        crate::abi::host_fns::fenced_artifact_delete(&self.artifacts, self.workspace_id, &id)
+        let pool = match self.pool.as_ref() {
+            Some(p) => p.clone(),
+            None => {
+                tracing::warn!(
+                    event = "artifact_delete_no_pool",
+                    "PgPool not set on HostState — artifact_delete is a no-op"
+                );
+                return;
+            }
+        };
+        let workspace_id = self.workspace_id;
+        tokio::runtime::Handle::current().block_on(async move {
+            sqlx::query("DELETE FROM echo_fixture WHERE id = $1 AND workspace_id = $2")
+                .bind(&id)
+                .bind(workspace_id)
+                .execute(&pool)
+                .await
+                // DB error → panic (caught by seam, slot repopulated, scrubbed error
+                // to caller). A 0-row result (missing/cross-workspace) is Ok — no-op.
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        event = "artifact_delete_error",
+                        error = %e,
+                        "artifact_delete DELETE failed — fail closed (T13-g)"
+                    );
+                    panic!("artifact_delete DELETE failed: {e}")
+                });
+        });
     }
 }
 
@@ -310,10 +495,11 @@ pub fn instantiate(
     Ok(instance)
 }
 
-/// Build a `Store<HostState>` carrying the fenced store and the memory limiter,
-/// unbound to a workspace until the dispatch site sets it (R-0006-b).
-pub fn new_store(engine: &wasmtime::Engine, artifacts: FencedArtifactStore) -> Store<HostState> {
-    let mut store = Store::new(engine, HostState::unbound(artifacts));
+/// Build a `Store<HostState>` with the memory limiter, unbound to a workspace
+/// until the dispatch site sets it (R-0006-b). Pool is also unbound until
+/// `set_pool` is called at the dispatch site (T13).
+pub fn new_store(engine: &wasmtime::Engine) -> Store<HostState> {
+    let mut store = Store::new(engine, HostState::unbound());
     store.limiter(|state| state as &mut dyn ResourceLimiter);
     store
 }
