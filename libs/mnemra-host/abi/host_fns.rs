@@ -28,6 +28,19 @@ use crate::auth::workspace_ctx::WorkspaceCtx;
 /// Mirrors `type json = string` in WIT (R-0012-f: never list<u8>).
 pub type Json = String;
 
+/// Paged list result — mirrors `record artifact-page` in WIT (R-0020).
+///
+/// T14: the `artifact-list` stub carries this return type.  Keyset/clamp/
+/// cursor logic is deferred to later tasks; the stub remains `todo!()`.
+pub struct ArtifactPage {
+    /// Artifact ids visible in the caller's workspace for this page.
+    pub ids: Vec<String>,
+    /// True when additional pages exist beyond this one.
+    pub has_more: bool,
+    /// Opaque continuation token; `None` when `has_more` is false.
+    pub next_cursor: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // artifact interface
 // ---------------------------------------------------------------------------
@@ -84,17 +97,22 @@ pub fn artifact_get(
     })
 }
 
-/// `artifact-list` — lists artifacts matching the given type and filter criteria.
+/// `artifact-list` — lists artifacts matching the given type and filter criteria
+/// with paging (R-0020).
 ///
 /// The WHERE clause includes `workspace_id = ctx.workspace_id()` to scope the
-/// query to the caller's workspace (R-0006-d). Storage wiring lands in Task 5.
+/// query to the caller's workspace (R-0006-d). `_limit` and `_cursor` are
+/// signature-only here; keyset/clamp/cursor logic deferred to later tasks.
+/// Storage wiring lands in Task 5.
 ///
-/// R-0012-a, R-0006-a, R-0006-d
+/// R-0012-a, R-0006-a, R-0006-d, R-0020
 pub fn artifact_list(
     ctx: WorkspaceCtx,
     _type_name: &str,
     _filters: Json,
-) -> Result<DispatchOutcome<Vec<String>>, DispatchError> {
+    _limit: u32,
+    _cursor: Option<&str>,
+) -> Result<DispatchOutcome<ArtifactPage>, DispatchError> {
     DispatchWrapper::invoke(&ARTIFACT_STABILITY, "artifact-list", || {
         // WHERE clause shape: workspace_id = ctx.workspace_id() AND type_name = $2
         // ctx.workspace_id() is the WHERE-clause discriminator (R-0006-d).
