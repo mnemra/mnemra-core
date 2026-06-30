@@ -22,30 +22,30 @@ superseded_by: null
 
 ## Context and Problem Statement
 
-This is a P-ADR ([P-* ADR](../glossary.md#p--adr): an Architecture Decision Record scoped to a single project, recording context, the decision, rejected alternatives, and consequences). Each `core: true` plugin declares its identity, content ownership, and required host-fn surface through a manifest. The manifest is signed (per [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md)) and loaded by the plugin runtime before any plugin code runs. From the declared host-fn surface, the runtime compiles a per-instance allowlist. Any call outside that allowlist fails at the WIT boundary.
+Each `core: true` plugin (signed and non-uninstallable; `core: false` is not valid at V0) declares its identity, content ownership, and required host function (host-fn) surface in a manifest file. The manifest is cryptographically signed per [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) and loaded by the plugin runtime before any plugin code runs. The runtime compiles the manifest's declared host-fn list into a per-instance allowlist; any call outside that list fails at the WebAssembly Interface Types (WIT) boundary, the contract layer between plugin WASM code and the host.
 
-Two axes needed resolution before this ADR could lock.
+Two axes needed resolution before this [ADR](../glossary.md#adr) could lock.
 
-1. **Universal `content.emit` vs aspect-map-per-type.** Under [P-0001-storage-layout](P-0001-storage-layout.md) C1 (single-document), the artifact is a whole row. There's no per-aspect split. The manifest's verb shape should match that single-document model: a universal `content.emit` over JSONB frontmatter plus body, not an `aspect_map` per type. Aspect maps would have been necessary under C2 (composite-with-typed-slots). C1 removes that surface entirely.
+1. **Universal `content.emit` vs aspect-map-per-type.** Under [P-0001-storage-layout](P-0001-storage-layout.md) option C1 (single-document: each artifact is one complete row with no per-aspect split), the manifest's verb shape follows directly: a universal `content.emit` over JSONB (PostgreSQL's binary JSON format) frontmatter and body, not a per-type `aspect_map`. Aspect maps would have been required under C2 (composite-with-typed-slots). C1 removes that surface entirely.
 
-2. **Host-fn ABI scope.** Which categories of host functions can a plugin invoke? The ABI surface has to be wide enough to support the 4 `core: true` plugins declared in [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md), and narrow enough that the signed-manifest allowlist meaningfully limits what a plugin can do. Plugins are IO-free. All IO is host-mediated, and the ABI names the categories.
+2. **Host-fn ABI scope.** Which categories of host functions can a plugin invoke? The ABI (Application Binary Interface: the function-call contract between a WASM plugin and its host runtime) must be wide enough to support the four `core: true` plugins declared in [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md), and narrow enough that the signed-manifest allowlist meaningfully limits what a plugin can do. Plugins are IO-free: all IO is host-mediated, and the ABI names the exact mediating functions.
 
-The manifest schema must carry an explicit `schema_version` field. That way V0.1+ manifest format evolution stays backward-compatible without breaking V0 plugins.
+The manifest schema must carry an explicit `schema_version` field so V0.1+ manifest format evolution can be backward-compatible without breaking V0 plugins.
 
 ## Decision Drivers
 
-- **C1 universal content.emit.** [P-0001-storage-layout](P-0001-storage-layout.md) locked the single-document layout. The manifest verb shape follows from that as a propagated consequence: universal artifact CRUD over JSONB, not per-aspect operations.
+- **C1 universal content.emit.** [P-0001-storage-layout](P-0001-storage-layout.md) locked the single-document layout. The manifest verb shape follows as a direct consequence: universal artifact CRUD over JSONB, not per-aspect operations.
 - **Per-instance allowlist compiled from signed manifest.** [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) requires the runtime to derive per-instance security properties from the signed manifest. The host-fn surface declared in the manifest is the input to that allowlist compilation.
-- **ABI forward-compat.** Pre-1.0 ABI freedom (a quality attribute scenario) requires that an ABI-change PR forces all `core: true` plugins to recompile and pass tests. The manifest's `schema_version` field makes that recompile surface explicit. A V0.1 change that bumps the schema version produces a new manifest version that old V0 plugins can reject gracefully.
-- **Security threat coverage.** `P-plugin-instance`/E (Critical) reads: "A plugin requests a host-fn outside its manifest's declared surface; if the host's permission check is at call-time and the plugin's manifest was loaded laxly, the plugin gains a capability it did not declare." The manifest is the structural mitigation. The allowlist is compiled into the per-instance binding, so calls outside it fail at the WIT boundary, not in the host-fn body.
-- **`workspace_id` must not be a plugin parameter on write paths.** `P-host-fns`/T (Critical): `workspace_id` is derived from the session/token in `WorkspaceCtx` ([P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md)). The ABI MUST NOT accept `workspace_id` as a write-path parameter.
-- **No direct DB or network from plugin.** An IO-free plugin core is a Hard constraint. The host-fn surface names the exact mediating functions. Anything not named is structurally unavailable.
+- **ABI forward-compat.** The pre-1.0 ABI freedom quality-attribute scenario requires that any ABI-change PR force all `core: true` plugins to recompile and pass tests. The manifest's `schema_version` field makes the recompile surface explicit: V0.1 changes that bump the schema version produce a new manifest version that old V0 plugins can reject with a structured error rather than loading incorrectly.
+- **Security threat coverage.** `P-plugin-instance`/E (a Critical threat in the [architecture threat model](../architecture/overview.md)): "A plugin requests a host-fn outside its manifest's declared surface; if the host's permission check is at call-time and the plugin's manifest was loaded laxly, the plugin gains a capability it did not declare." The manifest is the structural mitigation: the per-instance allowlist is compiled into the binding, so calls outside it fail at the WIT boundary, not in the host-fn body.
+- **`workspace_id` must not be a plugin parameter on write paths.** `P-host-fns`/T (Critical): `workspace_id` is derived from the session or token in `WorkspaceCtx` (the host-side context object bound to each request; see [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md)). The ABI MUST NOT accept `workspace_id` as a write-path parameter.
+- **No direct DB or network from plugin.** IO-free plugin core is a Hard constraint. The host-fn surface names the exact mediating functions; anything not named is structurally unavailable.
 
 ## Considered Options
 
 1. **M1 — Universal `content.emit` with typed host-fn allowlist (V0 shape).** A single manifest verb model. Host-fn categories are declared per-plugin, and the allowlist is compiled per-instance from the signed manifest.
-2. **M2 — Aspect-map-per-type manifest.** Each plugin declares an `aspect_map` per content type, specifying which aspects (body, state, log, edges) it owns. Rich, but only meaningful under C2. It doesn't fit C1.
-3. **M3 — Capability-flag-only manifest (no host-fn granularity).** The manifest declares capability flags (`content_read`, `content_write`, `metrics_write`) without per-fn granularity. Simpler but coarser, and it doesn't enable per-fn allowlist compilation.
+2. **M2 — Aspect-map-per-type manifest.** Each plugin declares an `aspect_map` per content type, specifying which aspects (body, state, log, edges) it owns. Rich, but only meaningful under C2; doesn't fit C1.
+3. **M3 — Capability-flag-only manifest (no host-fn granularity).** The manifest declares capability flags (`content_read`, `content_write`, `metrics_write`) without per-fn granularity. Simpler but coarser; doesn't enable per-fn allowlist compilation.
 
 ## Decision Outcome
 
@@ -115,65 +115,114 @@ signed_at   = "..."     # ISO 8601
 
 These constraints are architectural, not stylistic. The runtime enforces them.
 
+Threat codes in the Source column (`P-plugin-instance`, `P-host-fns`, `DF-sampling-up`, `P-cli-handler`, `DS-pg-content`) reference specific threats in the [architecture threat model](../architecture/overview.md). `R-0007` is an accepted risk record. `Wasmtime` is the WebAssembly runtime that provides the plugin sandbox. `TB-mnemra-host` and `TB-plugin-sandbox` are trust-boundary labels from the architecture overview.
+
 | Constraint | Enforcement | Source |
 |---|---|---|
-| `workspace_id` is NOT a parameter on any write-path host-fn | Host derives `workspace_id` from `WorkspaceCtx` (session/token); the plugin cannot supply it | [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md) plus `P-host-fns`/T mitigation |
-| Undeclared host-fn calls fail at WIT boundary | Per-instance allowlist compiled from signed manifest; failure is at binding, not in the host-fn body | `P-plugin-instance`/E mitigation |
-| `artifact.delete` requires explicit manifest declaration | The destructive op isn't in the default `required` surface; the plugin must opt in | `P-cli-handler`/E mitigation pattern applied to the plugin surface |
-| `sampling.request` content-IDs only (no artifact bodies in prompt) | At V0 all plugins are `core: true`, so the surface is contained; V0.1+ third-party install escalates this to Critical per `R-0007` | `DF-sampling-up`/I mitigation |
-| No direct DB access; no network access | Wasmtime sandbox plus IO-free plugin core (Hard constraint) | Brief Hard constraints; architecture overview TB `TB-mnemra-host`↔`TB-plugin-sandbox` |
-| `core: true` is the only valid value at V0 | Non-core plugin install is V0.1+ scope; the runtime rejects `core: false` manifests at V0 | [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) plus brief Hard constraints |
+| `workspace_id` is NOT a parameter on any write-path host-fn | Host derives `workspace_id` from `WorkspaceCtx` (session/token); plugin cannot supply it | [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md) + `P-host-fns`/T mitigation |
+| Undeclared host-fn calls fail at WIT boundary | Per-instance allowlist compiled from signed manifest; failure is at binding, not at host-fn body | `P-plugin-instance`/E mitigation |
+| `artifact.delete` requires explicit manifest declaration | Destructive op not included in default `required` surface; plugin must opt in | `P-cli-handler`/E mitigation pattern applied to plugin surface |
+| `sampling.request` content-IDs only (no artifact bodies in prompt) | At V0 all plugins are `core: true` so surface is contained; V0.1+ third-party install escalates this to Critical per `R-0007` | `DF-sampling-up`/I mitigation |
+| No direct DB access; no network access | Wasmtime sandbox + IO-free plugin core (Hard constraint) | Brief Hard constraints; architecture overview TB `TB-mnemra-host`↔`TB-plugin-sandbox` |
+| `core: true` is the only valid value at V0 | Non-core plugin install is V0.1+ scope; runtime rejects `core: false` manifests at V0 | [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) + brief Hard constraints |
 
 ### Schema evolution (schema_version field)
 
-`schema_version: 1` locks the V0 manifest format. V0.1+ changes that alter the manifest structure increment this field. The runtime loads a manifest by branching on `schema_version`. A V0 plugin presenting `schema_version: 1` against a V0.1 runtime keeps loading without modification. A V0.1 plugin presenting `schema_version: 2` against a V0 runtime produces a structured load error that names the schema_version mismatch.
+`schema_version: 1` locks the V0 manifest format. V0.1+ changes that alter the manifest structure increment this field. The runtime loads a manifest by branching on `schema_version`. A V0 plugin presenting `schema_version: 1` against a V0.1 runtime continues to load without modification. A V0.1 plugin presenting `schema_version: 2` against a V0 runtime produces a structured load error naming the schema_version mismatch.
 
 This is the primary forward-compat invariant for the ABI evolution discipline quality attribute scenario: "A plugin calling an `@unstable` host function emits a deprecation warning."
 
 ### Consequences
 
 **Good:**
-- `P-plugin-instance`/E (Critical) mitigation: a per-instance host-fn allowlist compiled from the signed manifest. A call outside the allowlist fails structurally at the WIT boundary.
-- The universal `content.emit` ABI is narrow. A typical work-verb plugin declares 5 content CRUD operations plus 4 observability operations, which is 9 required host-fn declarations. That's an auditable surface.
-- The `workspace_id` write-path exclusion is structural: host-fn signatures never take `workspace_id` as a parameter, and `WorkspaceCtx` is host-derived.
-- `schema_version: 1` gives a forward-compat break surface. ABI evolution is mechanical (recompile all `core: true` plugins) and well-bounded, since the set is small at V0.
-- The signing chain in [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) signs the manifest. Verification is synchronous at load time, with no async path.
+- `P-plugin-instance`/E (Critical) mitigation: per-instance host-fn allowlist compiled from signed manifest; call outside allowlist fails structurally at WIT boundary.
+- The universal `content.emit` ABI is narrow: 5 content CRUD operations + 4 observability operations = 9 required host-fn declarations for a typical work-verb plugin. Auditable surface.
+- `workspace_id` write-path exclusion is structural: host-fn signatures never accept `workspace_id` as a parameter; `WorkspaceCtx` is host-derived.
+- `schema_version: 1` provides a forward-compat break surface: ABI evolution is mechanical (recompile all `core: true` plugins) and well-bounded (small set at V0).
+- Signing chain in [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) signs the manifest; verification is synchronous at load time; no async path.
 
 **Bad / Trade-offs:**
-- TOML format for the manifest is a tooling dependency. Plugin authors need a TOML serializer in their build toolchain to produce the signed manifest. It's in the standard library for Rust, and feasible for other compile-to-WASM languages.
-- Per-fn granularity in `host_fns.required` means adding a new host function to a plugin requires a manifest update and a re-sign. At V0, with 4 `core: true` plugins and a single signing authority, this is a controlled process. The cost scales with third-party plugin volume at V0.1+.
-- `sampling.request` as an optional host-fn creates a two-tier plugin ABI. Plugins that declare it carry a different trust surface than plugins that don't. The manifest makes that split explicit, and the host's allowlist compilation handles it structurally.
+- TOML format for the manifest is a tooling dependency. Plugin authors need a TOML serializer in their build toolchain to produce the signed manifest. Standard library for Rust; feasible for other compile-to-WASM languages.
+- Per-fn granularity in `host_fns.required` means adding a new host function to a plugin requires a manifest update and a re-sign. At V0 with 4 `core: true` plugins and a single signing authority, this is a controlled process; the cost scales with third-party plugin volume at V0.1+.
+- `sampling.request` as an optional host-fn creates a two-tier plugin ABI: plugins that declare it have a different trust surface than those that do not. The manifest makes this explicit; the host's allowlist compilation handles it structurally.
 
 ## Pros and Cons of the Options
 
 ### M1 — Universal `content.emit` + typed host-fn allowlist (accepted)
 
-- Pro: Propagates C1's single-document simplicity straight into the ABI, with no aspect-map complexity.
+- Pro: Propagates C1's single-document simplicity directly into the ABI; no aspect-map complexity.
 - Pro: Per-fn allowlist compilation is the structural mitigation for `P-plugin-instance`/E (Critical).
-- Pro: `schema_version: 1` gives a clean break surface for ABI evolution.
-- Con: A TOML plus signing toolchain dependency in the plugin build pipeline.
+- Pro: `schema_version: 1` provides a clean break surface for ABI evolution.
+- Con: TOML + signing toolchain dependency in the plugin build pipeline.
 
 ### M2 — Aspect-map-per-type manifest
 
-- Pro: Rich per-aspect access control is possible (body, state, log, and edges as separate capability grants).
-- Con: Only meaningful under the C2 layout; doesn't fit the C1 single-document model.
-- Con: A substantially richer manifest surface, with no third-party plugins to validate it at V0.
+- Pro: Rich per-aspect access control possible (body vs state vs log vs edges as separate capability grants).
+- Con: Only meaningful under C2 layout; does not fit C1 single-document model.
+- Con: Substantially richer manifest surface without third-party plugins to validate it at V0.
 
 ### M3 — Capability-flag-only manifest
 
-- Pro: A simpler manifest format with fewer fields to declare.
-- Con: A coarse-grained allowlist (category-level) rather than per-fn, which is a weaker `P-plugin-instance`/E mitigation.
-- Con: Doesn't accommodate `sampling.request` as an optional per-plugin flag without extending the flag vocabulary toward the same complexity as M1 anyway.
+- Pro: Simpler manifest format; fewer fields to declare.
+- Con: Coarse-grained allowlist (category-level) rather than per-fn; weaker `P-plugin-instance`/E mitigation.
+- Con: Does not accommodate `sampling.request` as an optional per-plugin flag without extending the flag vocabulary toward the same complexity as M1 anyway.
+
+## Amendment 2026-06-30 — Component content-hash field (supply-chain binding)
+
+The signing-to-runnable Frame ([`docs/intent/signing-to-runnable-frame.md`](../../intent/signing-to-runnable-frame.md), §5) routed the **content-hash-of-the-component-bytes** field to a P-0003 amendment (the `{{P-ManifestContentHash}}` open slot) rather than a spec-local field. The field is a **durable part of the manifest contract every `core: true` plugin must satisfy**: it's recomputed and enforced on **every** plugin load by the verified-load gate (`libs/mnemra-host/startup/pool_population.rs:126`). It is also a **manifest-schema change** (a new key in the signed canonical body), and P-0003 is the **sole authority** for that schema. A spec-local field would orphan a schema field from its schema authority: a future plugin author reading P-0003 wouldn't see the content-hash requirement, and a future manifest-schema change could silently drop it.
+
+The **runtime behavior** (recompute-and-reject-on-mismatch, fail-closed, single-read load, distinct error variant) is governed by **R-0021** in [`docs/specs/2026-06-30-signing-to-runnable.md`](../../specs/2026-06-30-signing-to-runnable.md); this amendment governs the **schema** (the field, its location, its algorithm constraint, and its presence rule).
+
+### Schema change — `[component]` section in the signed canonical body
+
+The V0 manifest schema gains a `[component]` section carrying a content-hash of the component (`.wasm`) bytes. It is located in the **signed canonical body**: the bytes **before** the `\n[signature]` marker that the signature covers (the slice extracted at `libs/mnemra-host/signing/verify.rs:337-344`). This location is **forced** by [P-0005](P-0005-v0-signing-chain.md) R-0005-h (core-by-provenance): a content-hash in the unsigned `[signature]`-adjacent region would let an attacker swap both the component and its declared hash.
+
+```toml
+# ... [plugin], [verbs], [content_types], [state_scopes], [host_fns] (unchanged) ...
+
+[component]
+# Content-hash binding of the component (.wasm) bytes. In the SIGNED body
+# (before [signature]) so the signature covers it (R-0005-h core-by-provenance).
+hash_alg = "blake3"   # one of {blake3, sha256, sha384, sha512}; V0 = blake3; MD5/SHA-1 rejected
+hash     = "..."      # mandatory; lowercase-hex digest of the component .wasm bytes under hash_alg
+
+[signature]
+# unchanged — covers everything above this marker
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `[component].hash_alg` | string | One of `{"blake3","sha256","sha384","sha512"}`; V0 locked value `"blake3"`; `"md5"`/`"sha1"`/any other value SHALL be rejected at load |
+| `[component].hash` | string | **Mandatory** (absence is a fail-closed load rejection); lowercase-hex digest of the component `.wasm` bytes under `hash_alg` |
+
+**Named algorithm (banned-weak constraint).** The content-hash algorithm SHALL be **SHA-256 or stronger / BLAKE3** (a fast cryptographic hash function); `MD5` and `SHA-1` are **banned** and SHALL be rejected at load. The V0 locked value is **BLAKE3**, reusing the in-tree BLAKE3 primitive already mandated for admin-token hashing ([P-0008](P-0008-admin-token-shape.md) / R-0008-b). No new dependency (`P-StackDiscipline`: prefer primitives already in the stack over introducing new ones). The strong set is the schema's **forward-allowance**; at V0 the only value any manifest carries is `blake3` (`sha256`/`sha384`/`sha512` are accepted by the schema but not exercised by a V0 manifest).
+
+**Binds bytes, not a path.** The `[component]` section binds the component's **bytes** (via `hash`); it carries **no path or name field**. The runtime resolves which component to load by other means (the single `core: true` plugin at V0); a manifest-declared component path/name is an out-of-scope multi-plugin concern, not part of this schema change.
+
+**Read only from the signed slice (complete-mediation).** The `[component]` table SHALL be parsed **only from the signed canonical body**: the bytes the signature covers, before the `\n[signature]` marker (the slice extracted at `libs/mnemra-host/signing/verify.rs:337-344`). A `[component]` table appearing in the unsigned `[signature]`-adjacent region SHALL NOT satisfy the field-presence requirement and SHALL cause rejection: the enforced value is always the signed value, never an unsigned-region copy. (Behavioral enforcement: spec R-0021-c/-e.)
+
+### `schema_version` stays `1` — and the mandatory-field rule (one decision)
+
+The "Schema evolution" section above states: *"`schema_version: 1` locks the V0 manifest format. **V0.1+ changes that alter the manifest structure increment this field.**"* Adding a `[component]` section **does** alter the manifest structure, so on the literal face of that rule it would increment. It does **not** increment, and the reasons are recorded here so this ADR is not silently self-contradicted:
+
+1. **V0 is still being *defined*, not evolved post-freeze.** No external plugin has shipped against a frozen V0 schema. The increment rule governs **V0.1+** changes (changes that alter the format *after* V0 is fixed), so a third party loading an older V0 plugin can detect the mismatch. There is no such older population: the single `core: true` plugin (`mnemra-echo`) is **re-signed with the field** as part of the same M1 change. The `[component]` section is therefore part of the **V0 schema definition**, not a post-freeze evolution.
+2. **The increment surface's purpose is not engaged.** `schema_version`'s job (Decision Outcome, "Schema evolution") is to give a *future* runtime a branch point for an *older* manifest. Bumping to `2` now would imply a `schema_version: 1` population that this change must remain load-compatible with, but that population doesn't exist: every V0 manifest carries the field.
+
+**Paired rule: mandatory field enforced by the parser, not by the version number.** Because `schema_version` stays `1`, the version number **cannot** signal the `[component].hash` field's presence. The parser SHALL therefore **require the field directly**: a signed manifest body lacking `[component].hash` SHALL be **rejected fail-closed** at load, never loaded with the content-hash check skipped. This mandatory-field rule and the `schema_version: 1` disposition are **one decision**: holding the version at `1` is only safe *because* the parser enforces presence rather than inferring it from the version. (Behavioral enforcement: spec R-0021-c.)
+
+### Scope of this amendment
+
+This amendment adds **only** the `[component]` content-hash section to the signed body. It does **not** change `schema_version`, the host-fn ABI, the `[verbs]` / `[content_types]` / `[state_scopes]` / `[host_fns]` sections, the `[signature]` section, or any structural invariant in the table above. The custody / signing mechanism is unchanged ([P-0005](P-0005-v0-signing-chain.md)). The Tier-C signing-key custody hardening (`{{P-SigningKeyCustodyHardening}}`) remains deferred behind the R-0005-e multi-deployment trip-wire; it's out of scope here.
 
 ## More Information
 
-- Frame open ADR slot: `{{P-PluginManifest}}` ([Frame](../intent/mnemra-core-frame.md), Tier A table). Frame is Stage 2 of the work-shaping pipeline, where agents synthesize a constraint summary and rationale chain. This ADR resolves that slot.
+- Frame open ADR slot: `{{P-PluginManifest}}` ([Frame](../intent/mnemra-core-frame.md), Tier A table). This ADR resolves that slot.
 - Depends on: [P-0001-storage-layout](P-0001-storage-layout.md) (C1 leads to universal `content.emit`); [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md) (4 `core: true` plugins whose manifests follow this schema).
-- [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) — the signing chain signs the manifest; the `[signature]` section is populated at build time; the runtime verifies it synchronously at load.
-- [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md) — `WorkspaceCtx` is the source of `workspace_id` on all host-fn write paths; the host-fn signatures enforce the exclusion.
-- [P-0007-plugin-resource-limits](P-0007-plugin-resource-limits.md) — per-instance fuel and memory limits apply to the Wasmtime instance executing the plugin; the manifest is loaded before instance instantiation.
-- [P-0008-admin-token-shape](P-0008-admin-token-shape.md) — the admin token's `scopes` array feeds permission checks at the host layer; manifest-declared `verbs` are a separate surface (MCP-facing verb names, not token scopes).
-- [P-0009-rls-admin-token](P-0009-rls-admin-token.md) — the verb-to-scope mapping: which admin token scope grants access to which manifest-declared verb categories.
+- [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md): signing chain signs the manifest; `[signature]` section populated at build time; runtime verifies synchronously at load.
+- [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md): `WorkspaceCtx` is the source of `workspace_id` on all host-fn write paths; host-fn signatures enforce the exclusion.
+- [P-0007-plugin-resource-limits](P-0007-plugin-resource-limits.md): per-instance fuel/memory limits apply to the Wasmtime instance executing the plugin; manifest is loaded before instance instantiation.
+- [P-0008-admin-token-shape](P-0008-admin-token-shape.md): admin token's `scopes` array feeds permission checks at the host layer; manifest-declared `verbs` are a separate surface (MCP, Model Context Protocol: verb names exposed to connected agents, not token scopes).
+- [P-0009-rls-admin-token](P-0009-rls-admin-token.md): verb-to-scope mapping: which admin token scope grants access to which manifest-declared verb categories.
 - Threat references: `P-plugin-instance`/E,T,I; `P-host-fns`/T,I,E; `DF-host-fn-call`/T,I; `DF-sampling-up`/T,I; `P-cli-handler`/E; `DS-pg-content`/T. ([Overview](../architecture/overview.md))
-- Accepted risk `R-0007`: plugin sampling is unrestricted at V0 because all plugins are `core: true`; it becomes Critical at V0.1+ third-party install.
-- V0.1+ ABI follow-up: an `@stable`/`@unstable` annotation per host-fn in the WIT interface definitions; the stability-tier mark scenario from the quality-attribute tree.
+- Accepted risk `R-0007`: plugin sampling is unrestricted at V0 because all plugins are `core: true`; becomes Critical at V0.1+ third-party install.
+- V0.1+ ABI follow-up: `@stable`/`@unstable` annotation per host-fn in the WIT interface definitions; stability-tier mark scenario from quality-attribute tree.
