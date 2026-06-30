@@ -25,8 +25,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "586bfecca3d3ca1a04b6ee1866268e363160fdb0a81998695adce76a0f4255ec",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "7ebfca7f8363a8d2b2d654f183da8e5bcddb0f730938f53180eba5f5b457314e",
+      "translated_at": "2026-06-30T22:55:54Z"
     },
     "adrs/P-0004-observability-shape.md": {
       "primary_audience": "agent",
