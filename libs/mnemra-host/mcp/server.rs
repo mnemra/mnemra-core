@@ -44,7 +44,19 @@ use crate::mcp::dispatch::{auth_and_authorize, resolve_content_call};
 use crate::mcp::errors::{SUPERVISOR_DEGRADED_CODE, VERB_NOT_EXPOSED_CODE};
 use crate::plugin::manifest::parse_manifest;
 use crate::plugin::pool::PluginPool;
-use crate::plugin::trap_recovery::{ContentResult, ResourceBudget, invoke_content};
+use crate::plugin::trap_recovery::{ContentCall, ContentResult, ResourceBudget, invoke_content};
+
+/// Query scan timeout: the host read-path Postgres `statement_timeout` canceled
+/// the keyset query (SQLSTATE 57014) — the R-0020-d scan-cost backstop firing.
+///
+/// A DISTINCT custom code per R-0010-f no-conflation: it is NOT `PLUGIN_EXEC_CODE`
+/// (-4004, the guest epoch-deadline `plugin_execution_timeout`) and NOT
+/// `INVALID_PARAMS` (-32602, parameter-invalid). It extends the custom mnemra MCP
+/// code range (-4000..-4099, allocated in `crate::mcp::errors`) with -4007.
+///
+/// Defined here rather than in `errors.rs` to stay within this task's edit scope;
+/// a follow-up may relocate it alongside -4001..-4006 for convention consistency.
+const QUERY_SCAN_TIMEOUT_CODE: rmcp::model::ErrorCode = rmcp::model::ErrorCode(-4007);
 
 // ---------------------------------------------------------------------------
 // Echo manifest bytes (embedded at compile time)
@@ -253,6 +265,25 @@ impl ServerHandler for MnemraMcpServer {
         // no runtime export registry (FENCE R-0019-c).
         let dispatch = resolve_content_call(&request.name, request.arguments.as_ref())?;
 
+        // Cursor ULID validation — performed here at the MCP boundary, BEFORE
+        // invoke_content. Reason: artifact_list returns WitArtifactPage (not a
+        // Result); panics inside the host-fn are caught by the catch_unwind seam
+        // in invoke_through_recovery and surface as PLUGIN_EXEC_CODE (-4004), NOT
+        // INVALID_PARAMS (-32602). Validating here is the only way to return the
+        // spec-required -32602 code for a malformed cursor (R-0020-b).
+        if let ContentCall::List {
+            cursor: Some(ref c),
+            ..
+        } = dispatch.call
+            && !is_valid_ulid(c)
+        {
+            return Err(rmcp::model::ErrorData {
+                code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                message: "cursor is not a valid ULID".into(),
+                data: None,
+            });
+        }
+
         // Invoke the typed `content` export on a pooled component instance. The
         // pool invoke is synchronous (wasmtime `Store` is not async) and may run
         // until the epoch deadline on a trapping plugin, so it runs on a blocking
@@ -262,8 +293,21 @@ impl ServerHandler for MnemraMcpServer {
         let plugin_pool = Arc::clone(&self.plugin_pool);
         let pg_pool = self.pool.clone();
         let verb = request.name.to_string();
-        let invoke_result = tokio::task::spawn_blocking(move || {
-            invoke_content(
+        // Time the dispatch for the bounded R-0004-a `duration_ms` carried on the
+        // scan-timeout metric (R-0020-d). The host-side statement_timeout caps the
+        // read-path query, so this duration is bounded.
+        let dispatch_started = std::time::Instant::now();
+        // R-0020-d part ii: the scan-cost `statement_timeout` (SQLSTATE 57014) flag
+        // is a thread-local set inside the host-fn `artifact_list`. It MUST be read
+        // on the same blocking thread the host-fn ran on — `artifact_list` executes
+        // synchronously on this `spawn_blocking` thread via `block_on`, so the flag
+        // is live in the closure but would be empty after `.await` (a different
+        // runtime thread). Clear on entry (guard against a prior invocation on this
+        // pooled thread), take immediately after `invoke_content`, and carry the
+        // bool out of the closure as a plain value.
+        let (invoke_result, scan_timeout) = tokio::task::spawn_blocking(move || {
+            crate::plugin::component::clear_scan_timeout();
+            let result = invoke_content(
                 &plugin_pool,
                 ECHO_PLUGIN_NAME,
                 &verb,
@@ -271,7 +315,9 @@ impl ServerHandler for MnemraMcpServer {
                 ResourceBudget::default(),
                 workspace_id,
                 &pg_pool,
-            )
+            );
+            let scan_timeout = crate::plugin::component::take_scan_timeout();
+            (result, scan_timeout)
         })
         .await
         .map_err(|join_err| {
@@ -294,48 +340,201 @@ impl ServerHandler for MnemraMcpServer {
             }
         })?;
 
+        // R-0020-d part ii: a host-side `statement_timeout` (SQLSTATE 57014)
+        // cancellation on the read-path keyset query. The host-fn flagged it on the
+        // side-channel and failed closed (its panic was collapsed to a generic exec
+        // error by the recovery seam); surface the DISTINCT caller-facing
+        // `query_scan_timeout` code here — distinct from `plugin_execution_timeout`
+        // (the guest epoch -4004) and from `-32602` (parameter-invalid) — plus the
+        // R-0004-a `outcome = "timeout"` metric (workspace_id / verb / outcome /
+        // bounded duration_ms; cursor + next-cursor excluded, R-0020-g). The error
+        // body carries NO Postgres/schema/DB internals (R-0020-e no-leak posture).
+        if scan_timeout {
+            let duration_ms = dispatch_started.elapsed().as_millis() as u64;
+            tracing::warn!(
+                event = "verb_metric",
+                workspace_id = %workspace_id,
+                verb = %request.name,
+                outcome = "timeout",
+                duration_ms,
+                "artifact.list read-path scan-cost statement_timeout cancellation (R-0020-d)"
+            );
+            return Err(rmcp::model::ErrorData {
+                code: QUERY_SCAN_TIMEOUT_CODE,
+                message: "query scan timeout".into(),
+                data: None,
+            });
+        }
+
+        // R-0020-b / R-0016-a: invoke-inclusive duration_ms for all verbs.
+        //
+        // dispatch_started was set before spawn_blocking, so this elapsed span
+        // covers pool-slot acquire wait + guest execution (R-0016-a). Computing
+        // it once here (rather than per-arm) gives a consistent measurement point
+        // for the backfillable browse-by-metadata signal (#1919 tripwire): offline
+        // queries correlate verb_metric events by workspace_id across the full verb
+        // set (list + get + others), reconstructing the list-then-N-gets pattern.
+        let duration_ms = dispatch_started.elapsed().as_millis() as u64;
+
         // Map the typed return into a `CallToolResult` (R2). On a plugin
         // execution error (trap / not-registered), surface a structured MCP error
         // with a distinguishable code (R-0010-f) — never a vacuous `Ok`.
+        //
+        // R-0004-a / R-0020-g: every arm emits a `verb_metric` structured-log event
+        // carrying the R-0004-a floor (workspace_id / verb / outcome / duration_ms).
+        // Artifact IDs and content values are never emitted (R-0020-g exclusion).
+        // The timeout path early-returns above with outcome="timeout"; exactly one
+        // verb_metric fires per dispatch (invariant maintained across all arms).
         match invoke_result {
             Ok(ContentResult::Created(id)) => {
+                // R-0004-a: per-verb metric. `id` is NOT emitted (artifact-id, R-0020-g).
+                tracing::info!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "ok",
+                    duration_ms,
+                    "artifact.create dispatch completed (R-0004-a)"
+                );
                 // `echo.create` -> the generated ULID as a text content item.
                 Ok(CallToolResult::success(vec![Content::text(id)]))
             }
             Ok(ContentResult::Got(Some(content))) => {
+                // R-0004-a: per-verb metric. `content` is NOT emitted (artifact data, R-0020-g).
+                // This arm is the primary `get` success path; offline queries correlating
+                // list-then-get sequences per workspace_id fire against this event (#1919).
+                tracing::info!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "ok",
+                    duration_ms,
+                    "artifact.get dispatch completed (R-0004-a)"
+                );
                 // `echo.get` -> the stored content (round-trips the payload).
                 Ok(CallToolResult::success(vec![Content::text(content)]))
             }
             Ok(ContentResult::Got(None)) => {
+                // R-0004-a: per-verb metric. Not-found is a valid response (outcome "ok").
+                // Counted separately from Got(Some) by offline queries — both are get verbs.
+                tracing::info!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "ok",
+                    duration_ms,
+                    "artifact.get dispatch completed (not found) (R-0004-a)"
+                );
                 // Not found / not visible in this workspace — an empty-content Ok
                 // result (the readback path; cross-workspace get lands here).
                 Ok(CallToolResult::success(vec![]))
             }
-            Ok(ContentResult::Listed(ids)) => {
-                // `echo.list` -> each workspace-visible id as a text content item.
+            Ok(ContentResult::Listed(page)) => {
+                // `echo.list` -> artifact-page as MCP structured_content (R-0020 T16).
                 // The ids are already workspace-scoped in the fenced-list host body
                 // (R-0006-d); a cross-workspace id cannot appear here.
-                Ok(CallToolResult::success(
-                    ids.into_iter().map(Content::text).collect(),
-                ))
+                // CallToolResult::structured() populates both structured_content (the
+                // JSON object) and content[0].text (the JSON string) so that clients
+                // which read only the text content still see all ids.
+                //
+                // R-0004-a / R-0020-g: per-verb metric for the list success path.
+                // cursor (in) and next-cursor (out) are intentionally excluded — both
+                // are artifact IDs and must not appear in the metric or structured log
+                // (R-0020-g). duration_ms is invoke-inclusive (computed above, R-0016-a).
+                tracing::info!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "ok",
+                    duration_ms,
+                    "artifact.list dispatch completed (R-0004-a; cursor+next-cursor excluded R-0020-g)"
+                );
+                Ok(CallToolResult::structured(serde_json::json!({
+                    "ids": page.ids,
+                    "has_more": page.has_more,
+                    "next_cursor": page.next_cursor,
+                })))
             }
             Ok(ContentResult::Updated) => {
+                // R-0004-a: per-verb metric.
+                tracing::info!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "ok",
+                    duration_ms,
+                    "artifact.update dispatch completed (R-0004-a)"
+                );
                 // `echo.update` is void — an empty-content success result (like the
                 // `Got(None)` readback). The merge/persist happened host-side; a
                 // missing/cross-workspace target was a silent no-op (R-0006-d).
                 Ok(CallToolResult::success(vec![]))
             }
             Ok(ContentResult::Deleted) => {
+                // R-0004-a: per-verb metric.
+                tracing::info!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "ok",
+                    duration_ms,
+                    "artifact.delete dispatch completed (R-0004-a)"
+                );
                 // `echo.delete` is void — an empty-content success result. The
                 // delete happened host-side; a missing/cross-workspace target was a
                 // silent no-op (R-0006-d, miss=no-op).
                 Ok(CallToolResult::success(vec![]))
             }
-            Err(exec_err) => Err(rmcp::model::ErrorData {
-                code: crate::mcp::errors::PLUGIN_EXEC_CODE,
-                message: format!("plugin execution failed: {}", exec_err.code()).into(),
-                data: None,
-            }),
+            Err(exec_err) => {
+                // R-0004-a: per-verb metric for plugin execution failures (trap / not-registered).
+                tracing::warn!(
+                    event = "verb_metric",
+                    workspace_id = %workspace_id,
+                    verb = %request.name,
+                    outcome = "error",
+                    duration_ms,
+                    "plugin execution failed (R-0004-a)"
+                );
+                Err(rmcp::model::ErrorData {
+                    code: crate::mcp::errors::PLUGIN_EXEC_CODE,
+                    message: format!("plugin execution failed: {}", exec_err.code()).into(),
+                    data: None,
+                })
+            }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// ULID validation helper (R-0020-b)
+// ---------------------------------------------------------------------------
+
+/// Return `true` iff `s` is a syntactically valid Crockford base32-encoded ULID.
+///
+/// Rules:
+/// - Exactly 26 characters.
+/// - First character in `[0-7]` — the top 3 bits of the 130-bit encoding must be
+///   zero so the value fits in 128 bits.
+/// - All characters from the Crockford base32 alphabet:
+///   `0-9`, `A-H`, `J-K`, `M-N`, `P-T`, `V-Z` (excludes `I`, `L`, `O`, `U`).
+fn is_valid_ulid(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 26 {
+        return false;
+    }
+    // First character must be in [0-7] to keep the 128-bit ULID value in range.
+    if !matches!(b[0], b'0'..=b'7') {
+        return false;
+    }
+    b.iter().all(|&c| {
+        matches!(
+            c,
+            b'0'..=b'9'
+                | b'A'..=b'H'
+                | b'J'..=b'K'
+                | b'M'..=b'N'
+                | b'P'..=b'T'
+                | b'V'..=b'Z'
+        )
+    })
 }

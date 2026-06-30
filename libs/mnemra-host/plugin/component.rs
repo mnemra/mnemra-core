@@ -39,6 +39,8 @@
 //! the slice-1 path that runs is fully real; only genuinely-unreachable imports
 //! are trap-stubbed (no `todo!()` on the reachable path).
 
+use std::cell::Cell;
+
 use uuid::Uuid;
 use wasmtime::component::{Component, Instance, Linker};
 use wasmtime::{ResourceLimiter, Store};
@@ -46,6 +48,88 @@ use wasmtime::{ResourceLimiter, Store};
 use sqlx::PgPool;
 
 use crate::plugin::limits::MEMORY_MAX_BYTES;
+
+// ---------------------------------------------------------------------------
+// R-0020-d — scan-cost statement_timeout backstop: thread-local signal + helpers
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    /// Per-thread signal that the most recent `artifact_list` keyset SELECT was
+    /// canceled by the host-side `statement_timeout` (SQLSTATE 57014, R-0020-d).
+    ///
+    /// This is the only in-band channel for a DISTINCT caller-facing error code.
+    /// A WIT host-fn returns a non-`Result` type, so its sole error channel is
+    /// `panic!`, and the `catch_unwind` recovery seam in `trap_recovery` collapses
+    /// every host-fn panic to the generic `plugin_invocation_failed` code with the
+    /// payload discarded (no-leak). To surface a `query_scan_timeout` code that is
+    /// distinct from `plugin_execution_timeout` (the guest epoch -4004) and from
+    /// `-32602` (parameter-invalid), the scan-timeout class must ride this
+    /// side-channel up to the dispatch site.
+    ///
+    /// Set in `artifact_list` immediately before the fail-closed panic; read +
+    /// cleared by `server.rs::call_tool` within the SAME `spawn_blocking` closure.
+    /// Same-thread by construction: `artifact_list` runs synchronously on the
+    /// blocking thread via `block_on` (no task migration), so the flag is live in
+    /// the closure but would be empty after `.await` (a different runtime thread).
+    static SCAN_TIMEOUT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Set the per-thread scan-cost-timeout flag (R-0020-d). Called from
+/// `artifact_list` on a 57014 cancellation, immediately before the fail-closed
+/// panic that aborts the page.
+fn flag_scan_timeout() {
+    SCAN_TIMEOUT.with(|c| c.set(true));
+}
+
+/// Clear the per-thread scan-cost-timeout flag. The dispatch site calls this at
+/// the START of the `spawn_blocking` closure so a flag left by a prior invocation
+/// on the same pooled blocking thread cannot leak into this one (R-0020-d).
+pub fn clear_scan_timeout() {
+    SCAN_TIMEOUT.with(|c| c.set(false));
+}
+
+/// Take (read + clear) the per-thread scan-cost-timeout flag (R-0020-d). The
+/// dispatch site calls this immediately after `invoke_content` returns, on the
+/// same `spawn_blocking` thread the host-fn ran on, to decide whether to surface
+/// the `query_scan_timeout` caller error + `outcome = "timeout"` metric.
+pub fn take_scan_timeout() -> bool {
+    SCAN_TIMEOUT.with(|c| c.replace(false))
+}
+
+/// True iff `e` is a Postgres `statement_timeout` cancellation — SQLSTATE
+/// **57014** (`query_canceled`), the scan-cost backstop firing (R-0020-d). Matches
+/// ONLY 57014; every other SELECT error keeps the existing fail-closed panic and
+/// is never reclassified as a scan timeout.
+fn is_query_canceled(e: &sqlx::Error) -> bool {
+    e.as_database_error().and_then(|db| db.code()).as_deref() == Some("57014")
+}
+
+/// Parse a Postgres `current_setting('statement_timeout')` display string to
+/// milliseconds (R-0020-d part-i read-back). Postgres normalizes the value to a
+/// human-friendly unit (`3000` ms → `"3s"`, `50` ms → `"50ms"`, `0` → `"0"`), so
+/// the read-back converts the unit back to a millisecond count for the white-box
+/// assertion (== 3000). Only ever consumes a value the host itself just set, so a
+/// best-effort parse (unknown unit → numeric part) is safe. Test-only (the
+/// production read path does not read the GUC back).
+#[cfg(feature = "test-hooks")]
+fn parse_pg_timeout_to_ms(raw: &str) -> i64 {
+    let s = raw.trim();
+    let split = s
+        .find(|c: char| !c.is_ascii_digit() && c != '-')
+        .unwrap_or(s.len());
+    let (num, unit) = s.split_at(split);
+    let n: i64 = num.parse().unwrap_or(0);
+    match unit.trim() {
+        "" => n,
+        "us" => n / 1000,
+        "ms" => n,
+        "s" => n * 1000,
+        "min" => n * 60_000,
+        "h" => n * 3_600_000,
+        "d" => n * 86_400_000,
+        _ => n,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Generated host bindings for the `plugin` world
@@ -69,7 +153,23 @@ wasmtime::component::bindgen!({
 });
 
 // Re-export the generated guest-import types under stable local names.
+pub use mnemra::host::types::ArtifactPage as WitArtifactPage;
 pub use mnemra::host::types::WorkspaceCtx as WitWorkspaceCtx;
+
+/// Local `ArtifactPage` — the paged-list result type shared across
+/// `content_list` / `trap_recovery` / `server` without exposing bindgen
+/// internals to those callers.  The bindgen-generated `WitArtifactPage` is
+/// converted into this type inside `content_list` and `artifact_list`.
+///
+/// R-0020
+pub struct ArtifactPage {
+    /// Artifact ids visible in the caller's workspace for this page.
+    pub ids: Vec<String>,
+    /// True when additional pages exist beyond this one.
+    pub has_more: bool,
+    /// Opaque continuation token; `None` when `has_more` is false.
+    pub next_cursor: Option<String>,
+}
 
 // ---------------------------------------------------------------------------
 // HostState — the per-store host data
@@ -286,10 +386,26 @@ impl mnemra::host::artifact::Host for HostState {
         })
     }
 
-    /// `artifact-list` — SELECT ids from `echo_fixture` WHERE workspace_id = $1
-    /// AND type = $2 (T13, R-0006-d). `_filters` deferred — brain #1846.
+    /// `artifact-list` — keyset (cursor) page of ids from `echo_fixture` WHERE
+    /// workspace_id = $1 AND type = $2, ORDER BY id LIMIT $effective_limit + 1
+    /// (T16, R-0020-a/-c/-f, R-0006-d). `_filters` deferred — brain #1846.
     ///
-    /// Fail-closed (T13-g): a real DB error panics (caught by the seam in
+    /// R-0020-d scan-cost backstop (T17): the keyset SELECT runs inside an
+    /// EXPLICIT Postgres transaction that first issues `SET LOCAL statement_timeout`
+    /// (via the parameterized `set_config(..., is_local := true)` form). The
+    /// explicit transaction is mandatory: a `SET LOCAL` outside one binds only to
+    /// its own implicit single-statement transaction and is a no-op for the
+    /// following query — which would ship the backstop silently disarmed. Setting
+    /// the GUC and running the SELECT on the SAME `tx` handle is what arms it.
+    ///
+    /// On a `statement_timeout` cancellation Postgres raises SQLSTATE 57014
+    /// (`query_canceled`); `artifact_list` detects THAT specific error, flags the
+    /// per-thread `SCAN_TIMEOUT` side-channel (read by `server.rs` to surface the
+    /// distinct `query_scan_timeout` caller code + `outcome = "timeout"` metric),
+    /// and fails closed via panic so the page is never a vacuous empty success.
+    ///
+    /// Fail-closed (T13-g): every other DB error (BEGIN / SET LOCAL / read-back /
+    /// non-57014 SELECT / COMMIT) panics (caught by the seam in
     /// `invoke_through_recovery`) rather than silently returning an empty vec
     /// (which would be indistinguishable from a legitimate "no results"). A
     /// legitimate `Ok(vec![])` (no matching rows) is returned as-is.
@@ -298,37 +414,201 @@ impl mnemra::host::artifact::Host for HostState {
         _ctx: WitWorkspaceCtx,
         type_name: String,
         _filters: String,
-    ) -> Vec<String> {
+        limit: u32,
+        cursor: Option<String>,
+    ) -> WitArtifactPage {
         let pool = match self.pool.as_ref() {
             Some(p) => p.clone(),
             None => {
                 tracing::warn!(
                     event = "artifact_list_no_pool",
-                    "PgPool not set on HostState — artifact_list returning empty vec"
+                    "PgPool not set on HostState — artifact_list returning empty page"
                 );
-                return vec![];
+                return WitArtifactPage {
+                    ids: vec![],
+                    has_more: false,
+                    next_cursor: None,
+                };
             }
         };
         let workspace_id = self.workspace_id;
-        tokio::runtime::Handle::current().block_on(async move {
-            let rows: Vec<(String,)> =
-                sqlx::query_as("SELECT id FROM echo_fixture WHERE workspace_id = $1 AND type = $2")
+        // R-0020-c: host-side clamp — 0 → default 100, hard cap 500.
+        let effective_limit: u32 = if limit == 0 { 100 } else { limit.min(500) };
+        // Fetch one extra row to detect has_more (fetch-one-extra idiom, R-0020-a).
+        let fetch_limit: u32 = effective_limit + 1;
+        // Static SQL strings — two forms so the cursor predicate changes the
+        // parameter ordinal ($3 vs shifted $4) with no dynamic string construction.
+        // The LIMIT is always a bound parameter (never inlined) to satisfy
+        // sqlx::SqlSafeStr. Cursor validation (syntactically valid ULID) has already
+        // happened in mcp/server.rs before invoke_content (R-0020-b).
+        const SQL_NO_CURSOR: &str = "SELECT id FROM echo_fixture WHERE workspace_id = $1 AND type = $2 \
+             ORDER BY id LIMIT $3";
+        const SQL_WITH_CURSOR: &str = "SELECT id FROM echo_fixture WHERE workspace_id = $1 AND type = $2 \
+             AND id > $3 ORDER BY id LIMIT $4";
+
+        let (ids, has_more, next_cursor) = tokio::runtime::Handle::current().block_on(async move {
+            // R-0020-d: open an EXPLICIT transaction so the SET LOCAL
+            // statement_timeout binds to the keyset SELECT. begin / set_config /
+            // SELECT / commit all run on the same pooled connection inside one
+            // BEGIN — a SET LOCAL outside an explicit txn is a no-op (the
+            // silent-disarm trap the spec forbids).
+            let mut tx = pool.begin().await.unwrap_or_else(|e| {
+                tracing::warn!(
+                    event = "artifact_list_error",
+                    error = %e,
+                    "artifact_list BEGIN failed — fail closed (T13-g)"
+                );
+                panic!("artifact_list BEGIN failed: {e}")
+            });
+
+            // The scan-cost backstop ceiling. Production = 3000 ms (the locked
+            // value, strictly below the R-0007-b 5 s guest epoch deadline). Under
+            // test-hooks the (G1-blocked) cancellation test can force a low value
+            // through the knob so the timeout actually fires on a seeded scan.
+            let timeout_ms: u32 = {
+                #[cfg(feature = "test-hooks")]
+                {
+                    crate::plugin::sql_observe::effective_statement_timeout_ms(3000)
+                }
+                #[cfg(not(feature = "test-hooks"))]
+                {
+                    3000
+                }
+            };
+
+            // SET LOCAL statement_timeout, parameterized. `SET LOCAL
+            // statement_timeout = $1` cannot bind a parameter, but
+            // `set_config('statement_timeout', $1, true)` is the equivalent
+            // parameterized form — `is_local := true` makes it SET LOCAL (reverts
+            // at txn end). statement_timeout reads a bare number as milliseconds,
+            // so the value is the ms count as text.
+            sqlx::query("SELECT set_config('statement_timeout', $1, true)")
+                .bind(timeout_ms.to_string())
+                .execute(&mut *tx)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        event = "artifact_list_error",
+                        error = %e,
+                        "artifact_list SET LOCAL statement_timeout failed — fail closed (T13-g)"
+                    );
+                    panic!("artifact_list SET LOCAL statement_timeout failed: {e}")
+                });
+
+            // R-0020-d part i (test-only): read back current_setting INSIDE the
+            // same explicit transaction and record the milliseconds so the
+            // white-box GUC-placement assertion (non-zero, == 3000, < 5 s) is
+            // observable. The production read path does not pay this round-trip.
+            #[cfg(feature = "test-hooks")]
+            {
+                let setting: (String,) =
+                    sqlx::query_as("SELECT current_setting('statement_timeout')")
+                        .fetch_one(&mut *tx)
+                        .await
+                        .unwrap_or_else(|e| {
+                            tracing::warn!(
+                                event = "artifact_list_error",
+                                error = %e,
+                                "artifact_list current_setting read-back failed — fail closed (T13-g)"
+                            );
+                            panic!("artifact_list current_setting read-back failed: {e}")
+                        });
+                crate::plugin::sql_observe::record_statement_timeout_in_txn(parse_pg_timeout_to_ms(
+                    &setting.0,
+                ));
+            }
+
+            // The keyset SELECT — runs on the SAME `tx` handle, AFTER the SET
+            // LOCAL, so the statement_timeout governs it (the load-bearing
+            // structure for T22). The SQL is byte-identical to T16's; only the
+            // executor changed (&pool -> &mut *tx).
+            let select_result: Result<Vec<(String,)>, sqlx::Error> = if let Some(ref c) = cursor {
+                #[cfg(feature = "test-hooks")]
+                crate::plugin::sql_observe::record_list_sql(
+                    SQL_WITH_CURSOR,
+                    effective_limit,
+                    fetch_limit,
+                    true,
+                );
+                sqlx::query_as(SQL_WITH_CURSOR)
                     .bind(workspace_id)
                     .bind(&type_name)
-                    .fetch_all(&pool)
+                    .bind(c)
+                    .bind(i64::from(fetch_limit))
+                    .fetch_all(&mut *tx)
                     .await
-                    // Distinguish a real DB error (panic → seam catches → structured error)
-                    // from a legitimate empty result (Ok(vec![])).
-                    .unwrap_or_else(|e| {
-                        tracing::warn!(
-                            event = "artifact_list_error",
-                            error = %e,
-                            "artifact_list SELECT failed — fail closed (T13-g)"
-                        );
-                        panic!("artifact_list SELECT failed: {e}")
-                    });
-            rows.into_iter().map(|(id,)| id).collect()
-        })
+            } else {
+                #[cfg(feature = "test-hooks")]
+                crate::plugin::sql_observe::record_list_sql(
+                    SQL_NO_CURSOR,
+                    effective_limit,
+                    fetch_limit,
+                    false,
+                );
+                sqlx::query_as(SQL_NO_CURSOR)
+                    .bind(workspace_id)
+                    .bind(&type_name)
+                    .bind(i64::from(fetch_limit))
+                    .fetch_all(&mut *tx)
+                    .await
+            };
+
+            let rows: Vec<(String,)> = match select_result {
+                Ok(rows) => rows,
+                // R-0020-d part ii: a statement_timeout cancellation raises SQLSTATE
+                // 57014 (query_canceled). Detect THAT specific error (not all SELECT
+                // errors), flag the per-thread side-channel (read by server.rs to
+                // surface the distinct `query_scan_timeout` code + `outcome =
+                // "timeout"` metric), and fail closed via panic so the page is never
+                // a vacuous empty success. Non-57014 errors keep T16's existing
+                // fail-closed panic (→ plugin_invocation_failed); not reclassified.
+                Err(e) if is_query_canceled(&e) => {
+                    flag_scan_timeout();
+                    tracing::warn!(
+                        event = "artifact_list_scan_timeout",
+                        "artifact_list keyset SELECT canceled by statement_timeout (57014) — scan-cost backstop fired (R-0020-d)"
+                    );
+                    panic!(
+                        "artifact_list keyset SELECT canceled by statement_timeout (R-0020-d)"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        event = "artifact_list_error",
+                        error = %e,
+                        "artifact_list SELECT failed — fail closed (T13-g)"
+                    );
+                    panic!("artifact_list SELECT failed: {e}")
+                }
+            };
+
+            // Commit the explicit transaction (releases the SET LOCAL GUC). The
+            // rows are already materialized; commit cannot change them.
+            tx.commit().await.unwrap_or_else(|e| {
+                tracing::warn!(
+                    event = "artifact_list_error",
+                    error = %e,
+                    "artifact_list COMMIT failed — fail closed (T13-g)"
+                );
+                panic!("artifact_list COMMIT failed: {e}")
+            });
+
+            let mut ids: Vec<String> = rows.into_iter().map(|(id,)| id).collect();
+            // Fetch-one-extra (R-0020-a): pop the sentinel row when present.
+            // has_more = true iff we received fetch_limit rows (the extra row exists).
+            let got_extra = ids.len() == fetch_limit as usize;
+            if got_extra {
+                ids.pop();
+            }
+            let has_more = got_extra;
+            let next_cursor = if has_more { ids.last().cloned() } else { None };
+            (ids, has_more, next_cursor)
+        });
+        WitArtifactPage {
+            ids,
+            has_more,
+            next_cursor,
+        }
     }
 
     /// `artifact-update` — merge `frontmatter_patch` (jsonb `||`) and COALESCE
@@ -545,21 +825,37 @@ pub fn content_get(
 }
 
 /// Invoke the typed `content.list` export on a raw component `Instance`
-/// (R-0019-a). Returns the ids of `type_name` artifacts visible in the caller's
-/// workspace (the guest body calls back into the host `artifact-list` import,
-/// which scopes on the host-derived `workspace_id`). `filters` is threaded but
-/// not applied this slice (predicate logic deferred — brain #1846).
+/// (R-0019-a, R-0020). Returns an `ArtifactPage` with the ids of `type_name`
+/// artifacts visible in the caller's workspace (the guest body calls back into
+/// the host `artifact-list` import, which scopes on the host-derived
+/// `workspace_id`). `filters` is threaded but not applied this slice (predicate
+/// logic deferred — brain #1846). `limit` and `cursor` are forwarded to the
+/// guest; T14 host body returns placeholder paging only (has-more=false,
+/// next-cursor=none) — no keyset/clamp/cursor logic at this layer.
 pub fn content_list(
     store: &mut Store<HostState>,
     instance: &Instance,
     type_name: &str,
     filters: &str,
-) -> wasmtime::Result<Vec<String>> {
+    limit: u32,
+    cursor: Option<&str>,
+) -> wasmtime::Result<ArtifactPage> {
     let plugin = Plugin::new(&mut *store, instance)?;
     let content = plugin.mnemra_host_content();
     // See `content_create`: the accessor takes `&String`, not `&str`.
     #[allow(clippy::unnecessary_to_owned)]
-    content.call_list(&mut *store, &type_name.to_owned(), &filters.to_owned())
+    let wit_page = content.call_list(
+        &mut *store,
+        &type_name.to_owned(),
+        &filters.to_owned(),
+        limit,
+        cursor,
+    )?;
+    Ok(ArtifactPage {
+        ids: wit_page.ids,
+        has_more: wit_page.has_more,
+        next_cursor: wit_page.next_cursor,
+    })
 }
 
 /// Invoke the typed `content.update` export on a raw component `Instance`

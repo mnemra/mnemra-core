@@ -46,12 +46,19 @@ intent_version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
 
 [audit_chain.spec]
 ref = "docs/specs/2026-05-24-mnemra-core-v0-substrate.md"
-version = "dc0ed3bb29e0668973cd381faf5ff7d389235b22"
-# PROVENANCE: Warden fold-review chain 959 (request-changes) -> 961 (APPROVE)
-# against the content committed as 5df42c7; round-2 re-review (task 1582) confirmed
-# the P-0010 re-target, E1 Option-A narrative, and storage D1-D8 intact, with a
-# clean filesystem sound gate (sole P-0011 hit is the intentional frame:605
-# dissolution record). Strong backing.
+version = "3118fbb3f5f81c45f3ea1e7c42bd6448114f123f"
+# RE-LOCKED 2026-06-29 (spec-exit, #1847 artifact-list keyset pagination): spec amended in place
+# (R-0020 + R-0012-a/-f/-e + R-0019-a + R-0017-a) and committed 05a2ba4; version re-locked to the new
+# blob, reconciling the prior dc0ed3b -> committed-spec drift in the same move. Stage-3 review: Warden
+# 1164 + Bolt 1165 + Glitch 1166 (all approve-with-conditions, no Critical/High); conditions folded
+# (dispatch 1167); maintainer spec-exit gate accepted (ids-only locked + dogfood-instrumented, revisit
+# tripwire #1919; statement_timeout=3000ms + limit=0->clamp-to-default ratified). Product-tier
+# generated_against unchanged: the amendment draws from the localized paging intake/frame (blob
+# 31515f1), recorded as provenance in the spec body, not the BOM.
+#
+# PRIOR PROVENANCE: Warden fold-review chain 959 (request-changes) -> 961 (APPROVE) against content
+# committed as 5df42c7; round-2 re-review (task 1582) confirmed the P-0010 re-target, E1 Option-A
+# narrative, and storage D1-D8 intact, with a clean filesystem sound gate. Strong backing.
 internal_conformance = "pass"
 
 [audit_chain.spec.generated_against]

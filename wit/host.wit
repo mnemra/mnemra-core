@@ -1,4 +1,4 @@
-package mnemra:host@0.0.1;
+package mnemra:host@0.0.2;
 
 /// Shared types used across all host-fn interfaces.
 interface types {
@@ -19,6 +19,21 @@ interface types {
         /// Workspace identifier — host-derived, never a bare host-fn param.
         workspace-id: string,
     }
+
+    /// Paged result for artifact-list operations (R-0020).
+    ///
+    /// `ids` holds the artifact ids visible in the caller's workspace for
+    /// this page.  `has-more` is true when additional pages exist beyond
+    /// this one.  `next-cursor` is the opaque continuation token to supply
+    /// on the next call; `none` when `has-more` is false.
+    ///
+    /// T14: host body returns placeholder paging only (has-more=false,
+    /// next-cursor=none); keyset/clamp/cursor logic lands in later tasks.
+    record artifact-page {
+        ids: list<string>,
+        has-more: bool,
+        next-cursor: option<string>,
+    }
 }
 
 /// Typed content export interface — the fixed CRUD surface EVERY content plugin
@@ -38,7 +53,7 @@ interface types {
 ///
 /// R-0019-a, R-0019-e
 interface content {
-    use types.{json};
+    use types.{json, artifact-page};
 
     /// Create a new artifact of `type` and return its generated id (ULID).
     ///
@@ -52,11 +67,18 @@ interface content {
     @since(version = 0.0.1)
     get: func(id: string) -> option<string>;
 
-    /// List artifacts of `type` matching `filters`.
+    /// List artifacts of `type` matching `filters` with paging (R-0020).
     ///
-    /// R-0019-a
-    @since(version = 0.0.1)
-    %list: func(%type: string, filters: json) -> list<string>;
+    /// `limit` caps the number of ids returned (0 = host-default).
+    /// `cursor` resumes from a prior page (none = first page).
+    /// Returns an `artifact-page` with the visible ids and a continuation
+    /// token; T14 host body returns placeholder paging only.
+    ///
+    /// Breaking change from 0.0.1 (list<string>) — R-0020, R-0017-a.
+    ///
+    /// R-0019-a, R-0020
+    @since(version = 0.0.2)
+    %list: func(%type: string, filters: json, limit: u32, cursor: option<string>) -> artifact-page;
 
     /// Patch an artifact's frontmatter and/or body.
     ///
@@ -76,7 +98,7 @@ interface content {
 ///
 /// R-0012-a, R-0003-g
 interface artifact {
-    use types.{json, workspace-ctx};
+    use types.{json, workspace-ctx, artifact-page};
 
     /// Create a new artifact and return its generated id.
     ///
@@ -96,11 +118,18 @@ interface artifact {
     @since(version = 0.0.1)
     artifact-get: func(ctx: workspace-ctx, id: string) -> option<string>;
 
-    /// List artifacts by type with optional filter criteria.
+    /// List artifacts by type with optional filter criteria and paging (R-0020).
     ///
-    /// R-0012-a
-    @since(version = 0.0.1)
-    artifact-list: func(ctx: workspace-ctx, %type: string, filters: json) -> list<string>;
+    /// `limit` caps the number of ids returned (0 = host-default).
+    /// `cursor` resumes from a prior page (none = first page).
+    /// Returns an `artifact-page` with the visible ids and a continuation
+    /// token; T14 host body returns placeholder paging only.
+    ///
+    /// Breaking change from 0.0.1 (list<string>) — R-0020, R-0017-a.
+    ///
+    /// R-0012-a, R-0020
+    @since(version = 0.0.2)
+    artifact-list: func(ctx: workspace-ctx, %type: string, filters: json, limit: u32, cursor: option<string>) -> artifact-page;
 
     /// Permanently delete an artifact.  Opt-in at the host_fns.required
     /// declaration level (R-0003-g).

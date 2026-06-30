@@ -909,9 +909,12 @@ fn artifact_get_signature_params() {
 // artifact-list signature — R-0012-a (contract table)
 // ---------------------------------------------------------------------------
 
-/// `artifact-list` must have: `(ctx, type: string, filters: <JSON>)`
+/// `artifact-list` must have: `(ctx, type: string, filters: <JSON>, limit: u32,
+/// cursor: option<string>)` and return `artifact-page` (R-0012-a, R-0020).
 ///
-/// R-0012-a
+/// Breaking ABI change from 0.0.1 (was `list<string>`) — T14.
+///
+/// R-0012-a, R-0020
 #[test]
 fn artifact_list_signature_params() {
     let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
@@ -939,6 +942,42 @@ fn artifact_list_signature_params() {
         .get(2)
         .expect("`artifact-list` must have param[2] `filters`");
     assert_eq!(p2.name, "filters");
+
+    // T14 (R-0020): `limit: u32` and `cursor: option<string>` paging params.
+    let p3 = func
+        .params
+        .get(3)
+        .expect("`artifact-list` must have param[3] `limit` (R-0020)");
+    assert_eq!(
+        p3.name, "limit",
+        "`artifact-list` param[3] must be named `limit`"
+    );
+    assert!(
+        matches!(p3.ty, Type::U32),
+        "`artifact-list` param `limit` must be u32, got {:?}",
+        p3.ty
+    );
+
+    let p4 = func
+        .params
+        .get(4)
+        .expect("`artifact-list` must have param[4] `cursor` (R-0020)");
+    assert_eq!(
+        p4.name, "cursor",
+        "`artifact-list` param[4] must be named `cursor`"
+    );
+    let cursor_is_option_string = match &p4.ty {
+        Type::Id(id) => {
+            let td = &resolve.types[*id];
+            matches!(&td.kind, wit_parser::TypeDefKind::Option(Type::String))
+        }
+        _ => false,
+    };
+    assert!(
+        cursor_is_option_string,
+        "`artifact-list` param `cursor` must be `option<string>`, got {:?}",
+        p4.ty
+    );
 
     assert_no_workspace_id_param("artifact-list", func);
 }
@@ -1429,4 +1468,153 @@ fn deprecated_fn_invocation_returns_structured_error() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// T14 (R-0020): artifact-page return assertions — both directions
+// ---------------------------------------------------------------------------
+
+/// `artifact-list` must return `artifact-page`, NOT `list<string>` (R-0020, T14).
+///
+/// R-0020
+#[test]
+fn artifact_list_returns_artifact_page() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let iface =
+        find_interface(&resolve, pkg_id, "artifact").expect("artifact interface must exist");
+    let func = iface
+        .functions
+        .get("artifact-list")
+        .expect("`artifact-list` must exist (R-0012-a)");
+
+    assert!(
+        func.result
+            .as_ref()
+            .map(|ty| type_is_named(&resolve, ty, "artifact-page"))
+            .unwrap_or(false),
+        "`artifact-list` must return `artifact-page` (R-0020), got {:?}",
+        func.result
+    );
+}
+
+/// `artifact-list` must NOT return `list<string>` (breaking ABI change — R-0020, T14).
+///
+/// R-0020
+#[test]
+fn artifact_list_does_not_return_list_string() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let iface =
+        find_interface(&resolve, pkg_id, "artifact").expect("artifact interface must exist");
+    let func = iface
+        .functions
+        .get("artifact-list")
+        .expect("`artifact-list` must exist (R-0012-a)");
+
+    let is_list_string = match &func.result {
+        Some(Type::Id(id)) => {
+            let td = &resolve.types[*id];
+            matches!(&td.kind, wit_parser::TypeDefKind::List(Type::String))
+        }
+        _ => false,
+    };
+    assert!(
+        !is_list_string,
+        "`artifact-list` must NOT return `list<string>` (breaking ABI T14 — R-0020)"
+    );
+}
+
+/// `content.%list` must have `(type: string, filters: json, limit: u32,
+/// cursor: option<string>)` — matching the import-side paging params (R-0020, T14).
+///
+/// R-0019-a, R-0020
+#[test]
+fn content_list_signature_params() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let iface = find_interface(&resolve, pkg_id, "content")
+        .expect("content interface must exist (R-0019-a)");
+    let func = iface
+        .functions
+        .get("list")
+        .expect("`content.%list` must exist (note: parsed as `list`, `%` is an escape)");
+
+    // Export side has no ctx — first param is `type`.
+    let p0 = func
+        .params
+        .first()
+        .expect("`content.%list` must have param[0] `type`");
+    assert_eq!(
+        p0.name, "type",
+        "`content.%list` param[0] must be `type` (no ctx on export)"
+    );
+    assert!(
+        matches!(p0.ty, Type::String),
+        "`content.%list` param `type` must be string"
+    );
+
+    let p1 = func
+        .params
+        .get(1)
+        .expect("`content.%list` must have param[1] `filters`");
+    assert_eq!(
+        p1.name, "filters",
+        "`content.%list` param[1] must be `filters`"
+    );
+
+    let p2 = func
+        .params
+        .get(2)
+        .expect("`content.%list` must have param[2] `limit` (R-0020)");
+    assert_eq!(
+        p2.name, "limit",
+        "`content.%list` param[2] must be named `limit`"
+    );
+    assert!(
+        matches!(p2.ty, Type::U32),
+        "`content.%list` param `limit` must be u32, got {:?}",
+        p2.ty
+    );
+
+    let p3 = func
+        .params
+        .get(3)
+        .expect("`content.%list` must have param[3] `cursor` (R-0020)");
+    assert_eq!(
+        p3.name, "cursor",
+        "`content.%list` param[3] must be named `cursor`"
+    );
+    let cursor_is_option_string = match &p3.ty {
+        Type::Id(id) => {
+            let td = &resolve.types[*id];
+            matches!(&td.kind, wit_parser::TypeDefKind::Option(Type::String))
+        }
+        _ => false,
+    };
+    assert!(
+        cursor_is_option_string,
+        "`content.%list` param `cursor` must be `option<string>`, got {:?}",
+        p3.ty
+    );
+}
+
+/// `content.%list` must return `artifact-page` (R-0020, T14).
+///
+/// R-0019-a, R-0020
+#[test]
+fn content_list_returns_artifact_page() {
+    let (resolve, pkg_id) = load_resolve().expect("wit/ directory must parse");
+    let iface = find_interface(&resolve, pkg_id, "content")
+        .expect("content interface must exist (R-0019-a)");
+    let func = iface
+        .functions
+        .get("list")
+        .expect("`content.%list` must exist");
+
+    assert!(
+        func.result
+            .as_ref()
+            .map(|ty| type_is_named(&resolve, ty, "artifact-page"))
+            .unwrap_or(false),
+        "`content.%list` must return `artifact-page` (R-0020), got {:?}",
+        func.result
+    );
 }
