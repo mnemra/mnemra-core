@@ -37,3 +37,9 @@ pub mod pool;
 pub mod runtime;
 // Task 22: trap-to-kill-and-replace recovery (R-0007-e/f/h, R-0016-c).
 pub mod trap_recovery;
+// T15 (R-0020 RED): test-only SQL-observation seam + scan-cost statement_timeout
+// knobs for the keyset-pagination read path (white-box AC residual, spec line 664).
+// Gated behind `test-hooks` so it is absent from production builds and the
+// `no_test_seams` gate stays green; Forge (T16/T17) wires the GREEN call sites.
+#[cfg(feature = "test-hooks")]
+pub mod sql_observe;

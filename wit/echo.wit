@@ -1,4 +1,4 @@
-package mnemra:host@0.0.1;
+package mnemra:host@0.0.2;
 
 interface echo {
     /// Round-trip: returns "echo: <s>". Validates host-fn parameters and return values.

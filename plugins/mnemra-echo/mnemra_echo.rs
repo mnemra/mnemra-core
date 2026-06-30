@@ -38,7 +38,7 @@ wit_bindgen::generate!({
 
 use exports::mnemra::host::content::Guest as ContentGuest;
 use mnemra::host::artifact;
-use mnemra::host::types::WorkspaceCtx;
+use mnemra::host::types::{ArtifactPage, WorkspaceCtx};
 
 struct EchoPlugin;
 
@@ -72,12 +72,25 @@ impl ContentGuest for EchoPlugin {
     }
 
     /// `content.list` — list ids of `type_name` artifacts via the host
-    /// `artifact-list` import (R-0019-a, guest-driven model). `filters` is passed
-    /// through to the host; predicate application is deferred (brain #1846). The
+    /// `artifact-list` import (R-0019-a, guest-driven model, R-0020). `filters`
+    /// is passed through to the host; predicate application is deferred (brain
+    /// #1846). `limit` and `cursor` are passed through for paging; T14 host body
+    /// returns placeholder paging only (has-more=false, next-cursor=none). The
     /// host scopes the result to the caller's workspace (R-0006-d); the guest
     /// cannot supply or widen the scope.
-    fn list(type_name: String, filters: String) -> Vec<String> {
-        artifact::artifact_list(&host_supplied_ctx(), &type_name, &filters)
+    fn list(
+        type_name: String,
+        filters: String,
+        limit: u32,
+        cursor: Option<String>,
+    ) -> ArtifactPage {
+        artifact::artifact_list(
+            &host_supplied_ctx(),
+            &type_name,
+            &filters,
+            limit,
+            cursor.as_deref(),
+        )
     }
 
     /// `content.update` — merge the frontmatter patch + (optionally) replace the

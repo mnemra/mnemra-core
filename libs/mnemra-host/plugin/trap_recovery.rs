@@ -525,13 +525,20 @@ pub enum ContentCall {
         /// The artifact id (from the MCP `id` argument).
         id: String,
     },
-    /// `content.list(type, filters)` — returns the ids visible in the workspace.
+    /// `content.list(type, filters, limit, cursor)` — returns a paged result
+    /// of ids visible in the workspace (R-0020).
     List {
         /// The artifact type name (from the MCP `content_type` argument).
         type_name: String,
         /// The filter JSON-as-string (from the MCP `filters` argument). Threaded
         /// through but not applied this slice (predicate logic deferred — #1846).
         filters: String,
+        /// Page-size cap (0 = host-default). Threaded to guest; T14 placeholder
+        /// paging only — no LIMIT clamp applied.
+        limit: u32,
+        /// Opaque continuation cursor (none = first page). Threaded to guest; T14
+        /// placeholder paging only — no cursor parsing/validation applied.
+        cursor: Option<String>,
     },
     /// `content.update(id, frontmatter_patch, body)` — merge the frontmatter
     /// patch into the stored frontmatter and (when `body` is `Some`) replace the
@@ -555,6 +562,21 @@ pub enum ContentCall {
     },
 }
 
+/// Paged list result carried by `ContentResult::Listed` (R-0020).
+///
+/// Mirrors `component::ArtifactPage` (the cross-module local type) and the
+/// WIT `artifact-page` record.  Defined here so `server.rs` and other callers
+/// of `invoke_content` can pattern-match without importing bindgen internals.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactPage {
+    /// Artifact ids visible in the caller's workspace for this page.
+    pub ids: Vec<String>,
+    /// True when additional pages exist beyond this one.
+    pub has_more: bool,
+    /// Opaque continuation token; `None` when `has_more` is false.
+    pub next_cursor: Option<String>,
+}
+
 /// The typed result of a successful `content` invoke.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContentResult {
@@ -562,8 +584,9 @@ pub enum ContentResult {
     Created(String),
     /// `content.get` returned the stored content (or `None`).
     Got(Option<String>),
-    /// `content.list` returned the ids visible in the workspace.
-    Listed(Vec<String>),
+    /// `content.list` returned a paged result of ids visible in the workspace
+    /// (R-0020).
+    Listed(ArtifactPage),
     /// `content.update` completed (the WIT `update` is void — no payload).
     Updated,
     /// `content.delete` completed (the WIT `delete` is void — no payload).
@@ -610,10 +633,26 @@ pub fn invoke_content(
             ContentCall::Get { id } => {
                 crate::plugin::component::content_get(store, instance, id).map(ContentResult::Got)
             }
-            ContentCall::List { type_name, filters } => {
-                crate::plugin::component::content_list(store, instance, type_name, filters)
-                    .map(ContentResult::Listed)
-            }
+            ContentCall::List {
+                type_name,
+                filters,
+                limit,
+                cursor,
+            } => crate::plugin::component::content_list(
+                store,
+                instance,
+                type_name,
+                filters,
+                *limit,
+                cursor.as_deref(),
+            )
+            .map(|p| {
+                ContentResult::Listed(ArtifactPage {
+                    ids: p.ids,
+                    has_more: p.has_more,
+                    next_cursor: p.next_cursor,
+                })
+            }),
             ContentCall::Update {
                 id,
                 frontmatter_patch,

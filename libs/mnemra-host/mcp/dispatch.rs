@@ -198,6 +198,8 @@ pub fn resolve_content_call(
             // exactly like create) and `filters` -> WIT `filters` (a JSON string,
             // default `"{}"`). The host-fn body scopes by workspace + type only;
             // `filters` is threaded but not applied this slice (brain #1846).
+            // T14 (R-0020): `limit` and `cursor` forwarded for paging; T14 host
+            // returns placeholder paging only — no keyset/clamp/cursor logic here.
             let type_name = arguments
                 .and_then(|m| m.get("content_type"))
                 .and_then(|v| v.as_str())
@@ -207,7 +209,21 @@ pub fn resolve_content_call(
                 .and_then(|m| m.get("filters"))
                 .map(json_value_to_payload_string)
                 .unwrap_or_else(|| "{}".to_owned());
-            ContentCall::List { type_name, filters }
+            let limit = arguments
+                .and_then(|m| m.get("limit"))
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u32)
+                .unwrap_or(0);
+            let cursor = arguments
+                .and_then(|m| m.get("cursor"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_owned());
+            ContentCall::List {
+                type_name,
+                filters,
+                limit,
+                cursor,
+            }
         }
         "update" => {
             // T12 update slice: `id` -> WIT id; `frontmatter_patch` -> WIT
