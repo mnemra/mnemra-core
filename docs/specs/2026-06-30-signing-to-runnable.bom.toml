@@ -1,0 +1,42 @@
+spec_type = "architecture"
+
+[audit_chain.intent]
+ref = "../intent/signing-to-runnable.md"
+version = "1c6820e726720e76f60aa5c76735af0223de5207"
+locked_at = 2026-06-30T16:45:19Z
+
+[audit_chain.frame]
+ref = "../intent/signing-to-runnable-frame.md"
+version = "83bba6a5ba76e6dab97b74799212107332e0198d"
+internal_conformance = "pass"
+
+[audit_chain.frame.generated_against]
+intent_version = "1c6820e726720e76f60aa5c76735af0223de5207"
+
+[audit_chain.spec]
+ref = "2026-06-30-signing-to-runnable.md"
+version = "479852a28124727ca3eafdb6cd29f0ad95d76f76"
+internal_conformance = "pass"
+
+[audit_chain.spec.generated_against]
+intent_version = "1c6820e726720e76f60aa5c76735af0223de5207"
+frame_version = "83bba6a5ba76e6dab97b74799212107332e0198d"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true
