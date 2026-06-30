@@ -3037,6 +3037,53 @@ This is the primary forward-compat invariant for the ABI evolution discipline qu
 - Con: Coarse-grained allowlist (category-level) rather than per-fn — weaker `P-plugin-instance`/E mitigation.
 - Con: Does not accommodate `sampling.request` as an optional per-plugin flag without extending the flag vocabulary toward the same complexity as M1 anyway.
 
+## Amendment 2026-06-30 — Component content-hash field (supply-chain binding)
+
+The signing-to-runnable Frame ([`docs/intent/signing-to-runnable-frame.md`](../../intent/signing-to-runnable-frame.md), §5) routed the **content-hash-of-the-component-bytes** field to a P-0003 amendment (the `{{P-ManifestContentHash}}` slot) rather than a spec-local field: the field is a **durable part of the manifest contract every `core: true` plugin must satisfy** — it is recomputed and enforced on **every** plugin load by the verified-load gate (`libs/mnemra-host/startup/pool_population.rs:126`) — and it is a **manifest-schema change** (a new key in the signed canonical body), and P-0003 is the **sole authority** for that schema. A spec-local field would orphan a schema field from its schema authority: a future plugin author reading P-0003 would not see the content-hash requirement, and a future manifest-schema change could silently drop it.
+
+The **runtime behavior** (recompute-and-reject-on-mismatch, fail-closed, single-read load, distinct error variant) is governed by **R-0021** in [`docs/specs/2026-06-30-signing-to-runnable.md`](../../specs/2026-06-30-signing-to-runnable.md); this amendment governs the **schema** (the field, its location, its algorithm constraint, and its presence rule).
+
+### Schema change — `[component]` section in the signed canonical body
+
+The V0 manifest schema gains a `[component]` section carrying a content-hash of the component (`.wasm`) bytes. It is located in the **signed canonical body** — the bytes **before** the `\n[signature]` marker that the signature covers (the slice extracted at `libs/mnemra-host/signing/verify.rs:337-344`). This location is **forced** by [P-0005](P-0005-v0-signing-chain.md) R-0005-h (core-by-provenance): a content-hash in the unsigned `[signature]`-adjacent region would let an attacker swap both the component and its declared hash.
+
+```toml
+# ... [plugin], [verbs], [content_types], [state_scopes], [host_fns] (unchanged) ...
+
+[component]
+# Content-hash binding of the component (.wasm) bytes. In the SIGNED body
+# (before [signature]) so the signature covers it (R-0005-h core-by-provenance).
+hash_alg = "blake3"   # one of {blake3, sha256, sha384, sha512}; V0 = blake3; MD5/SHA-1 rejected
+hash     = "..."      # mandatory; lowercase-hex digest of the component .wasm bytes under hash_alg
+
+[signature]
+# unchanged — covers everything above this marker
+```
+
+| Field | Type | Constraints |
+|---|---|---|
+| `[component].hash_alg` | string | One of `{"blake3","sha256","sha384","sha512"}`; V0 locked value `"blake3"`; `"md5"`/`"sha1"`/any other value SHALL be rejected at load |
+| `[component].hash` | string | **Mandatory** (absence is a fail-closed load rejection); lowercase-hex digest of the component `.wasm` bytes under `hash_alg` |
+
+**Named algorithm (banned-weak constraint).** The content-hash algorithm SHALL be **SHA-256 or stronger / BLAKE3**; `MD5` and `SHA-1` are **banned** and SHALL be rejected at load. The V0 locked value is **BLAKE3**, reusing the in-tree BLAKE3 primitive already mandated for admin-token hashing ([P-0008](P-0008-admin-token-shape.md) / R-0008-b) — no new dependency (Simplicity; `P-StackDiscipline`). The strong set is the schema's **forward-allowance**; at V0 the only value any manifest carries is `blake3` (`sha256`/`sha384`/`sha512` are accepted by the schema but not exercised by a V0 manifest).
+
+**Binds bytes, not a path.** The `[component]` section binds the component's **bytes** (via `hash`); it carries **no path or name field**. The runtime resolves which component to load by other means (the single `core: true` plugin at V0); a manifest-declared component path/name is an out-of-scope multi-plugin concern, not part of this schema change.
+
+**Read only from the signed slice (complete-mediation).** The `[component]` table SHALL be parsed **only from the signed canonical body** — the bytes the signature covers, before the `\n[signature]` marker (the slice extracted at `libs/mnemra-host/signing/verify.rs:337-344`). A `[component]` table appearing in the unsigned `[signature]`-adjacent region SHALL NOT satisfy the field-presence requirement and SHALL cause rejection: the enforced value is always the signed value, never an unsigned-region copy. (Behavioral enforcement: spec R-0021-c/-e.)
+
+### `schema_version` stays `1` — and the mandatory-field rule (one decision)
+
+The "Schema evolution" section above states: *"`schema_version: 1` locks the V0 manifest format. **V0.1+ changes that alter the manifest structure increment this field.**"* Adding a `[component]` section **does** alter the manifest structure, so on the literal face of that rule it would increment. It does **not** increment, and the reasons are recorded here so this ADR is not silently self-contradicted:
+
+1. **V0 is still being *defined*, not evolved post-freeze.** No external plugin has shipped against a frozen V0 schema. The increment rule governs **V0.1+** changes — changes that alter the format *after* V0 is fixed — so a third party loading an older V0 plugin can detect the mismatch. There is no such older population: the single `core: true` plugin (`mnemra-echo`) is **re-signed with the field** as part of the same M1 change. The `[component]` section is therefore part of the **V0 schema definition**, not a post-freeze evolution.
+2. **The increment surface's purpose is not engaged.** `schema_version`'s job (Decision Outcome, "Schema evolution") is to give a *future* runtime a branch point for an *older* manifest. Bumping to `2` now would imply a `schema_version: 1` population that this change must remain load-compatible with — but that population does not exist; every V0 manifest carries the field.
+
+**Paired rule — mandatory field, enforced by the parser, not by the version number.** Because `schema_version` stays `1`, the version number **cannot** signal the `[component].hash` field's presence. The parser SHALL therefore **require the field directly**: a signed manifest body lacking `[component].hash` SHALL be **rejected fail-closed** at load — never loaded with the content-hash check skipped. This mandatory-field rule and the `schema_version: 1` disposition are **one decision**: holding the version at `1` is only safe *because* the parser enforces presence rather than inferring it from the version. (Behavioral enforcement: spec R-0021-c.)
+
+### Scope of this amendment
+
+This amendment adds **only** the `[component]` content-hash section to the signed body. It does **not** change `schema_version`, the host-fn ABI, the `[verbs]` / `[content_types]` / `[state_scopes]` / `[host_fns]` sections, the `[signature]` section, or any structural invariant in the table above. The custody / signing mechanism is unchanged ([P-0005](P-0005-v0-signing-chain.md)). The Tier-C signing-key custody hardening (`{{P-SigningKeyCustodyHardening}}`) remains deferred behind the R-0005-e multi-deployment trip-wire — out of scope here.
+
 ## More Information
 
 - Frame open ADR slot: `{{P-PluginManifest}}` ([Frame](../intent/mnemra-core-frame.md), Tier A table). This ADR resolves that slot.
