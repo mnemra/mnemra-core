@@ -74,22 +74,12 @@ required = [
 # Optional: not declared by this fixture; add only if needed.
 optional = []
 
+[component]
+hash_alg = "blake3"
+hash = "36dc88f4c30167c3cbef0d3a2ce42e4d6cd3754b43907685fd74c4dc6fb06952"
+
 [signature]
-# PLACEHOLDER — populated at build time by the mnemra signing chain per
-# P-0005-v0-signing-chain. At V0, no real root key exists; the signing ceremony
-# (Task 26) populates this section with the real root public key and signature
-# over the canonical manifest body (everything minus [signature]).
-#
-# Per the LOCKED fixture-signing mechanism (dispatch envelope §LOCKED):
-#   - This is a documented build-time-populated placeholder.
-#   - The canonical body (everything above this section) is the stable content.
-#   - This committed signature does NOT verify against the embedded ROOT at V0.
-#   - Tasks 20/21 load-pipeline tests sign IN-MEMORY with a freshly generated
-#     keypair; the embedded ROOT/sig_bytes here are NOT the trust anchor there.
-#   - Task 26 (post-stop): the build-time signer replaces these with real values.
-#
-# R-0002-a, R-0005-c
-algorithm  = "ed25519"
-public_key = "ROOT"     # placeholder — replaced by Task 26 build-time signer
-sig_bytes  = "PLACEHOLDER_SIG"   # placeholder — replaced by Task 26 build-time signer
-signed_at  = "1970-01-01T00:00:00Z"   # placeholder — replaced by Task 26 build-time signer
+algorithm = "ed25519"
+public_key = "73deb7ec5fd7efffbebe86d6dcdce9d81b4b0c43155267887ab3ff042bb773e5"
+sig_bytes = "de3c55fa66e5b2fb08c0674099cd40db39037ac38f9fa787ee8236e54b8ff02319cab91f53b6b14b2d8ad1dfd7024b57ef70f40c6e445d418b23ef97562cbb0f"
+signed_at = "2026-07-01T15:19:24Z"
