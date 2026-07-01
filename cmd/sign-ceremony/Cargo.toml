@@ -1,0 +1,31 @@
+[package]
+name = "sign-ceremony"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "mnemra root signing-ceremony producer tool (keygen + manifest signing)"
+
+# Core signing logic lives in the lib so the round-trip tests in tests/ can drive
+# it and verify output against the real mnemra-host verifier. The bin is a thin
+# CLI shim over the lib.
+[lib]
+name = "sign_ceremony"
+path = "ceremony.rs"
+
+[[bin]]
+name = "sign-ceremony"
+path = "main.rs"
+
+[dependencies]
+# Path dep on the runtime host so the producer signs with the SAME ed25519-dalek
+# the runtime verifies with, and so the round-trip test can call the real
+# verify_plugin / populate_verified_pool. All deps below are pre-existing
+# workspace deps (no new external dependency; versions unify via the shared lock).
+mnemra-host = { path = "../../libs/mnemra-host" }
+# clap: workspace CLI standard for subcommand parsing (Green-tier, MIT OR Apache-2.0).
+clap = { version = "4", features = ["derive"] }
+ed25519-dalek = "2.2.0"
+blake3 = "1.8.5"
+rand = "0.10.1"
+chrono = "0.4.45"
