@@ -196,6 +196,29 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Locate the built `mnemra-echo` component (`wasm32-wasip2`, release).
+///
+/// Same path as `pool_population.rs::echo_component_path()` and
+/// `content_hash_binding.rs::echo_component_path()` — private fns cannot cross
+/// integration-test crates, so each test file inlines its own copy.
+fn echo_component_path() -> std::path::PathBuf {
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root from libs/mnemra-host");
+    root.join("target/wasm32-wasip2/release/mnemra_echo.wasm")
+}
+
+/// Lowercase-hex BLAKE3 digest of the on-disk echo component.
+///
+/// Used to embed a correct `[component].hash` in the signed manifest for the
+/// positive test (R-0021-e fixture update — T2 GREEN).
+fn echo_blake3_hex() -> String {
+    let bytes = std::fs::read(echo_component_path()).expect("read echo component bytes");
+    blake3::hash(&bytes).to_hex().to_string()
+}
+
 // ---------------------------------------------------------------------------
 // MCP test utilities (inlined from mcp_slice1_e2e.rs helpers)
 // ---------------------------------------------------------------------------
@@ -259,12 +282,28 @@ fn is_valid_ulid(s: &str) -> bool {
 async fn verified_manifest_populates_pool_and_call_tool_dispatches() {
     // Build a synthetic signed manifest — on-disk manifest.toml has placeholder
     // sig bytes and is NOT verifiable (real signing is Task 26).
+    //
+    // T2 GREEN fixture update (R-0021-e): include [component] section with a
+    // correct BLAKE3 hash inside the signed body so the content-hash gate passes.
+    // [component] must fall inside the signature-covered slice; manifest_with_signature
+    // re-generates the unsigned base internally (losing [component]), so the full
+    // manifest is built inline here, mirroring wrap_signed in content_hash_binding.rs.
     let signing_key = generate_keypair();
     let verifying_key = signing_key.verifying_key();
-    let unsigned = manifest_bytes_unsigned("mnemra-echo", "0.1.0", true);
-    let sig = sign_manifest(&signing_key, &unsigned);
-    let signed_manifest =
-        manifest_with_signature("mnemra-echo", "0.1.0", true, &verifying_key, &sig);
+    let base = String::from_utf8(manifest_bytes_unsigned("mnemra-echo", "0.1.0", true)).unwrap();
+    let component_sect = format!(
+        "\n[component]\nhash_alg = \"blake3\"\nhash = \"{}\"\n",
+        echo_blake3_hex()
+    );
+    let signed_body = base + &component_sect;
+    let sig = sign_manifest(&signing_key, signed_body.as_bytes());
+    let pubkey_hex = hex_encode(verifying_key.as_bytes());
+    let sig_hex = hex_encode(&sig);
+    let signed_manifest = format!(
+        "{signed_body}\n[signature]\nalgorithm = \"ed25519\"\npublic_key = \
+         \"{pubkey_hex}\"\nsig_bytes = \"{sig_hex}\"\nsigned_at = \"2026-06-13T00:00:00Z\"\n"
+    )
+    .into_bytes();
 
     // WHEN: populate_verified_pool verifies then builds the pool
     // Type annotation pins StartupError as an unresolved symbol in RED output.

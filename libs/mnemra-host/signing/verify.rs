@@ -45,7 +45,7 @@
 //! `public_key` field) was explicitly rejected by the maintainer on 2026-06-13
 //! in favor of fail-closed defense-in-depth.
 
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -307,7 +307,7 @@ pub fn verify_plugin(
     let signature = Signature::from_bytes(&sig_array);
 
     verifying_key
-        .verify(signed_payload, &signature)
+        .verify_strict(signed_payload, &signature)
         .map_err(|e| {
             SigningError::new(
                 name,
@@ -334,14 +334,22 @@ pub fn verify_plugin(
 /// If the marker is not found (malformed or already-unsigned manifest), the
 /// entire input is returned — which will fail sig verification and produce the
 /// correct Err from the caller.
-fn extract_signed_payload(manifest_toml: &[u8]) -> &[u8] {
-    const MARKER: &[u8] = b"\n[signature]";
-    if let Some(idx) = find_subsequence(manifest_toml, MARKER) {
+pub(crate) fn extract_signed_payload(manifest_toml: &[u8]) -> &[u8] {
+    if let Some(idx) = find_subsequence(manifest_toml, SIGNATURE_MARKER) {
         &manifest_toml[..idx]
     } else {
         manifest_toml
     }
 }
+
+/// The literal byte sequence marking the `[signature]` table boundary — the
+/// EXACT slice point this verifier keys on (see `extract_signed_payload`).
+///
+/// Exposed as `pub` (not `pub(crate)`) so producer tooling in another crate
+/// (`cmd/sign-ceremony`) can validate a manifest against the SAME literal
+/// this verifier slices at, rather than duplicating the string and risking
+/// drift between producer and verifier (Warden T3 hardening, conf 80).
+pub const SIGNATURE_MARKER: &[u8] = b"\n[signature]";
 
 /// Find the starting index of `needle` in `haystack`, or `None` if absent.
 fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {

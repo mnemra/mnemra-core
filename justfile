@@ -62,6 +62,24 @@ plugin-wit: plugin
     wasm-tools component wit target/wasm32-wasip2/release/mnemra_echo.wasm
 
 # ---------------------------------------------------------------------------
+# Signing-ceremony producer tooling (round-1b).
+# Maintainer-run at the one-shot key ceremony — see docs/runbooks/signing-ceremony.md.
+# The runtime host never links or calls this bin.
+# ---------------------------------------------------------------------------
+
+# Generate a fresh Ed25519 root keypair. Writes the 32-byte private seed to
+# <key_out> (mode 600) and prints the public key hex to stdout (→ ROOT + ROOT_PIN
+# in round-2). Place <key_out> OUTSIDE every runtime-read dir (see the runbook).
+sign-keygen key_out:
+    cargo run -p sign-ceremony --quiet -- keygen {{key_out}}
+
+# Run the signing ceremony: read the private key in place from <key>, BLAKE3-hash
+# the committed <wasm>, embed [component], sign the body, populate [signature] in
+# <manifest>, self-verify against verify_plugin, and print the real public key hex.
+sign-ceremony key wasm manifest:
+    cargo run -p sign-ceremony --quiet -- sign {{key}} {{wasm}} {{manifest}}
+
+# ---------------------------------------------------------------------------
 # CI gate recipes (R-0018-f)
 # Each recipe emits exactly one "GATE <name> PASS|FAIL" line on stdout.
 # No recipe has --fix side effects.
@@ -76,7 +94,7 @@ PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact
 
 # Non-PG integration test binaries (12 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
-NONPG_TEST_FLAGS := "--test abi_contract --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test storage_contract --test workspace_ctx"
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test content_hash_binding --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
@@ -197,7 +215,47 @@ verify-smoke:
 # CI entry point — runs every verify-* recipe in order.
 # First failure stops and exits non-zero.
 # This is the sole CI entry point (R-0018-c, R-0018-f).
-ci: verify-type verify-lint verify-test verify-test-hooks verify-coverage verify-build verify-smoke
+ci: verify-type verify-lint verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-signing-root
+
+# ---------------------------------------------------------------------------
+# Signing-root pin gate (R-0005-d / R-0018-f) — wired into `ci`.
+#
+# PASS iff the build-embedded root (`signing::root_material::ROOT`) byte-equals
+# the independently-declared pin (`ROOT_PIN`). The signing ceremony is
+# complete: both are set to the real root public key (byte-equal), so this
+# gate is live and enforced as part of the `ci` chain above.
+#
+# The check runs the now-live `root_pin_gate_matches_embedded` test in
+# tests/build_gate.rs (no longer `#[ignore]`d — it also runs as part of the
+# normal suite via `NONPG_TEST_FLAGS`, which `verify-test` runs). We capture
+# its real exit status WITHOUT errexit (set +e), mirroring test-gate-shape's
+# O1 "read the child's real exit status" discipline, and map it to the GATE
+# line.
+#
+# Non-vacuous check (Warden hardening, round-2 false-green class): `cargo
+# test` exits 0 on a ZERO-test run too — a future `#[ignore]` re-add or a test
+# rename would silently make `code -eq 0` true over nothing having run. We
+# capture stdout/stderr and additionally require the summary line prove
+# exactly one test actually passed (`test result: ok. 1 passed; 0 failed;`).
+# A 0-test run (`0 passed`) FAILs the gate instead of silently PASSing.
+# ---------------------------------------------------------------------------
+verify-signing-root:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    set +e
+    output="$(cargo test -p mnemra-host --test build_gate -- --exact root_pin_gate_matches_embedded 2>&1)"
+    code=$?
+    set -e
+    echo "$output"
+    if [[ "$code" -ne 0 ]]; then
+        echo "GATE signing-root FAIL"
+        exit 1
+    fi
+    if [[ "$output" != *"test result: ok. 1 passed; 0 failed;"* ]]; then
+        echo "GATE signing-root FAIL"
+        exit 1
+    fi
+    echo "GATE signing-root PASS"
 
 # ---------------------------------------------------------------------------
 # Gate-shape self-test (Test Expectation 54)
