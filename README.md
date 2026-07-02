@@ -44,10 +44,7 @@ Substrate and host core:
 - [x] Walking skeleton end to end: an artifact `create` verb round-trips through a plugin to PostgreSQL and back, exercised by the integration test suite
 - [x] The remaining agent-facing artifact CRUD verbs (get, list, update, delete), each round-tripping through a plugin to PostgreSQL and exercised by the integration test suite
 - [x] Artifact-list paging (keyset cursor over a workspace-scoped page)
-
-In flight:
-
-- [ ] Long-running stdio MCP server launched from the `mnemra` binary
+- [x] Long-running stdio MCP server launched from the `mnemra` binary, exercised end to end by the `verify-smoke` gate
 
 Toward the V0 milestone (the public API is defined and a full reference workload runs on mnemra-core with no fallback to prior tooling):
 
@@ -111,10 +108,11 @@ mnemra init
 
 ### Run the agent-facing server
 
-The agent-facing entry point is the stdio MCP server. Launching the long-running server from the `mnemra` binary is still being wired; the bare binary does not yet start a live stdio server. The server handler and a content round-trip through a plugin are already exercised end to end by the integration test suite, which is the path that proves the wiring today:
+The agent-facing entry point is the stdio MCP server. Running the `mnemra` binary with no subcommand starts it: a file-mode check on the admin token, then a loopback `/health` listener on `127.0.0.1:8877` (`MNEMRA_HEALTH_PORT` overrides the port), then embedded PostgreSQL and schema init, the seven builtins, and the signed-and-verified plugin pool, then the MCP server is constructed and served over stdio. Tracing logs go to stderr; stdout is reserved exclusively for the MCP JSON-RPC wire protocol. The integration test suite (`just verify-test`) exercises the server handler and a content round-trip through a plugin; `just verify-smoke` is the real end-to-end gate — it spawns the production binary, drives a live MCP handshake over stdio, and checks `/health`:
 
 ```sh
-just verify-test    # or: cargo test
+just verify-test    # integration suite: server handler + plugin round-trip
+just verify-smoke   # end-to-end: real binary, MCP handshake + /health
 ```
 
 ## Documentation
