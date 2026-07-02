@@ -83,6 +83,20 @@ pub fn check(
     Ok(())
 }
 
+/// Check that the admin-token file alone is exactly mode 600 (R-0005-f
+/// instantiated over the admin-token file; R-0022-a 5-pre boundary).
+///
+/// `run_with` (T5) sequences this ahead of any listener bind. Unlike
+/// [`check`], which mediates all three secret files (SF2 complete
+/// mediation) for the Task 17/18 startup surface, the 5-pre boundary is
+/// scoped to the admin-token file alone: the signing-verification material
+/// is embedded in the binary (no runtime file — R-0005-f supersession,
+/// spec § Supersession-by-reference), and the LLM-key file is outside
+/// R-0022-d's scope (the R-0014 pathway does not apply to `run()`).
+pub fn check_admin_token(token_path: &Path) -> Result<(), FileModeError> {
+    check_single(token_path)
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------

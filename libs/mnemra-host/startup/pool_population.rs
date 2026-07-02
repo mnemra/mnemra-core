@@ -1,8 +1,10 @@
-//! Verify-gated plugin pool population — `populate_verified_pool`.
+//! Verify-gated plugin pool population — `populate_verified_pool` and
+//! `populate_verified_pool_from_dir`.
 //!
 //! # Security design (SF1 / R-0005-a / R-0021)
 //!
-//! `populate_verified_pool` is a fail-closed gate with two ordered layers:
+//! Both entry points share one fail-closed gate with two ordered layers,
+//! factored into the private `populate_verified_pool_at_path`:
 //!
 //! 1. **Signature verification** (SF1 / R-0005-a): verifies the manifest's
 //!    Ed25519 signature against `root_material` — proves provenance of the
@@ -15,21 +17,20 @@
 //!    on absence of `[component].hash`.  Only a hash in the **signed** slice
 //!    satisfies presence (complete mediation / R-0021-c).
 //!
-//! # V0 manifest/component decoupling (INTENTIONAL — do NOT "fix")
+//! # Two load paths (T5, R-0022-e — decoupling-reversal)
 //!
-//! This function verifies the **manifest_toml parameter it is passed** and loads
-//! the real built mnemra-echo component **from the workspace target directory
-//! separately**. It does NOT read or verify the on-disk `plugins/mnemra-echo/
-//! manifest.toml`. That on-disk manifest carries placeholder signature bytes
-//! (`public_key="ROOT"`, `sig_bytes="PLACEHOLDER_SIG"`) — real signing is
-//! deferred to Task 26. If the on-disk manifest were verified here, the function
-//! would return `Err` for every caller in the V0 build. The decoupling is
-//! intentional V0 design: callers (including tests) supply a verifiable manifest
-//! while the component binary is loaded from the fixed build path.
-//!
-//! Not yet called by `run()`; production startup wiring is deferred to Task 26
-//! (manifest signing) and the serve-loop/storage follow-up. Verifies the manifest
-//! passed in, NOT the on-disk placeholder manifest.
+//! - [`populate_verified_pool`] — the parameter-driven gate (Task 11/17).
+//!   Callers (including most of this crate's tests) supply the manifest
+//!   bytes directly; the component is loaded from the workspace build
+//!   output (`echo_component_path()`, the `target/wasm32-wasip2/release`
+//!   rebuild). Behavior unchanged from Task 11/17.
+//! - [`populate_verified_pool_from_dir`] — the production disk-driven path.
+//!   `run()` (`mnemra_host::run_with`, R-0022-a) reads the **real on-disk
+//!   signed manifest** and the **committed signed component artifact**
+//!   under `root_dir` and feeds them through the same verify+hash+build
+//!   gate. This is what makes R-0021-e a true integrity check in
+//!   production — the bytes hashed are the bytes signed, never a
+//!   possibly-different local rebuild.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -127,13 +128,15 @@ impl std::error::Error for StartupError {
 ///    On mismatch → `Err(StartupError::ComponentHashMismatch(..))` before any
 ///    pool or instance is constructed (R-0021-e).
 ///
-/// # Manifest/component decoupling (V0 intentional design)
+/// # Parameter-driven load (unchanged from Task 11/17)
 ///
-/// Verifies the **`manifest_toml` parameter it is passed** and loads the real
-/// echo wasm **separately from the workspace target directory**.  It does NOT
-/// read or verify the on-disk `plugins/mnemra-echo/manifest.toml`.  That
-/// on-disk manifest carries placeholder signature bytes — real signing is
-/// deferred to Task 26.  Do not "fix" this decoupling.
+/// Verifies the **`manifest_toml` parameter it is passed** and loads the
+/// component from the workspace build output (`echo_component_path()`),
+/// independently of whatever manifest is on disk at
+/// `plugins/mnemra-echo/manifest.toml`. This is the shape most of this
+/// crate's tests use to construct fixtures (valid or adversarial) without
+/// touching the filesystem. Production (`run()`, T5) uses
+/// [`populate_verified_pool_from_dir`] instead (R-0022-e).
 ///
 /// # Parameters
 ///
@@ -144,6 +147,22 @@ impl std::error::Error for StartupError {
 pub fn populate_verified_pool(
     manifest_toml: &[u8],
     root_material: &[u8],
+) -> Result<Arc<PluginPool>, StartupError> {
+    populate_verified_pool_at_path(manifest_toml, root_material, &echo_component_path())
+}
+
+/// Shared verify+hash+build gate (SF1 / R-0021), single-read at
+/// `component_path` (R-0021-d).
+///
+/// Both [`populate_verified_pool`] (parameter manifest + the workspace
+/// build-output component) and [`populate_verified_pool_from_dir`] (on-disk
+/// manifest + the committed signed component artifact) delegate here — the
+/// verify/hash/build logic is identical; only where the manifest bytes and
+/// component path come from differs.
+fn populate_verified_pool_at_path(
+    manifest_toml: &[u8],
+    root_material: &[u8],
+    component_path: &std::path::Path,
 ) -> Result<Arc<PluginPool>, StartupError> {
     // Layer 1: verify signature FIRST — fail-closed (SF1, R-0005-a).
     verify_plugin(manifest_toml, root_material).map_err(StartupError::SignatureVerification)?;
@@ -189,9 +208,8 @@ pub fn populate_verified_pool(
         })?;
 
     // Layer 2b: single-read (R-0021-d) — read bytes once, then hash, compare, from_binary.
-    let component_path = echo_component_path();
     let component_bytes =
-        std::fs::read(&component_path).map_err(|e| StartupError::ComponentLoad(e.to_string()))?;
+        std::fs::read(component_path).map_err(|e| StartupError::ComponentLoad(e.to_string()))?;
 
     // Layer 2c: compute hash and compare — rejects weak alg and mismatch (R-0021-a / R-0021-e).
     let recomputed = compute_hash(hash_alg, &component_bytes)?;
@@ -209,6 +227,47 @@ pub fn populate_verified_pool(
     pool.register_module(ECHO_PLUGIN_NAME, "0.0.1", &component)
         .map_err(|e| StartupError::PoolPopulation(e.to_string()))?;
     Ok(Arc::new(pool))
+}
+
+// ---------------------------------------------------------------------------
+// populate_verified_pool_from_dir — production disk-driven load (R-0022-e)
+// ---------------------------------------------------------------------------
+
+/// Production disk-driven verified load (R-0022-e).
+///
+/// The integrity-gated load path `run()` uses: reads the **real on-disk
+/// signed manifest** and loads the **signed component artifact** — never a
+/// `target/` rebuild (spec § Constraints, integrity-gated-load-path). This
+/// is the decoupling-reversal: production no longer verifies only a
+/// parameter manifest while loading the target-dir component.
+///
+/// # Path contract (pinned by tests/startup_run_ordering.rs — do not change
+/// without a test revision)
+///
+/// - manifest:  `<root_dir>/plugins/mnemra-echo/manifest.toml`
+/// - component: `<root_dir>/artifacts/mnemra-echo/mnemra_echo.wasm`
+///
+/// # Behavioral contract
+///
+/// Applies the same two-layer fail-closed gate as [`populate_verified_pool`]
+/// (signature first against `root_material`, then the R-0021 content-hash
+/// binding parsed from the signed slice only, single-read then
+/// `Component::from_binary` on the same buffer). Production callers pass the
+/// embedded root (`signing::root_material::ROOT`); tests pass either the
+/// real root (keystone scenarios) or a per-run test key. On any `Err`, no
+/// `PluginPool` and no instance is constructed.
+pub fn populate_verified_pool_from_dir(
+    root_dir: &std::path::Path,
+    root_material: &[u8],
+) -> Result<Arc<PluginPool>, StartupError> {
+    let manifest_path = root_dir.join("plugins/mnemra-echo/manifest.toml");
+    let component_path = root_dir.join("artifacts/mnemra-echo/mnemra_echo.wasm");
+
+    let manifest_toml = std::fs::read(&manifest_path).map_err(|e| {
+        StartupError::ComponentLoad(format!("mnemra-echo: failed to read on-disk manifest: {e}"))
+    })?;
+
+    populate_verified_pool_at_path(&manifest_toml, root_material, &component_path)
 }
 
 // ---------------------------------------------------------------------------
