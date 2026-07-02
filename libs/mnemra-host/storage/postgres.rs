@@ -71,6 +71,16 @@ impl PostgresStorage {
         &self.pool
     }
 
+    /// Return a reference to the embedded engine.
+    ///
+    /// Needed by production `run()` (T5, R-0022-d) to run
+    /// `schema::init::init(engine, "vector")`, which requires the
+    /// superuser path (`ensure_extension` / `create_least_privilege_roles`)
+    /// that `PostgresStorage` does not otherwise expose.
+    pub fn engine(&self) -> &EmbeddedEngine {
+        self._engine.as_ref()
+    }
+
     /// Start the embedded Postgres engine and return a ready `PostgresStorage`.
     ///
     /// First invocation downloads Postgres binaries (~cold, several seconds).

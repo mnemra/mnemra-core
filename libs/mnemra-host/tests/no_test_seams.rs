@@ -56,4 +56,7 @@ fn test_epoch_seams_absent_in_default_build() {
     t.compile_fail("tests/ui/no_test_seams/await_tick_confirmation_reachable.rs");
     t.compile_fail("tests/ui/no_test_seams/tick_confirmed_since_restart_reachable.rs");
     t.compile_fail("tests/ui/no_test_seams/can_invoke_epoch_seam_reachable.rs");
+    // T5 (R-0022-a): startup failure-injection seam — born cfg-gated in the
+    // RED phase, so this fixture compile-fails from day one.
+    t.compile_fail("tests/ui/no_test_seams/run_config_injected_failure_reachable.rs");
 }

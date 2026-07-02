@@ -85,16 +85,26 @@ sign-ceremony key wasm manifest:
 # No recipe has --fix side effects.
 # ---------------------------------------------------------------------------
 
-# PG-touching integration test binaries (14 members).
+# PG-touching integration test binaries (15 members).
 # Defined once; all three verify-* recipes reference this variable so the list
 # stays in sync (R-0022: identical serialization directive across all recipes).
 # These binaries run at --test-threads 1 to prevent concurrent embedded-Postgres
 # teardown races (SIGABRT / signal 6, #1852 / Tier-1 CI-flake fix).
-PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test storage_contract_postgres --test tenancy_isolation"
+# startup_run_full (T5, #1992, R-0022-a): both scenarios reach real
+# start_embedded() (the happy path completes it; the builtin-init injection
+# fires after storage init succeeds), so it belongs here.
+PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
-# Non-PG integration test binaries (12 members).
+# Non-PG integration test binaries (16 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
-NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test content_hash_binding --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test storage_contract --test workspace_ctx"
+# health_listener (T4, #1991, R-0022-b/R-0004-g): uses sqlx::connect_lazy against an
+# unreachable address to get a deterministic overall:"down" body — no embedded Postgres
+# engine needed, so it belongs here, not in PG_TEST_FLAGS.
+# startup_run_ordering (T5, #1992, R-0022-a/-e): every scenario fails before —
+# or runs entirely without — real embedded Postgres (5-pre refusal, injected
+# storage failure replacing start_embedded(), keystone load-path pair), so it
+# belongs here, not in PG_TEST_FLAGS.
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test content_hash_binding --test health_listener --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
@@ -196,16 +206,30 @@ verify-build:
         exit 1
     fi
 
-# Verify: smoke tests
-# scaffold: real smoke gate lands in Task 27
-verify-smoke:
+# Verify: smoke tests — the REAL end-to-end gate (R-0022-c; #1993 T6).
+# Depends on `build` (the HOST binary only — bare `cargo build`,
+# default-members = ["cmd/mnemra"]) — deliberately NEVER `plugin`: the
+# integrity-gated load path loads the COMMITTED SIGNED artifact
+# (artifacts/mnemra-echo/mnemra_echo.wasm), not a target/ rebuild (§
+# Constraints, docs/specs/2026-06-30-signing-to-runnable.md) — a fresh
+# `target/wasm32-wasip2` rebuild is NOT the signed artifact and would
+# false-reject via R-0021-e.
+#
+# tests/smoke_e2e.rs spawns the real `mnemra` binary as a subprocess and
+# drives a real MCP initialize handshake + list_tools call over its stdio,
+# asserting the production stdio serve-loop, the BLAKE3(committed artifact)
+# == signed [component].hash property, and that the child owns no listening
+# TCP port besides /health. It is PG-class (the child starts a real embedded
+# Postgres) but deliberately NOT folded into {{PG_TEST_FLAGS}}: it is slow
+# (full production startup + a real subprocess spawn) and is semantically
+# its own gate (R-0022-c "the smoke gate"), not part of the general
+# behavioral suite verify-test / verify-test-hooks / verify-coverage already
+# run three times over. Scoped invocation mirrors verify-signing-root's
+# `cargo test --test <name>` pattern.
+verify-smoke: build
     #!/usr/bin/env bash
     set -euo pipefail
-    # scaffold: the `true` placeholder always passes; Task 27 swaps it for the real
-    # end-to-end smoke command. The FAIL branch holds the GATE contract shape
-    # (one GATE line + correct exit) so Task 27 only swaps the condition.
-    # NOTE: the FAIL branch is unreachable until Task 27 supplies a fallible command.
-    if true; then
+    if cargo test -p mnemra-host --test smoke_e2e -- --test-threads 1 2>&1; then
         echo "GATE smoke PASS"
     else
         echo "GATE smoke FAIL"

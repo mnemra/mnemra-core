@@ -21,12 +21,14 @@ async fn main() {
             std::process::exit(1);
         }
         None => {
-            // No subcommand: delegate to the legacy `mnemra_host::run` entry
-            // (scaffolding anchor for Tasks 23/25).
-            mnemra_host::run().map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                // run() returns Box<dyn Error> (not Send+Sync). Wrap for uniformity.
-                e.to_string().into()
-            })
+            // No subcommand: delegate to `mnemra_host::run` — production
+            // startup assembly (R-0022-a).
+            mnemra_host::run()
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                    // run() returns Box<dyn Error> (not Send+Sync). Wrap for uniformity.
+                    e.to_string().into()
+                })
         }
     };
 

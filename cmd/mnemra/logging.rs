@@ -11,7 +11,12 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::Subscr
 /// Initialise the global structured-log subscriber.
 ///
 /// Installs a `tracing-subscriber` registry with:
-/// - A JSON formatting layer writing to **stdout**.
+/// - A JSON formatting layer writing to **stderr** — stdout is reserved
+///   exclusively for the MCP JSON-RPC wire protocol `RunHandle::serve_stdio`
+///   (`libs/mnemra-host/mnemra_host.rs`, R-0022-c) serves over stdio; a log
+///   line landing on stdout would corrupt that stream. Matches MCP's own
+///   stdio-transport convention (servers reserve stdout for protocol,
+///   stderr for diagnostics).
 /// - An `EnvFilter` that reads `MNEMRA_LOG` first, then `RUST_LOG`, then
 ///   falls back to `info`.
 ///
@@ -28,7 +33,11 @@ pub fn init_logging() {
 
     let _ = Registry::default()
         .with(filter)
-        .with(tracing_subscriber::fmt::layer().json())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(std::io::stderr),
+        )
         .try_init();
 }
 
