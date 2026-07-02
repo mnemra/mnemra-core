@@ -1,0 +1,10 @@
+# BOM sidecar — retrieval cluster (get_context_for + provenance envelope +
+# search activation + typed edges + source-roles). Schema authority:
+# .claude/commands/verify.md Stage A. Blocks append at each /brief stage-exit lock.
+
+spec_type = "architecture"
+
+[audit_chain.intent]
+ref = "../intent/retrieval-cluster.md"
+version = "48fd4f59d845d084ab2f914571f0399830137a4a"
+locked_at = 2026-07-02T14:31:00Z
