@@ -1,0 +1,20 @@
+error[E0432]: unresolved import `mnemra_host::InjectedFailure`
+  --> tests/ui/no_test_seams/run_config_injected_failure_reachable.rs:14:19
+   |
+14 | use mnemra_host::{InjectedFailure, RunConfig};
+   |                   ^^^^^^^^^^^^^^^ no `InjectedFailure` in the root
+   |
+note: found an item that was configured out
+  --> mnemra_host.rs
+   |
+   | #[cfg(feature = "test-hooks")]
+   |       ---------------------- the item is gated behind the `test-hooks` feature
+   | #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+   | pub enum InjectedFailure {
+   |          ^^^^^^^^^^^^^^^
+
+error[E0599]: no associated function or constant named `with_injected_failure` found for struct `RunConfig` in the current scope
+  --> tests/ui/no_test_seams/run_config_injected_failure_reachable.rs:18:69
+   |
+18 |     let _: fn(RunConfig, InjectedFailure) -> RunConfig = RunConfig::with_injected_failure;
+   |                                                                     ^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `RunConfig`

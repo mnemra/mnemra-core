@@ -484,10 +484,8 @@ pub(crate) async fn create_least_privilege_roles(
 
 /// Health snapshot body (R-0004-g).
 ///
-/// Task 25's `/health` HTTP handler serializes this struct to JSON. At V0 the
-/// struct has no `#[derive(Serialize)]` — Task 25 adds that when it wires the
-/// HTTP handler.
-#[derive(Debug, PartialEq)]
+/// Task 25's `/health` HTTP handler serializes this struct to JSON.
+#[derive(Debug, PartialEq, serde::Serialize)]
 pub struct HealthSnapshot {
     /// True if the Postgres engine is reachable.
     pub postgres: bool,
@@ -514,6 +512,19 @@ impl fmt::Display for HealthStatus {
             HealthStatus::Degraded => write!(f, "degraded"),
             HealthStatus::Down => write!(f, "down"),
         }
+    }
+}
+
+/// Serializes via [`fmt::Display`] (`"ok" | "degraded" | "down"`) so the
+/// wire form and the log/error form share one source of truth — no
+/// separate `#[serde(rename_all = ...)]` mapping to drift out of sync with
+/// the `Display` impl above.
+impl serde::Serialize for HealthStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
     }
 }
 
