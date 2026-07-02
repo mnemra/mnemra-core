@@ -229,9 +229,9 @@ does **not** promote the tier — only a dedicated intake does. **This tier is t
 scope-anchor surface: research and discovery read `idea`-and-up so intended direction is
 never silently dropped to what-exists-live.**
 
-- **Search + indexing activation** (full-text + vector) [D1] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Proposed §V0.1 for the live entry; this pointer is retained so the D1 reference stays resolvable. Provenance: V0 discovery, Deferred section (locked 2026-05-02).
-- **First-class graph edges + traversal** [D2] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Proposed §V0.1 for the live entry; pointer retained so the D2 reference stays resolvable. Provenance: as D1.
-- **`get_context_for(artifact_id)` — the agent-context bundle composer** [D3] — **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Proposed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
+- **Search + indexing activation** (full-text + vector) [D1] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; this pointer is retained so the D1 reference stays resolvable. Provenance: V0 discovery, Deferred section (locked 2026-05-02).
+- **First-class graph edges + traversal** [D2] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the D2 reference stays resolvable. Provenance: as D1.
+- **`get_context_for(artifact_id)` — the agent-context bundle composer** [D3] — **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Designed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
 - **Bidirectional issue↔code via commit-ref convention** [D4] — provenance: as D1.
 - **New first-class artifact types beyond the migrated set** [D5] — provenance: as D1.
 - **Row-level-security policy enforcement** [D6] — provenance: as D1.
@@ -240,7 +240,7 @@ never silently dropped to what-exists-live.**
 - **Multi-orchestrator-per-project topology** [D9] — provenance: as D1.
 - **Third-party plugin install** [D11], gated on a documented ABI evolution policy — provenance: as D1.
 - **Host-fn ABI 1.0 stabilization** [D12] — provenance: as D1.
-- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Proposed §V0.1 for the live entry; pointer retained so the G2/G3 reference stays resolvable. Provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there — the retrieval cluster is the pipeline run it rides.
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the G2/G3 reference stays resolvable. Provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there — the retrieval cluster is the pipeline run it rides.
 - **Knowledge-object substrate shape** (frontmatter-shape not new artifact-type; OCC version field; extensible typed audit events) — provenance: as G2/G3.
 - **Knowledge-object family schemas + judge-extender + review-queue + memory-inspector + memory-write-back discipline** (F1/F3/F4/F5/F7) — provenance: as G2/G3 (forward-context, no consumer yet).
 - **Multi-language plugin authoring** (Rust-first now; JS/TS, Python, TinyGo; later C#) — provenance: architecture overview V0/V1 boundary.
@@ -392,47 +392,32 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
 The very-next-update phase after MVP cutover — net-new value beyond V0 workspace-fidelity.
-Each V0.1 entry is `proposed` at this product altitude (this brief's intake locks the
-phase placement); each entry's own feature-altitude intake will lock its frame+spec
-before build. Maintainer ruling 2026-05-20: V0 = workspace-replacement (no regression);
-V0.1 = the core product promise activates plus operational follow-ups V0 deliberately did
-not promise.
+Each V0.1 entry starts `proposed` at this product altitude (this brief's intake locks the
+phase placement); each entry's own feature-altitude intake locks its frame+spec before
+build, promoting it to `designed` (see Designed §V0.1 for the entries that have — the
+retrieval cluster's four). Maintainer ruling 2026-05-20: V0 = workspace-replacement (no
+regression); V0.1 = the core product promise activates plus operational follow-ups V0
+deliberately did not promise.
 
-- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise).** A
-  one-call MCP retrieval of persistent, typed, cross-session context for a given artifact,
-  rather than reconstructing it by hand each session. The headline V0.1 capability — the
-  first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
-  promise; first net-new value over V0.* Tier: `proposed`. Provenance: V0 discovery (D3 —
-  locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`).
-  **Re-confirmed 2026-07-02 (MODIFIED):** covered by the retrieval-cluster
-  feature-altitude intake (locked 2026-07-02) as one clustered feature with D1, D2, and
-  G2/G3 below — one intake/frame/spec pipeline; the frame is locked (2026-07-02) and the
-  spec is at the spec-exit gate. Tier stays `proposed` until the spec locks (the
-  `designed` validator is a locked frame **plus** a locked spec).
-- **Search + indexing activation [D1] (retrieval cluster).** Batch indexing pipeline over
-  the corpus the substrate already holds (per-shape chunking, authored-tree summary
-  nodes, local embeddings, full-text search) plus the agent-facing `search` verb — hybrid
-  FTS+dense retrieval fused by Reciprocal Rank Fusion with local rerank, budget-shaped.
-  Part of the retrieval cluster (one clustered feature with `1.1.0`, D2, G2/G3). *Order:
-  rides with `1.1.0` — the headline verb needs the index.* Tier: `proposed`. Provenance:
-  V0 discovery D1 (locked 2026-05-02); retrieval-cluster intake (locked 2026-07-02) —
-  the intake lock performed the `idea → proposed` promotion. *(ADDED 2026-07-02.)*
-- **First-class graph edges + traversal [D2] (retrieval cluster).** Typed, traversable
-  edges extracted from the authored-but-latent sources (frontmatter relation lists,
-  free-text citations) with provenance discrimination; **the `0.8.0` edge-table substrate
-  is what this traversal activates** — one superset vocabulary, one traversal path
-  (recursive CTEs, per the storage-substrate decision). Part of the retrieval cluster.
-  *Order: as D1.* Tier: `proposed`. Provenance: V0 discovery D2 (locked 2026-05-02);
-  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the promotion.
-  *(ADDED 2026-07-02.)*
+- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise)** —
+  **promoted to `designed` @ V0.1 / `1.1.0`** (2026-07-02). See Designed §V0.1 for the
+  live entry; pointer retained so the `1.1.0` reference stays resolvable. Provenance:
+  retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked
+  2026-07-02).
+- **Search + indexing activation [D1] (retrieval cluster)** — **promoted to `designed`
+  @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry;
+  pointer retained so the D1 reference stays resolvable. Provenance: retrieval-cluster
+  spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
+- **First-class graph edges + traversal [D2] (retrieval cluster)** — **promoted to
+  `designed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live
+  entry; pointer retained so the D2 reference stays resolvable. Provenance:
+  retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked
+  2026-07-02).
 - **Cross-artifact authoritativeness + provenance/use-policy substrate fields [G2/G3]
-  (retrieval cluster).** The substrate fields the retrieval envelope reads and serves:
-  trust provenance (authoritative/outdated/background), the policy permissions record
-  (dont-use, model-egress, visibility, tenant-share), freshness handles + decay classes,
-  and decision axes. Part of the retrieval cluster. *Order: as D1 — the envelope's
-  substrate.* Tier: `proposed`. Provenance: knowledge-object survey (2026-05-15);
-  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the promotion.
-  *(ADDED 2026-07-02.)*
+  (retrieval cluster)** — **promoted to `designed` @ V0.1, retrieval cluster**
+  (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the G2/G3
+  reference stays resolvable. Provenance: retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
 - **`1.2.0` — Ongoing ingest pipeline.** Watchers, scheduled polls, or webhooks that
   auto-detect and ingest new content arriving in the brain corpus after V0's one-shot batch
   migration (`0.14.0`). Distinct from `0.14.0`: `0.14.0` is a one-shot move-existing-corpus;
@@ -455,15 +440,61 @@ references them as build-time dependencies, does not absorb them into its regist
 
 ### Designed
 
-A locked frame + locked spec exists. **Empty.** No mnemra feature has a locked spec — the
-spec stage has not been run for any feature, and V0's constraints/frame artifact is still
-draft. Stated explicitly: the register does not infer design completion that does not
-exist.
+A locked frame + locked spec exists. The retrieval cluster is this tier's first tenant:
+its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its
+four constituent entries below from `proposed`. Stated explicitly: the register does not
+infer design completion beyond what a locked spec actually covers.
+
+#### V0.1 (post-`1.0.0` immediate roadmap)
+
+- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise).** A
+  one-call MCP retrieval of persistent, typed, cross-session context for a given artifact,
+  rather than reconstructing it by hand each session. The headline V0.1 capability — the
+  first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
+  promise; first net-new value over V0.* Tier: `designed`. Provenance: V0 discovery (D3 —
+  locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`) +
+  retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked
+  2026-07-02). **Promoted 2026-07-02 (MODIFIED):** covered by the retrieval-cluster
+  feature-altitude intake (locked 2026-07-02) as one clustered feature with D1, D2, and
+  G2/G3 below — one intake/frame/spec pipeline; the frame locked 2026-07-02 and the spec
+  locked 2026-07-02, satisfying the `designed` validator (a locked frame **plus** a locked
+  spec).
+- **Search + indexing activation [D1] (retrieval cluster).** Batch indexing pipeline over
+  the corpus the substrate already holds (per-shape chunking, authored-tree summary
+  nodes, local embeddings, full-text search) plus the agent-facing `search` verb — hybrid
+  FTS+dense retrieval fused by Reciprocal Rank Fusion with local rerank, budget-shaped.
+  Part of the retrieval cluster (one clustered feature with `1.1.0`, D2, G2/G3). *Order:
+  rides with `1.1.0` — the headline verb needs the index.* Tier: `designed`. Provenance:
+  V0 discovery D1 (locked 2026-05-02); retrieval-cluster intake (locked 2026-07-02) —
+  the intake lock performed the `idea → proposed` promotion; retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
+  `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **First-class graph edges + traversal [D2] (retrieval cluster).** Typed, traversable
+  edges extracted from the authored-but-latent sources (frontmatter relation lists,
+  free-text citations) with provenance discrimination; **the `0.8.0` edge-table substrate
+  is what this traversal activates** — one superset vocabulary, one traversal path
+  (recursive CTEs, per the storage-substrate decision). Part of the retrieval cluster.
+  *Order: as D1.* Tier: `designed`. Provenance: V0 discovery D2 (locked 2026-05-02);
+  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the
+  `idea → proposed` promotion; retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
+  `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields [G2/G3]
+  (retrieval cluster).** The substrate fields the retrieval envelope reads and serves:
+  trust provenance (authoritative/outdated/background), the policy permissions record
+  (dont-use, model-egress, visibility, tenant-share), freshness handles + decay classes,
+  and decision axes. Part of the retrieval cluster. *Order: as D1 — the envelope's
+  substrate.* Tier: `designed`. Provenance: knowledge-object survey (2026-05-15);
+  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the
+  `idea → proposed` promotion; retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
+  `proposed → designed` promotion. *(ADDED 2026-07-02.)*
 
 ### Committed
 
-`designed` plus a plan, release-bound. **Empty.** Nothing is design-complete, and no
-release has a committed date — consistent with the product's stated posture that a phase
+`designed` plus a plan, release-bound. **Empty.** The retrieval cluster is now `designed`,
+but no feature has yet moved `designed → committed` (no committed-tier plan exists, and no
+release has a committed date) — consistent with the product's stated posture that a phase
 commits a date only when work is far enough along. Stated explicitly: the register does
 not over-claim commitment. An empty `committed` tier early in a project is the register
 working, not a gap.
@@ -556,6 +587,14 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-02** — Retrieval-cluster spec locked
+  (`docs/specs/2026-07-02-retrieval-cluster.md`). Register: `proposed → designed`
+  promotion for the four clustered entries — `1.1.0` (`get_context_for` retrieval verb),
+  D1 (search + indexing), D2 (graph edges + traversal), and G2/G3 (authoritativeness +
+  provenance/use-policy substrate fields) — moved from Proposed §V0.1 into a new Designed
+  §V0.1 subsection (the tier's first tenant), each with a pointer-stub retained in
+  Proposed §V0.1 and the corresponding Idea-section pointers (D1, D2, D3, G2/G3)
+  retargeted from "See Proposed §V0.1" to "See Designed §V0.1."
 - **2026-07-02** — Retrieval-cluster riders (labeled deltas; authored with the
   retrieval-cluster Stage-3 spec, riding that cluster's docs change). **RC-1
   model-hosting amendment** (retrieval-cluster intake, locked 2026-07-02) — every
