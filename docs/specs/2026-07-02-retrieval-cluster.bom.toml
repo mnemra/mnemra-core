@@ -17,3 +17,32 @@ locked_at = 2026-07-02T21:40:00Z
 
 [audit_chain.frame.generated_against]
 intent_version = "48fd4f59d845d084ab2f914571f0399830137a4a"
+
+[audit_chain.spec]
+ref = "2026-07-02-retrieval-cluster.md"
+version = "0b948ea22ef77ffd122a9aec3700b5bdeb2098a5"
+internal_conformance = "pass"
+locked_at = 2026-07-02T21:06:00Z
+
+[audit_chain.spec.generated_against]
+intent_version = "48fd4f59d845d084ab2f914571f0399830137a4a"
+frame_version = "65b1d0562a6cb5e81b43775d2f9493fe44be568f"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true

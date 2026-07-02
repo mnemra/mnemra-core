@@ -68,8 +68,12 @@ Each is a concrete not-this:
 - Not a Notion replacement, knowledge wiki, or general-purpose vector-database wrapper.
 - Not a horizontal "AI for every department" tool; not sales/marketing/HR enablement.
 - Not an attempt to match an enterprise knowledge-search incumbent's breadth.
-- Does not run a language model. Embeddings and summaries call out to an external model;
-  the system never hosts one.
+- Does not host a **generative** language model. All generative work (query rewrite,
+  chunk-context, tag generation, synthesis) calls out to an external model at V0; local
+  **non-generative** inference (embedding, reranking — small encoder models behind the
+  host-fn seam) is permitted host-side. *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster
+  intake (locked 2026-07-02); was: "Does not run a language model. Embeddings and
+  summaries call out to an external model; the system never hosts one.")*
 - Not RAG-as-a-service.
 - The open-source core does not pursue multi-tenant isolation as a product goal; tenancy is
   a structural column-shape at V0 with policy enforcement deferred. The boundary between
@@ -125,7 +129,10 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   functions. Plugins are leaves — no direct sideways linkage; cross-plugin calls are
   host-mediated.
 - Deployment posture SHALL be **self-hosted-first, single-binary**. The system MUST NOT
-  host a language model; it calls out to an external one.
+  host a **generative** LLM — all generative work calls out to an external model at V0;
+  local **non-generative** inference (embedding, reranking) is permitted host-side.
+  *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake (locked 2026-07-02); was: "The
+  system MUST NOT host a language model; it calls out to an external one.")*
 - **"Single-binary" constrains the server, not the deployment packaging.** It means one
   process (not a microservice mesh) — an immutable image/appliance is a valid packaging
   shape for that single binary and does not violate this constraint.
@@ -140,6 +147,13 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   follow-up task; this brief's Hard constraints lock the direction.
 - Architecture MUST NOT be schedule-pressured. Dates appearing in marketing or landing
   material are not architectural inputs and do not weight tradeoff analysis.
+- **Accessibility is a standing product requirement**, binding on every human-facing UI
+  and documentation surface the product ships (current and future: the docs site, any
+  dashboard/console, human-readable CLI output); each such surface's design gate reviews
+  it. Machine-facing MCP/agent surfaces are outside this requirement's scope; derivative
+  human views inherit it. *(ADDED 2026-07-02 — retrieval-cluster frame pre-gate walk item
+  13 (locked 2026-07-02): routed here as a product-level standing requirement rather than
+  faked into an MCP-verb feature cluster.)*
 
 ### Evidence
 
@@ -215,8 +229,8 @@ does **not** promote the tier — only a dedicated intake does. **This tier is t
 scope-anchor surface: research and discovery read `idea`-and-up so intended direction is
 never silently dropped to what-exists-live.**
 
-- **Search + indexing activation** (full-text + vector) [D1] — provenance: V0 discovery, Deferred section (locked 2026-05-02).
-- **First-class graph edges + traversal** [D2] — provenance: as D1.
+- **Search + indexing activation** (full-text + vector) [D1] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Proposed §V0.1 for the live entry; this pointer is retained so the D1 reference stays resolvable. Provenance: V0 discovery, Deferred section (locked 2026-05-02).
+- **First-class graph edges + traversal** [D2] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Proposed §V0.1 for the live entry; pointer retained so the D2 reference stays resolvable. Provenance: as D1.
 - **`get_context_for(artifact_id)` — the agent-context bundle composer** [D3] — **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Proposed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
 - **Bidirectional issue↔code via commit-ref convention** [D4] — provenance: as D1.
 - **New first-class artifact types beyond the migrated set** [D5] — provenance: as D1.
@@ -226,7 +240,7 @@ never silently dropped to what-exists-live.**
 - **Multi-orchestrator-per-project topology** [D9] — provenance: as D1.
 - **Third-party plugin install** [D11], gated on a documented ABI evolution policy — provenance: as D1.
 - **Host-fn ABI 1.0 stabilization** [D12] — provenance: as D1.
-- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there, no dedicated pipeline run of its own.
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Proposed §V0.1 for the live entry; pointer retained so the G2/G3 reference stays resolvable. Provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there — the retrieval cluster is the pipeline run it rides.
 - **Knowledge-object substrate shape** (frontmatter-shape not new artifact-type; OCC version field; extensible typed audit events) — provenance: as G2/G3.
 - **Knowledge-object family schemas + judge-extender + review-queue + memory-inspector + memory-write-back discipline** (F1/F3/F4/F5/F7) — provenance: as G2/G3 (forward-context, no consumer yet).
 - **Multi-language plugin authoring** (Rust-first now; JS/TS, Python, TinyGo; later C#) — provenance: architecture overview V0/V1 boundary.
@@ -245,6 +259,7 @@ never silently dropped to what-exists-live.**
 - **End-user CLI/TUI** distinct from the admin control CLI; **plugin registry/marketplace + signing/distribution as a product surface**; **hosted web console**; **onboarding/docs-as-product**; **agent-framework-specific integrations** beyond generic MCP — all valid under the product umbrella, unvalidated.
 - **A newsfeed capability** (working name) — pure thought, no provenance.
 - **A permissions model** — pure thought; explicitly needs research into the approach (see Open Decision OD-B).
+- **Per-user identity machinery** — owner-columns-as-identity, caller identity in the request context, real owner==caller checks. Activates per-user `visibility: owner-only` serving semantics (at V0 owner-only serves no one — the fail-closed enforcement is the V0 semantics) and is the first write/label-capability surface that fires the deferred write-side policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns from day one so this lands as a feature, not an excavation. Provenance: retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
 
 ### Proposed
 
@@ -288,9 +303,11 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
   and log shapes emitted to the observability minimum rather than stored (P-0010 D8); the pre-1.0
   host-fn ABI; an MCP server skeleton (stdio) onto which each capability increment adds its
   verbs; the admin/destructive control CLI; an observability minimum; an **LLM-API-key
-  configuration surface** (mnemra-core calls out to an external model for embeddings per
-  the architecture-overview ELT subsystem; the key is configured per deployment, never
-  hard-coded, and never used to host a model); **and the builtin tenancy/identity core —
+  configuration surface** (mnemra-core calls out to an external model for *generative*
+  work; embeddings and reranking run host-side on local non-generative encoder models per
+  RC-1; the key is configured per deployment, never hard-coded, and never used to host a
+  model) *(MODIFIED 2026-07-02 per RC-1; was: "calls out to an external model for
+  embeddings per the architecture-overview ELT subsystem")*; **and the builtin tenancy/identity core —
   workspace (tenant boundary; solo collapses to `default`), users, agents (tied to
   user–workspace pairs), authentication (a workspace claim in every token; per-deployment
   OIDC via RFC 9728; a static dev-token first-run bootstrap), agent sessions, per-plugin
@@ -387,6 +404,35 @@ not promise.
   first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
   promise; first net-new value over V0.* Tier: `proposed`. Provenance: V0 discovery (D3 —
   locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`).
+  **Re-confirmed 2026-07-02 (MODIFIED):** covered by the retrieval-cluster
+  feature-altitude intake (locked 2026-07-02) as one clustered feature with D1, D2, and
+  G2/G3 below — one intake/frame/spec pipeline; the frame is locked (2026-07-02) and the
+  spec is at the spec-exit gate. Tier stays `proposed` until the spec locks (the
+  `designed` validator is a locked frame **plus** a locked spec).
+- **Search + indexing activation [D1] (retrieval cluster).** Batch indexing pipeline over
+  the corpus the substrate already holds (per-shape chunking, authored-tree summary
+  nodes, local embeddings, full-text search) plus the agent-facing `search` verb — hybrid
+  FTS+dense retrieval fused by Reciprocal Rank Fusion with local rerank, budget-shaped.
+  Part of the retrieval cluster (one clustered feature with `1.1.0`, D2, G2/G3). *Order:
+  rides with `1.1.0` — the headline verb needs the index.* Tier: `proposed`. Provenance:
+  V0 discovery D1 (locked 2026-05-02); retrieval-cluster intake (locked 2026-07-02) —
+  the intake lock performed the `idea → proposed` promotion. *(ADDED 2026-07-02.)*
+- **First-class graph edges + traversal [D2] (retrieval cluster).** Typed, traversable
+  edges extracted from the authored-but-latent sources (frontmatter relation lists,
+  free-text citations) with provenance discrimination; **the `0.8.0` edge-table substrate
+  is what this traversal activates** — one superset vocabulary, one traversal path
+  (recursive CTEs, per the storage-substrate decision). Part of the retrieval cluster.
+  *Order: as D1.* Tier: `proposed`. Provenance: V0 discovery D2 (locked 2026-05-02);
+  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the promotion.
+  *(ADDED 2026-07-02.)*
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields [G2/G3]
+  (retrieval cluster).** The substrate fields the retrieval envelope reads and serves:
+  trust provenance (authoritative/outdated/background), the policy permissions record
+  (dont-use, model-egress, visibility, tenant-share), freshness handles + decay classes,
+  and decision axes. Part of the retrieval cluster. *Order: as D1 — the envelope's
+  substrate.* Tier: `proposed`. Provenance: knowledge-object survey (2026-05-15);
+  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the promotion.
+  *(ADDED 2026-07-02.)*
 - **`1.2.0` — Ongoing ingest pipeline.** Watchers, scheduled polls, or webhooks that
   auto-detect and ingest new content arriving in the brain corpus after V0's one-shot batch
   migration (`0.14.0`). Distinct from `0.14.0`: `0.14.0` is a one-shot move-existing-corpus;
@@ -510,6 +556,26 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-02** — Retrieval-cluster riders (labeled deltas; authored with the
+  retrieval-cluster Stage-3 spec, riding that cluster's docs change). **RC-1
+  model-hosting amendment** (retrieval-cluster intake, locked 2026-07-02) — every
+  falsified canonical copy reconciled in the same change (single-source discipline):
+  MODIFIED the Non-goals model clause ("never hosts one" → MUST NOT host a *generative*
+  LLM; local non-generative inference — embedding, reranking — permitted host-side);
+  MODIFIED the Hard-constraints model-hosting clause to match; MODIFIED the `0.1.0`
+  substrate entry's external-embedding framing (embeddings/reranking now local
+  non-generative; the LLM-API-key surface serves the generative call-outs). The
+  architecture-overview ELT external-embedding framing is the named lagging copy,
+  reconciled in the same change. **Register:** `idea → proposed` promotions performed by
+  the retrieval-cluster intake lock — D1 (search + indexing), D2 (graph edges +
+  traversal, noting the `0.8.0` edge-table substrate as what its traversal activates),
+  and G2/G3 (authoritativeness + provenance/use-policy substrate fields) — added as live
+  Proposed §V0.1 entries with idea-tier pointers retained; `1.1.0` re-confirmed as the
+  cluster's headline entry (tier stays `proposed` until the spec locks). ADDED idea-tier
+  entry: per-user identity machinery (frame pre-gate walk item 9). **Hard constraints:**
+  ADDED accessibility as a standing product requirement binding on human-facing UI/docs
+  surfaces (frame pre-gate walk item 13 — routed here, not faked into the MCP-verb
+  cluster).
 - **2026-05-20** — Intake-exit gate confirmed (Stage 1 lock). All open decisions resolved:
   LIC-1 (Apache-2.0 + future-relicense locked; mnemra-core repo LICENSE/README correction
   is a follow-up task); T-5 split (categorization-via-LLM-API → `idea`; LLM-API-key config
