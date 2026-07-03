@@ -5,7 +5,7 @@ primary-audience: agent
 ---
 
 ---
-status: "proposed"
+status: "accepted"
 date: "2026-07-02"
 decision-makers: ["the maintainer"]
 consulted: ["the architect", "the researcher", "the orchestrator"]
@@ -21,9 +21,9 @@ overrides: null
 
 ## Status
 
-`proposed`
+`accepted`
 
-Authored at the foundational-ADR-cluster stage as the formalization of the storage-layout verdicts already locked in the working docs — the Round-2 cluster review (verdict pressure-tested and accepted 2026-05-04) and the system-overview walk that folded in the subsequent use-case deltas — plus the remaining details (source-of-truth principle, column-promotion policy) locked against canon here. It flips to `accepted` at the maintainer's review gate; the core cluster-model choice is not re-opened by that gate (it formalizes a locked verdict), what the gate reviews is this rendering at ADR precision and the three explicit reconciliations flagged in "Decision Drivers" and "More Information".
+Authored at the foundational-ADR-cluster stage as the formalization of the storage-layout verdicts already locked in the working docs — the Round-2 cluster review (verdict pressure-tested and accepted 2026-05-04) and the system-overview walk that folded in the subsequent use-case deltas — plus the remaining details (source-of-truth principle, column-promotion policy) locked against canon here. Accepted at the maintainer's review gate (2026-07-03); the core cluster-model choice was not re-opened by that gate (it formalizes a locked verdict) — the gate reviewed this rendering at ADR precision and confirmed the three explicit reconciliations flagged in "Decision Drivers" and "More Information".
 
 This ADR **refines** — it does not supersede — [P-0001-storage-layout](P-0001-storage-layout.md) (C1 single-document layout: whole artifact in one row, JSONB frontmatter + body + system fields, per-artifact-type tables). P-0001's C1 layout choice **and** its per-artifact-type-table granularity both stand. P-0017 adds the layer P-0001 left open: the **cluster-shape taxonomy** that classifies each per-type table by its data shape, and the two governing principles (source-of-truth, column-promotion) that a per-shape policy hangs off.
 
