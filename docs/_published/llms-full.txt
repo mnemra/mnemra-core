@@ -97,8 +97,12 @@ Each is a concrete not-this:
 - Not a Notion replacement, knowledge wiki, or general-purpose vector-database wrapper.
 - Not a horizontal "AI for every department" tool; not sales/marketing/HR enablement.
 - Not an attempt to match an enterprise knowledge-search incumbent's breadth.
-- Does not run a language model. Embeddings and summaries call out to an external model;
-  the system never hosts one.
+- Does not host a **generative** language model. All generative work (query rewrite,
+  chunk-context, tag generation, synthesis) calls out to an external model at V0; local
+  **non-generative** inference (embedding, reranking — small encoder models behind the
+  host-fn seam) is permitted host-side. *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster
+  intake (locked 2026-07-02); was: "Does not run a language model. Embeddings and
+  summaries call out to an external model; the system never hosts one.")*
 - Not RAG-as-a-service.
 - The open-source core does not pursue multi-tenant isolation as a product goal; tenancy is
   a structural column-shape at V0 with policy enforcement deferred. The boundary between
@@ -154,7 +158,10 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   functions. Plugins are leaves — no direct sideways linkage; cross-plugin calls are
   host-mediated.
 - Deployment posture SHALL be **self-hosted-first, single-binary**. The system MUST NOT
-  host a language model; it calls out to an external one.
+  host a **generative** LLM — all generative work calls out to an external model at V0;
+  local **non-generative** inference (embedding, reranking) is permitted host-side.
+  *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake (locked 2026-07-02); was: "The
+  system MUST NOT host a language model; it calls out to an external one.")*
 - **"Single-binary" constrains the server, not the deployment packaging.** It means one
   process (not a microservice mesh) — an immutable image/appliance is a valid packaging
   shape for that single binary and does not violate this constraint.
@@ -169,6 +176,13 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   follow-up task; this brief's Hard constraints lock the direction.
 - Architecture MUST NOT be schedule-pressured. Dates appearing in marketing or landing
   material are not architectural inputs and do not weight tradeoff analysis.
+- **Accessibility is a standing product requirement**, binding on every human-facing UI
+  and documentation surface the product ships (current and future: the docs site, any
+  dashboard/console, human-readable CLI output); each such surface's design gate reviews
+  it. Machine-facing MCP/agent surfaces are outside this requirement's scope; derivative
+  human views inherit it. *(ADDED 2026-07-02 — retrieval-cluster frame pre-gate walk item
+  13 (locked 2026-07-02): routed here as a product-level standing requirement rather than
+  faked into an MCP-verb feature cluster.)*
 
 ### Evidence
 
@@ -244,9 +258,9 @@ does **not** promote the tier — only a dedicated intake does. **This tier is t
 scope-anchor surface: research and discovery read `idea`-and-up so intended direction is
 never silently dropped to what-exists-live.**
 
-- **Search + indexing activation** (full-text + vector) [D1] — provenance: V0 discovery, Deferred section (locked 2026-05-02).
-- **First-class graph edges + traversal** [D2] — provenance: as D1.
-- **`get_context_for(artifact_id)` — the agent-context bundle composer** [D3] — **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Proposed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
+- **Search + indexing activation** (full-text + vector) [D1] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; this pointer is retained so the D1 reference stays resolvable. Provenance: V0 discovery, Deferred section (locked 2026-05-02).
+- **First-class graph edges + traversal** [D2] — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the D2 reference stays resolvable. Provenance: as D1.
+- **`get_context_for(artifact_id)` — the agent-context bundle composer** [D3] — **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Designed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
 - **Bidirectional issue↔code via commit-ref convention** [D4] — provenance: as D1.
 - **New first-class artifact types beyond the migrated set** [D5] — provenance: as D1.
 - **Row-level-security policy enforcement** [D6] — provenance: as D1.
@@ -255,7 +269,7 @@ never silently dropped to what-exists-live.**
 - **Multi-orchestrator-per-project topology** [D9] — provenance: as D1.
 - **Third-party plugin install** [D11], gated on a documented ABI evolution policy — provenance: as D1.
 - **Host-fn ABI 1.0 stabilization** [D12] — provenance: as D1.
-- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there, no dedicated pipeline run of its own.
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the G2/G3 reference stays resolvable. Provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there — the retrieval cluster is the pipeline run it rides.
 - **Knowledge-object substrate shape** (frontmatter-shape not new artifact-type; OCC version field; extensible typed audit events) — provenance: as G2/G3.
 - **Knowledge-object family schemas + judge-extender + review-queue + memory-inspector + memory-write-back discipline** (F1/F3/F4/F5/F7) — provenance: as G2/G3 (forward-context, no consumer yet).
 - **Multi-language plugin authoring** (Rust-first now; JS/TS, Python, TinyGo; later C#) — provenance: architecture overview V0/V1 boundary.
@@ -274,6 +288,7 @@ never silently dropped to what-exists-live.**
 - **End-user CLI/TUI** distinct from the admin control CLI; **plugin registry/marketplace + signing/distribution as a product surface**; **hosted web console**; **onboarding/docs-as-product**; **agent-framework-specific integrations** beyond generic MCP — all valid under the product umbrella, unvalidated.
 - **A newsfeed capability** (working name) — pure thought, no provenance.
 - **A permissions model** — pure thought; explicitly needs research into the approach (see Open Decision OD-B).
+- **Per-user identity machinery** — owner-columns-as-identity, caller identity in the request context, real owner==caller checks. Activates per-user `visibility: owner-only` serving semantics (at V0 owner-only serves no one — the fail-closed enforcement is the V0 semantics) and is the first write/label-capability surface that fires the deferred write-side policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns from day one so this lands as a feature, not an excavation. Provenance: retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
 
 ### Proposed
 
@@ -317,9 +332,11 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
   and log shapes emitted to the observability minimum rather than stored (P-0010 D8); the pre-1.0
   host-fn ABI; an MCP server skeleton (stdio) onto which each capability increment adds its
   verbs; the admin/destructive control CLI; an observability minimum; an **LLM-API-key
-  configuration surface** (mnemra-core calls out to an external model for embeddings per
-  the architecture-overview ELT subsystem; the key is configured per deployment, never
-  hard-coded, and never used to host a model); **and the builtin tenancy/identity core —
+  configuration surface** (mnemra-core calls out to an external model for *generative*
+  work; embeddings and reranking run host-side on local non-generative encoder models per
+  RC-1; the key is configured per deployment, never hard-coded, and never used to host a
+  model) *(MODIFIED 2026-07-02 per RC-1; was: "calls out to an external model for
+  embeddings per the architecture-overview ELT subsystem")*; **and the builtin tenancy/identity core —
   workspace (tenant boundary; solo collapses to `default`), users, agents (tied to
   user–workspace pairs), authentication (a workspace claim in every token; per-deployment
   OIDC via RFC 9728; a static dev-token first-run bootstrap), agent sessions, per-plugin
@@ -404,18 +421,32 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
 The very-next-update phase after MVP cutover — net-new value beyond V0 workspace-fidelity.
-Each V0.1 entry is `proposed` at this product altitude (this brief's intake locks the
-phase placement); each entry's own feature-altitude intake will lock its frame+spec
-before build. Maintainer ruling 2026-05-20: V0 = workspace-replacement (no regression);
-V0.1 = the core product promise activates plus operational follow-ups V0 deliberately did
-not promise.
+Each V0.1 entry starts `proposed` at this product altitude (this brief's intake locks the
+phase placement); each entry's own feature-altitude intake locks its frame+spec before
+build, promoting it to `designed` (see Designed §V0.1 for the entries that have — the
+retrieval cluster's four). Maintainer ruling 2026-05-20: V0 = workspace-replacement (no
+regression); V0.1 = the core product promise activates plus operational follow-ups V0
+deliberately did not promise.
 
-- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise).** A
-  one-call MCP retrieval of persistent, typed, cross-session context for a given artifact,
-  rather than reconstructing it by hand each session. The headline V0.1 capability — the
-  first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
-  promise; first net-new value over V0.* Tier: `proposed`. Provenance: V0 discovery (D3 —
-  locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`).
+- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise)** —
+  **promoted to `designed` @ V0.1 / `1.1.0`** (2026-07-02). See Designed §V0.1 for the
+  live entry; pointer retained so the `1.1.0` reference stays resolvable. Provenance:
+  retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked
+  2026-07-02).
+- **Search + indexing activation [D1] (retrieval cluster)** — **promoted to `designed`
+  @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry;
+  pointer retained so the D1 reference stays resolvable. Provenance: retrieval-cluster
+  spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
+- **First-class graph edges + traversal [D2] (retrieval cluster)** — **promoted to
+  `designed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live
+  entry; pointer retained so the D2 reference stays resolvable. Provenance:
+  retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked
+  2026-07-02).
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields [G2/G3]
+  (retrieval cluster)** — **promoted to `designed` @ V0.1, retrieval cluster**
+  (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the G2/G3
+  reference stays resolvable. Provenance: retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
 - **`1.2.0` — Ongoing ingest pipeline.** Watchers, scheduled polls, or webhooks that
   auto-detect and ingest new content arriving in the brain corpus after V0's one-shot batch
   migration (`0.14.0`). Distinct from `0.14.0`: `0.14.0` is a one-shot move-existing-corpus;
@@ -438,15 +469,61 @@ references them as build-time dependencies, does not absorb them into its regist
 
 ### Designed
 
-A locked frame + locked spec exists. **Empty.** No mnemra feature has a locked spec — the
-spec stage has not been run for any feature, and V0's constraints/frame artifact is still
-draft. Stated explicitly: the register does not infer design completion that does not
-exist.
+A locked frame + locked spec exists. The retrieval cluster is this tier's first tenant:
+its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its
+four constituent entries below from `proposed`. Stated explicitly: the register does not
+infer design completion beyond what a locked spec actually covers.
+
+#### V0.1 (post-`1.0.0` immediate roadmap)
+
+- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise).** A
+  one-call MCP retrieval of persistent, typed, cross-session context for a given artifact,
+  rather than reconstructing it by hand each session. The headline V0.1 capability — the
+  first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
+  promise; first net-new value over V0.* Tier: `designed`. Provenance: V0 discovery (D3 —
+  locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`) +
+  retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked
+  2026-07-02). **Promoted 2026-07-02 (MODIFIED):** covered by the retrieval-cluster
+  feature-altitude intake (locked 2026-07-02) as one clustered feature with D1, D2, and
+  G2/G3 below — one intake/frame/spec pipeline; the frame locked 2026-07-02 and the spec
+  locked 2026-07-02, satisfying the `designed` validator (a locked frame **plus** a locked
+  spec).
+- **Search + indexing activation [D1] (retrieval cluster).** Batch indexing pipeline over
+  the corpus the substrate already holds (per-shape chunking, authored-tree summary
+  nodes, local embeddings, full-text search) plus the agent-facing `search` verb — hybrid
+  FTS+dense retrieval fused by Reciprocal Rank Fusion with local rerank, budget-shaped.
+  Part of the retrieval cluster (one clustered feature with `1.1.0`, D2, G2/G3). *Order:
+  rides with `1.1.0` — the headline verb needs the index.* Tier: `designed`. Provenance:
+  V0 discovery D1 (locked 2026-05-02); retrieval-cluster intake (locked 2026-07-02) —
+  the intake lock performed the `idea → proposed` promotion; retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
+  `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **First-class graph edges + traversal [D2] (retrieval cluster).** Typed, traversable
+  edges extracted from the authored-but-latent sources (frontmatter relation lists,
+  free-text citations) with provenance discrimination; **the `0.8.0` edge-table substrate
+  is what this traversal activates** — one superset vocabulary, one traversal path
+  (recursive CTEs, per the storage-substrate decision). Part of the retrieval cluster.
+  *Order: as D1.* Tier: `designed`. Provenance: V0 discovery D2 (locked 2026-05-02);
+  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the
+  `idea → proposed` promotion; retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
+  `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **Cross-artifact authoritativeness + provenance/use-policy substrate fields [G2/G3]
+  (retrieval cluster).** The substrate fields the retrieval envelope reads and serves:
+  trust provenance (authoritative/outdated/background), the policy permissions record
+  (dont-use, model-egress, visibility, tenant-share), freshness handles + decay classes,
+  and decision axes. Part of the retrieval cluster. *Order: as D1 — the envelope's
+  substrate.* Tier: `designed`. Provenance: knowledge-object survey (2026-05-15);
+  retrieval-cluster intake (locked 2026-07-02) — the intake lock performed the
+  `idea → proposed` promotion; retrieval-cluster spec
+  (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
+  `proposed → designed` promotion. *(ADDED 2026-07-02.)*
 
 ### Committed
 
-`designed` plus a plan, release-bound. **Empty.** Nothing is design-complete, and no
-release has a committed date — consistent with the product's stated posture that a phase
+`designed` plus a plan, release-bound. **Empty.** The retrieval cluster is now `designed`,
+but no feature has yet moved `designed → committed` (no committed-tier plan exists, and no
+release has a committed date) — consistent with the product's stated posture that a phase
 commits a date only when work is far enough along. Stated explicitly: the register does
 not over-claim commitment. An empty `committed` tier early in a project is the register
 working, not a gap.
@@ -539,6 +616,34 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-02** — Retrieval-cluster spec locked
+  (`docs/specs/2026-07-02-retrieval-cluster.md`). Register: `proposed → designed`
+  promotion for the four clustered entries — `1.1.0` (`get_context_for` retrieval verb),
+  D1 (search + indexing), D2 (graph edges + traversal), and G2/G3 (authoritativeness +
+  provenance/use-policy substrate fields) — moved from Proposed §V0.1 into a new Designed
+  §V0.1 subsection (the tier's first tenant), each with a pointer-stub retained in
+  Proposed §V0.1 and the corresponding Idea-section pointers (D1, D2, D3, G2/G3)
+  retargeted from "See Proposed §V0.1" to "See Designed §V0.1."
+- **2026-07-02** — Retrieval-cluster riders (labeled deltas; authored with the
+  retrieval-cluster Stage-3 spec, riding that cluster's docs change). **RC-1
+  model-hosting amendment** (retrieval-cluster intake, locked 2026-07-02) — every
+  falsified canonical copy reconciled in the same change (single-source discipline):
+  MODIFIED the Non-goals model clause ("never hosts one" → MUST NOT host a *generative*
+  LLM; local non-generative inference — embedding, reranking — permitted host-side);
+  MODIFIED the Hard-constraints model-hosting clause to match; MODIFIED the `0.1.0`
+  substrate entry's external-embedding framing (embeddings/reranking now local
+  non-generative; the LLM-API-key surface serves the generative call-outs). The
+  architecture-overview ELT external-embedding framing is the named lagging copy,
+  reconciled in the same change. **Register:** `idea → proposed` promotions performed by
+  the retrieval-cluster intake lock — D1 (search + indexing), D2 (graph edges +
+  traversal, noting the `0.8.0` edge-table substrate as what its traversal activates),
+  and G2/G3 (authoritativeness + provenance/use-policy substrate fields) — added as live
+  Proposed §V0.1 entries with idea-tier pointers retained; `1.1.0` re-confirmed as the
+  cluster's headline entry (tier stays `proposed` until the spec locks). ADDED idea-tier
+  entry: per-user identity machinery (frame pre-gate walk item 9). **Hard constraints:**
+  ADDED accessibility as a standing product requirement binding on human-facing UI/docs
+  surfaces (frame pre-gate walk item 13 — routed here, not faked into the MCP-verb
+  cluster).
 - **2026-05-20** — Intake-exit gate confirmed (Stage 1 lock). All open decisions resolved:
   LIC-1 (Apache-2.0 + future-relicense locked; mnemra-core repo LICENSE/README correction
   is a follow-up task); T-5 split (categorization-via-LLM-API → `idea`; LLM-API-key config
@@ -1356,7 +1461,7 @@ stage, not under re-derivation.
 | Migration scope: the prior structured task-store tables (content / timeseries / log / state partitions) and a fixed subset of prior content-corpus subdirectories | V0 discovery (Migration scope) |
 | Workspace-level operational tooling (skill files, team profiles, internal memory store, inboxes, scratch, agent-harness state) is V0.1+ scope (the brief's idea-tier internal-workspace-absorption entry) | V0 discovery (Migration scope); brief idea-tier |
 | Architecture MUST NOT be schedule-pressured; marketing-tier dates are not architectural inputs | Brief Hard constraints |
-| The system MUST NOT host a language model; embeddings call out to an external model | Brief Hard constraints + Non-goals |
+| The system MUST NOT host a **generative** LLM; generative work (query rewrite, chunk-context, tag generation, synthesis) calls out to an external model at V0; local **non-generative** inference (embedding, reranking — encoder models behind the host-fn seam) is permitted host-side *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake; was: "MUST NOT host a language model; embeddings call out to an external model")* | Brief Hard constraints + Non-goals, as amended 2026-07-02 (RC-1) |
 
 ### Reframed 2026-06-08 — storage substrate re-opened on merits
 
@@ -1767,14 +1872,28 @@ TB-mnemra-host.P-health-handler -> TB-postgres.DS-pg-content: "DF-health-probe"
   material (whether it lives on the deployment node, in an HSM, is fetched at runtime, or
   is never on the node at all) is the open ADR slot `{{P-SigningKeyCustodyHardening}}`
   (Tier C; activated by the `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` multi-deployment trip-wire).
-- **External LLM is for embeddings only.** Per the brief's Hard constraints, mnemra-core
-  MUST NOT host a language model. The embeddings call out to an external provider via the
-  embedding-batch pathway (`DF-embed-call`): artifact content is routed through host
-  functions, batched, and sent to the configured provider's embedding endpoint; resulting
-  vectors are written into the projection substrate. The API key configuration surface is
-  folded into `0.1.0` (brief T-5 resolution). MCP sampling (`DF-sampling-up`) is the
-  separate path by which plugins ask the connected agent's MCP client to run an LLM
-  completion; the LLM provider that completion uses is external to mnemra-core.
+- **External LLM is for generative work only; embeddings and reranking are local
+  (MODIFIED 2026-07-02 per RC-1 — the retrieval-cluster intake's model-hosting
+  amendment; this bullet is the named lagging copy of the brief's ELT external-embedding
+  framing, reconciled here).** Per the amended Hard constraints, mnemra-core MUST NOT
+  host a *generative* LLM; local *non-generative* inference (BGE-M3 embedding,
+  BGE-reranker reranking — encoder models behind the host-fn seam) runs host-side and
+  never egresses. What calls out to the external provider are the four generative
+  placements of the retrieval cluster (index-time chunk-context and tag generation;
+  query-time HyDE rewrite and optional synthesis), each policy-gated at the model-egress
+  gate, individually disable-able, and bounded — the zero-egress configuration (all four
+  OFF) is a supported V0 configuration. The API key configuration surface remains folded
+  into `0.1.0` (brief T-5 resolution) and now serves the generative call-outs. The drawn
+  DFD below still shows the pre-RC-1 `DF-embed-call` flow and the `EE-llm-provider`
+  "(embeddings endpoint)" label; the retyped elements for the retrieval cluster — the
+  four `DF-egress-4.x` flows crossing `TB-external-llm`, the `EE-model-artifact-source`
+  entity, and the new retrieval processes/stores — are recorded in
+  [P-0014's typed-DFD extension](../adrs/P-0014-retrieval-architecture.md), and the
+  diagram + threat tables are re-drawn against it when that cluster's
+  pre-implementation security review updates this overview (the named follow-up; the
+  prose in this file is reconciled now). MCP sampling (`DF-sampling-up`) is the separate
+  path by which plugins ask the connected agent's MCP client to run an LLM completion;
+  the LLM provider that completion uses is external to mnemra-core.
 
 ## Threats by data-flow element
 
@@ -1971,6 +2090,20 @@ resolution. Empty at port-time — Frame work did not surface a brief-level tens
 
 ## Session log
 
+- **2026-07-02** — RC-1 reconciliation (rider on the retrieval-cluster Stage-3 docs
+  change; this overview's ELT external-embedding framing was the named lagging copy of
+  the brief's model-hosting amendment). Updated the hard-locked constraint-inventory
+  model-hosting row and the DFD-notes "External LLM" bullet to the RC-1 posture: MUST NOT
+  host a *generative* LLM; local non-generative inference (embedding, reranking) is
+  host-side and never egresses; the external provider serves the retrieval cluster's four
+  policy-gated, individually-disable-able generative placements; zero-egress is a
+  supported V0 configuration. The drawn DFD's `DF-embed-call` flow and `EE-llm-provider`
+  "(embeddings endpoint)" label are now pre-RC-1 renderings: the retyped retrieval-cluster
+  elements (four `DF-egress-4.x` flows, `EE-model-artifact-source`, new
+  processes/stores) are recorded in
+  [P-0014's typed-DFD extension](../adrs/P-0014-retrieval-architecture.md); the diagram
+  and per-element threat rows re-draw against it at that cluster's pre-implementation
+  security review (named follow-up with its firing event; prose reconciled now).
 - **2026-06-09** — Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
   out of the project-ADR layer**. The maintainer dispositioned escalation E1 (D8 vs the accepted
   observability ADR) by separating observability **generation** from **storage**, and ruled that
@@ -2104,11 +2237,11 @@ primary-audience: human
 
 # Architecture Decision Records
 
-Architectural decisions in mnemra-core, recorded in [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
+This section tracks mnemra-core's architectural decisions using the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
 
 ## What is an ADR?
 
-An ADR captures a single architectural decision with its context and rationale. ADRs are immutable once accepted: not edited as opinions change, but superseded by newer ADRs when decisions evolve.
+An Architecture Decision Record (ADR) captures a single architectural decision, its context, and its rationale. ADRs are immutable once accepted: not edited to reflect changing opinions, but superseded by newer ADRs when decisions evolve.
 
 ## ADR Lifecycle
 
@@ -2124,22 +2257,22 @@ ADR statuses:
 
 ## G/P Prefix Projection Pattern
 
-Two-tier identifier convention encoding decision origin and propagation.
+ADRs use a two-tier identifier convention reflecting decision origin and propagation.
 
-- **G-NNNN (general)** — workspace-wide decisions. Not individual files in this directory. Projected once into [`DEFAULTS.md`](DEFAULTS.md) as a concise entry per general standard, without the full rationale chain. DEFAULTS.md is frozen at projection; upstream G-* changes do not auto-sync.
-- **P-NNNN (project)** — project-specific decisions, stored as individual `P-NNNN-*.md` files here. Two sub-categories:
-  - *Project-specific:* a constraint or tradeoff unique to mnemra-core, with no workspace-wide analog.
-  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. An override P-ADR names the overridden default in its Status field (e.g., `Status: accepted, Overrides G-0017`).
+- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files here; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot of each general standard as a concise entry, without the full rationale chain. Frozen at projection: upstream G-* changes do not auto-sync.
+- **P-NNNN (project)** — project-specific architecture decisions, stored as individual `P-NNNN-*.md` files in this directory. Two sub-categories:
+  - *Project-specific:* a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
+  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. The override P-ADR's Status field names the default it overrides (e.g., `Status: accepted, Overrides G-0017`).
 
 *The default is the starting point; any deviation is a new P-ADR.*
 
 ## Using the Template
 
-To record a project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill all frontmatter fields, write the body sections. If it overrides a `DEFAULTS.md` entry, state that in the Status section.
+To record a new project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, and write the body sections. Overrides of a `DEFAULTS.md` entry are stated explicitly in the Status section.
 
 ## Current ADRs
 
-Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine ADR (P-0010) folded in 2026-06-08 from a post-spec-lock storage-engine evaluation, plus the logging-facade ADR (P-0011) recording the `tracing` facade-from-binary choice merged 2026-06-17, plus the plugin-runtime + MCP-SDK ADR (P-0012) recording the raw-Wasmtime-over-Extism runtime choice (retroactive; shipped Tasks 20–22) and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice (forward; implemented by Task 23). P-0012 corrects both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) was re-altituded out of the project-ADR layer: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR; its decisions live in the [observability baseline](../architecture/overview.md#observability), and the original observability ADR P-0004 is `deprecated` with no successor. P-0011 is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract), not an observability-shape ADR; it is the plumbing foundation under that baseline. All Tier-A placeholder slots resolved; see [`placeholder-resolution.md`](placeholder-resolution.md) for full status.
+Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine ADR (P-0010, folded in 2026-06-08 from a post-spec-lock storage-engine evaluation), the logging-facade ADR (P-0011, recording the `tracing` facade-from-binary choice, merged 2026-06-17), and the plugin-runtime + MCP-SDK ADR (P-0012, recording the raw-Wasmtime-over-Extism runtime choice — retroactive, shipped Tasks 20–22 — and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice — forward, implemented by Task 23). P-0012 corrects the two halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed on both halves without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR, so its decisions live in the [observability baseline](../architecture/overview.md#observability), and the original observability ADR P-0004 is `deprecated` (no successor ADR). P-0011 is *not* an observability-shape ADR — it is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract, per `P-LockContract`), and is the plumbing foundation under that baseline. All Tier-A placeholder slots are resolved (see [`placeholder-resolution.md`](placeholder-resolution.md) for full status). The three retrieval-cluster ADRs (P-0014/P-0015/P-0016, authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster's Frame slots; `accepted` (2026-07-02, at the retrieval-cluster spec-exit gate).
 
 | ADR | Summary |
 |-----|---------|
@@ -2155,6 +2288,9 @@ Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine A
 | [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) | PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (one implementation); V0 embedded Postgres; A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series on named trip-wires (D3/D4/D8 — TimescaleDB demoted); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. Reframes P-0001/Frame/overview. Escalation E1 (D8 vs observability hypertables) dispositioned 2026-06-09 → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
 | [P-0011-logging-facade](P-0011-logging-facade.md) | `tracing` + `tracing-subscriber` (Green/MIT) as the logging facade, wired **facade-from-binary**: the binary (`cmd/mnemra`) owns the one global subscriber (JSON → stdout + `EnvFilter`); library crates use `tracing` macros only and never depend on `tracing-subscriber`. Macros = locked contract, subscriber = binary-owned implementation. Foundation + crate-topology only (impl-crate-only); the full emission layer (semantics, per-verb metrics, OTel export, redaction) is deferred to Task 25 / R-0004. A dependency/topology choice (P-0010-shaped), not an observability *shape* decision (which the 2026-06-09 E1 disposition keeps in the [observability baseline](../architecture/overview.md#observability)). |
 | [P-0012-plugin-runtime-and-mcp-sdk](P-0012-plugin-runtime-and-mcp-sdk.md) | Two orthogonal substrate-layer choices the never-ratified `adr-001-plugin-runtime` proposal had bundled, and the build reversed on both halves without an ADR. **Decision A (retroactive; shipped Tasks 20–22):** host plugins on **raw Wasmtime, not Extism** — P-0007's resource-limit mechanism (fuel + epoch + `ResourceLimiter`) needs direct Wasmtime `Config`/`Store` control an Extism abstraction would mediate. **Decision B (forward; implemented by Task 23):** adopt the official MCP Rust SDK **`rmcp` v1.7.0 (Apache-2.0/Green)** for the single stdio MCP server rather than hand-rolling MCP/JSON-RPC — R-0010-a mandates MCP-2025-06-18 conformance and the MCP server is the auth+dispatch trust boundary, the worst place to hand-roll a mandated external wire contract; mnemra's R-0010 handler logic rides on top as the `rmcp` `ServerHandler`, unchanged. Dependency-selection decisions (P-0010/P-0011-shaped), anchored to `P-StackDiscipline` applied per-layer. |
+| [P-0014-retrieval-architecture](P-0014-retrieval-architecture.md) | Retrieval topology for the retrieval cluster: per-shape chunking + one collapsed-tree multi-resolution index behind a `TreeBuilder` seam (authored-first under a named eval); hybrid FTS+dense fused by application-side RRF with local cross-encoder rerank; three host-served MCP verbs with disclosure-budget mechanics; degraded-mode matrix (zero-egress a supported configuration; model artifacts deploy-time-provisioned, never runtime-fetched); instrumentation shape; model pin+verify (TB-5) + encoder footprint disclosure. P-0010 D6's four method-borrows land here (deferral closed). |
+| [P-0015-provenance-envelope-source-roles](P-0015-provenance-envelope-source-roles.md) | The two-axis envelope contract: a policy permissions record (`dont_use` / `model_egress` / `visibility` / `tenant_share` — mechanical validators, permissive not-set DDL defaults, named enforcement points, undecidable-only fail-closed poles) under the eight ratified mechanics and a single PARC-shaped decision port with per-channel serving-predicate placement + differential conformance; a trust axis (`outdated`/`authoritative`/`background`, origin-weighted supersession); freshness schema (handle kinds, decay classes, structural overrides); the closed three-kind displacement-event registry; citation form + per-dimension citation dispositions (`dont_use` stub vs `visibility` not-found); the V0 write-authorization invariant. `sensitive` dissolves into `model_egress: deny` + `visibility: admin-only`. |
+| [P-0016-edge-schema](P-0016-edge-schema.md) | One superset edge table extending the `0.8.0` substrate: closed eight-type vocabulary; `edge_class` + `origin` discriminating columns with the `supersedes` classing rule; one-logical-edge uniqueness with origin-authority upgrade (`system` > `declared` > `extracted`); the `superseded-by` forward pointer defined as the directional view of the origin-weighted `supersedes` edge (no second field); extraction contract (source-span provenance, idempotent re-extraction, per-run measured coverage); recursive-CTE traversal contract carrying workspace + policy predicates at every recursion level with the D4 instrument field set; dual-writer manifest ownership. |
 
 <!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
 
@@ -4706,19 +4842,538 @@ The "WIT change = churn/recompile" framing for this decision is **overstated**, 
 - **A separate spec amendment** adds the guest `run()` / invocation-envelope requirement (the export-side contract) to the locked spec — the spec currently pins the import-side host-fn ABI (R-0012-a) and the MCP front (R-0010-a/c/d, R-0006-b) but not the export/invocation envelope. That amendment is the next step in the sequence; this ADR only records the decision it will encode.
 - **The Task-23 re-decompose** sizes Bucket B (the typed-export delta) only; Bucket A (the component-host machinery + host-fn import bodies) is the ABI-agnostic bulk, storage-gated (Task 5/21), and must not inflate the typed-ABI line. Confirm with the re-decompose which task owns the host-fn bodies vs the invocation wiring, and budget the trap/replace re-pin.
 
-<!-- ===== docs/src/adrs/placeholder-resolution.md ===== -->
+<!-- ===== docs/src/adrs/P-0014-retrieval-architecture.md ===== -->
 
 ---
-title: "Placeholder Resolution — Tier-A ADR Slots"
-summary: "Maps each Tier-A Frame ADR placeholder to its resolution — an ADR file, a re-altituded non-ADR baseline, or PAUSED status. Updated by WS-E-2 Stage 3."
+title: "P-0014: Retrieval Architecture"
+summary: "Resolves the retrieval-cluster Frame's {{P-0014}} slot. Locks the retrieval topology: per-shape chunking policy, collapsed-tree multi-resolution index behind a TreeBuilder seam (authored-first under a named eval), hybrid FTS+dense channels fused by application-side RRF with local cross-encoder rerank, three host-served MCP verbs with disclosure-budget mechanics, the degraded-mode matrix, the internal granularity posture, the instrumentation shape, and the model-config pin+verify contract. This cluster is P-0010 D6's named firing event — the four method-borrows land here and close that deferral. Records the typed-DFD extension for the cluster's new elements and the 4.1 chunk-context ingress control (with P-0015)."
 primary-audience: agent
 ---
 
-# Placeholder Resolution — Tier-A ADR Slots
+---
+status: "accepted"
+date: "2026-07-02"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
 
-This document maps each Tier-A ADR placeholder from the Frame to its current resolution state. Maintained by the implementing developer at Spec stage; back-references are updated in the Frame and overview as each slot resolves.
+# P-0014: Retrieval Architecture
 
-**Source:** [Frame: Mnemra Core](../intent/mnemra-core-frame.md), Tier A table.
+**Project:** mnemra-core
+
+## Status
+
+`accepted`
+
+Accepted 2026-07-02 at the retrieval-cluster **spec-exit gate** (this ADR was part of the Stage-3 package the gate reviewed, with the spec [2026-07-02-retrieval-cluster](../../specs/2026-07-02-retrieval-cluster.md)). Authored at Stage 3 of the retrieval cluster, resolving the Frame's `{{P-0014}}` slot per [placeholder-resolution](placeholder-resolution.md). The architectural directions it renders were already decomposer-ratified — the [Frame](../../intent/retrieval-cluster-frame.md) locked at its frame-exit gate (verdict Accept, 2026-07-02) — and were not re-opened by the gate; what the gate reviewed was this rendering at spec precision.
+
+## Context and Problem Statement
+
+The retrieval cluster (register `1.1.0` + D1 + D2 + G2/G3) needs a locked retrieval topology: how the corpus is chunked and indexed, how search channels combine, where the verbs live, how responses are shaped to a budget, and how the four generative placements degrade. The locked Frame (blob `65b1d05`) directs the shape (directions R1/R2/R5/R6/R7/R8/R10/R11); this ADR is the slot that locks it at ADR precision and the designated landing site for [P-0010](P-0010-storage-substrate-engine.md) **D6's four method-borrows** — the retrieval-layer ADR whose authoring P-0010 named as that deferral's firing event. The companion contracts live in [P-0015](P-0015-provenance-envelope-source-roles.md) (envelope/policy) and [P-0016](P-0016-edge-schema.md) (edge schema); the binding requirement text is the spec's R-0023/R-0024/R-0028–R-0034.
+
+## Decision Drivers
+
+- **One-call, trust-labeled, budget-shaped context** is the product promise (intake JTBD; the 2026-06-05 reference trace measured the re-derivation tax at ≈4 tool calls + 3 reads per task). Progressive disclosure is a hard constraint — context-rot is load-bearing physics, "return more tokens" is not a failure mode.
+- **The substrate is locked and A1-clean** (P-0010 D1/D2): Postgres + pgvector behind the `Storage` trait; no new engine, no extension beyond pgvector. Retrieval must be expressible on that stack.
+- **Exact-key queries must survive** (decision IDs, file paths, function names) — the query class pure-vector retrieval loses by mathematics (intake SC4).
+- **The authored-hierarchy assumption is unvalidated** — the canon-free cross-check (2026-06-05) refuted the stronger authored-beats-clustered claim; the design must preserve the losing arm behind a seam (P-LockContract ⇄ P-PreserveDecisionSpace when-to-lock discriminator).
+- **"All placements ship, narrow later" (RC-3) is only honest with signals** — instrumentation is an in-scope deliverable, not a follow-up (P-InstrumentBefore; IB1 backfillable-first).
+- **Model artifacts are a supply chain** (Frame TB-5): a swapped or tampered encoder silently changes every embedding and rerank score.
+
+## Considered Options
+
+Closed upstream by the locked Frame, the locked retrieval research (2026-05-27, r3), and P-0010; recorded per P-PreserveDecisionSpace, not re-derived.
+
+1. **Postgres-side hybrid retrieval: collapsed-tree multi-resolution index + FTS/dense channels + application-side RRF + local rerank; three host-served verbs (chosen).**
+2. **A dedicated retrieval engine** (vector DB, search engine, or graph engine beside Postgres) — gated out: intake hard constraint ("no separate vector database, graph database, or search engine"); P-0010 D2's A1-clean stack and its named trip-wires (D3/D4/D8) own every upgrade path.
+3. **Plugin-exported retrieval verbs** — rejected: retrieval reads across every artifact family (cross-plugin aggregation is a projection concern, not a substrate concern — [P-0002](P-0002-core-plugin-partition.md)); `search`/`get_context_for` are non-CRUD domain verbs whose plugin dispatch [P-0013](P-0013-plugin-invocation-model.md) defers past V0 — host placement keeps that trip-wire unfired.
+4. **Clustered-first tree construction (RAPTOR-style) as the V0 default** — rejected as default, preserved as the designed-but-unbuilt strategy behind the `TreeBuilder` seam under the named hierarchy-source eval (the cross-check found no documented precedent for the authored-vs-clustered hybrid; the winner is an eval question, not a lock).
+
+## Decision Outcome
+
+**Chosen: Option 1**, rendered as decisions RA-1..RA-10 below. Binding requirement text lives in the spec ([R-0023, R-0024, R-0028–R-0034](../../specs/2026-07-02-retrieval-cluster.md)); this ADR is the decision record and the D6-borrow landing site.
+
+### RA-1 — Index topology: per-shape chunking + one collapsed tree
+
+The index builder SHALL chunk per shape and build **one collapsed-tree, multi-resolution index**: leaf chunks plus parent-linked summary nodes at section and document grain, all levels embedded into a single pgvector HNSW space and searched in **one KNN** (collapsed-tree style — D6 borrow 3), never staged tree-traversal retrieval. The per-shape chunking policy table (internal — RA-6):
+
+| Corpus shape | Chunk unit | Grain | Tree |
+|---|---|---|---|
+| Decision records (ADRs), specs, briefs/frames, research, skills/profiles | Markdown section (header-bounded) | hierarchical | authored tree: section + document summary nodes |
+| Daily logs / activity streams | Entry (day / event) | single | none |
+| Code | Symbol (function/struct) | single | none |
+| Structured rows (tasks, run records) | Row | single | none |
+
+*(Anchors: the locked retrieval research §1.1/§1.2 + cross-check corroboration of collapsed-tree; P-0010 D2 — pgvector HNSW is the A1-clean dense leg; Simplicity — one index space, one KNN.)*
+
+### RA-2 — Tree construction sits behind the `TreeBuilder` seam; authored-first under the named eval
+
+One `TreeBuilder` contract producing one node shape; two strategies designed against it — `authored` (markdown-header hierarchy) and `clustered` (embed-cluster-summarize, reimplemented, never vendored). **V0 builds `authored` only.** Authored-first is an **eval hypothesis, not a validated lock**: the hierarchy-source eval (spec R-0028-c) reads (a) per-strategy retrieval-failure rate/nDCG on the golden query set — the same harness instrument as P-0010 D3's trip-wire, one harness two consumers — and (b) the per-shape hierarchy-coverage measure reported at every index run. If coverage is low or the clustered arm wins, `clustered` is built behind the seam — a bounded change, not a re-architecture. *(Anchors: Stage 2a required constraint, decomposer-ratified; P-LockContract ⇄ P-PreserveDecisionSpace — the seam is intrinsic and locks, the winner is separable and preserved; P-Defer/DF1 — the eval read is the named firing instrument; P-MinBlastRadius.)*
+
+### RA-3 — Hybrid query path: FTS + dense → application-side RRF → local rerank → budget trim
+
+Two channels at V0 — lexical (native `tsvector`/`ts_rank`; the language config a single-sourced per-corpus parameter, default `english`, never inline literals) and dense (the RA-1 HNSW) — fused by **Reciprocal Rank Fusion as application-side SQL**, then reranked by the local cross-encoder (host `rerank`) into the disclosure budget. Exact-key queries resolve via the lexical channel and survive fusion (spec R-0029-b). The keyword leg is deliberately **not BM25** at V0: P-0010 D3's golden-query regression is the fidelity instrument and `pg_textsearch` the named Green upgrade. Extra channels (fact-key, raw-message, ColBERT late-interaction) are known extension points added only on attributed retrieval-failure evidence. HyDE rewrite (4.2) is an optional, config-gated **fused channel** — never a gating dependency. *(Anchors: intake SC4; P-0010 D2/D3/D6; research §1.3/§4.2 + cross-check corroboration of RRF-in-Postgres.)*
+
+### RA-4 — Three host-served verbs with disclosure-budget mechanics
+
+`get_context_for` / `search` / `get_artifact_by_citation` register on the existing stdio MCP server as host-served verbs (not plugin exports — Considered Option 3); every verb budget-enforced: 8k-token default, per-call override, the fixed reduction ladder (rerank-order → coarsen → drop whole items), no mid-item truncation, a budget report with resolvable omitted citations, **one** host-side counting function with the tokenizer pinned behind it (the host-resident embedding-model tokenizer — spec R-0024-d). `search` returns summary grain (first-pass); citation expansion is the second pass. *(Anchors: P-0002/P-0013/P-0012 — R-0023's anchors; intake SC3; P-TrustworthySignal — reduction is reported, never silent; P-MinBlastRadius — one counting function, one assembly point.)*
+
+### RA-5 — Degraded-mode matrix; zero-egress is a supported V0 configuration
+
+All four generative placements ship behind independent switches with the degraded modes the spec's matrix locks (`context_state: absent` marking; direct-embed fallback; raw-chunks return; `tags_state: absent` + structured degraded notice). `absent` is distinguishable from `empty` — and from `policy-suppressed` (egress-denied under placement-ON, excluded from backfill) — in every new schema; the capability surface reports placement state; synthesis is optional-in-ABI, returned as a single response-level digest object marked model-generated/untrusted (spec R-0030-e). The zero-egress configuration (all four OFF + local encoders on) is a **supported V0 configuration** in which indexing and all three verbs are fully functional with zero outbound connections **at runtime** (model artifacts pre-provisioned per RA-8 — the runtime never fetches) — the sovereignty promise satisfied by configuration plus out-of-band provisioning, upgraded at V0.1+ by local generative models through the same host-fn seam without ABI change. *(Anchors: RC-3 + the maintainer's "all of the above for V0, narrow later" ruling (2026-05-27); Stage 2a direction 2, decomposer-ratified; P-TrustworthySignal; P-LockContract — provider varies behind the config seam.)*
+
+### RA-6 — Granularity is an internal per-shape policy; no adopter-facing flag
+
+The RA-1 policy table is internal to the index builder. No adopter-facing granularity ABI/config flag ships at V0; the deferral's instruments are the self-announcing adopter ask and the storage-overhead measure (summary-node storage as a multiple of leaf storage, per index run) crossing the spec-named **3.0×** threshold. *(Anchors: P-Defer/DF1; Simplicity — every config knob is a mechanism every reader accounts for.)*
+
+### RA-7 — Instrumentation shape: product measurement tables, backfillable-first
+
+Narrowing signals live as structured retrieval-run records in plain timestamped, workspace-scoped Postgres tables — product measurement data (the dispatch-metrics family), not an observability store (generation⊥storage per the [observability baseline](../architecture/overview.md#observability); P-0010 D8/E1). Per-query records capture channels, candidates + rerank scores, budget actions, placement states, per-stage latency, and the index build — enough to recompute A/B metrics offline. **The D4 traversal instrument is placed on the traversal engine** (hop count, latency, flag on the 500 ms bound or an inexpressible traversal — the logged dogfood incident that fires Apache AGE adoption); **D5's second-adapter re-open rides the same signal.** Per-placement egress-volume counters double as the TB-2 boundary instrument and the local-migration trigger (~14M doc-tokens/month); the query-time egress content-audit records which query text / which chunk citations egressed, keyed for incident response. *(Anchors: P-InstrumentBefore + IB1; intake SC6; P-0010 D4/D5/D8 — carried instruments consumed here, not re-derived; RC-3's premise.)*
+
+### RA-8 — Model-config pin + verify (TB-5); provisioning + footprint
+
+The model-config schema pins each local model's **revision** and verifies artifact **integrity** (a fixed digest from a trusted source) before load; no unpinned/`latest` model refs; a failed check fails the load closed with a structured error. The model-artifact source is a distinct trust boundary (TB-5) from the package-dependency tier `fastembed-rs` clears.
+
+**Provisioning (r1 fold — reconciles TB-5 with the RA-5 zero-egress claim):** the `DF-model-fetch` flow is **deploy/provision-time only — the runtime never fetches model artifacts**. In egress-permitted environments a deploy or first-provision step fetches into the local model cache (pin+verified); in a zero-egress environment the artifacts are placed out-of-band (pre-provisioned cache or baked into the deployment artifact). A host starting with a required artifact absent fails the load closed — no fetch attempt — and reports `/health` `overall: "degraded"` while an encoder is unloaded (the substrate's R-0007-h precedent), with retrieval verbs returning the structured unavailable state (spec R-0030-c/R-0031-d are the binding text).
+
+**Footprint disclosure (always-on encoders):** BGE-M3 + BGE-reranker-v2-m3 load into the single host process in every deployment. Order-of-magnitude sizing basis (eval-calibrated placeholder, measured at implementation): on-disk **~0.5–2.5 GB combined** (quantization-dependent ONNX artifacts), resident memory of the same order (**~1–3 GB combined**), cold-start model-load time **seconds-order** (single-digit to low tens). This is the first sizing guideline for the single-binary posture; the measured values land in the deployment docs at implementation. *(Anchors: Frame TB-5 / Stage-2 review M4; P-SecurityLayered supply-chain layer; RC-1 — sovereignty satisfiable without runtime egress.)*
+
+### RA-9 — The 4.1 chunk-context ingress control (residual (iv); with P-0015)
+
+Chunk-context output is model-generated text derived from untrusted corpus content, stored and feeding retrieval scoring with no closed vocabulary to post-validate (the tag-validator pattern does not transfer to free-form prose). **Control chosen from the Frame §5 candidate set: bounded influence, composite** — the output is stored in a dedicated column marked model-generated; length-capped (200-token default; over-cap rejected, row marked context-absent); used **only** as dense-embedding input for its own chunk; **excluded from the FTS index and from every served payload**. Its maximum influence is a dense-ranking shift on its own chunk — it can never inject served content or instructions. Rejected from the candidate set: an extractive-only output form (would forfeit the situating value the placement exists for) and an unbounded treat-as-untrusted annotation (an annotation without a mechanism is not a control). *(Anchors: Frame §5 residual (iv) + Stage-2 r2 review N5; P-SecurityLayered — untrusted model output never reaches a served payload; spec R-0030-f is the binding text.)*
+
+### RA-10 — The P-0010 D6 method-borrows land here (deferral closed)
+
+This cluster is D6's named firing event; the four borrows are adopted as design methods (engines out, patterns in):
+
+1. **Single-query BM25+dense+RRF fusion** (`search::rrf()`) as the ergonomic reference target for the RA-3 application-fusion SQL.
+2. **`pg_textsearch`** as the named Green BM25 upgrade path — D3's trip-wire instrument decides.
+3. **Collapsed-tree / multi-resolution embeddings + keyed-supersession-via-normalized-topic-key SQL patterns** — RA-1's one-KNN shape; superseded nodes are excluded from default retrieval and remain point-in-time reachable (spec R-0029-e). The borrow adapts the *shape* (default-excluded, point-in-time-reachable SQL), not the key: the source pattern keys supersession on a normalized topic key inferred over content; mnemra's corpus declares supersession explicitly, so the key is the origin-weighted `supersedes` edge itself — the "`superseded-by` forward pointer" is that edge read from the superseded side (P-0016 ES-2), and no topic-key inference enters the trust path (spec R-0026-a).
+4. **Borrow the graph *model*, not a graph *engine*** — traversal stays recursive CTEs over the P-0016 edge table (P-0010 D4).
+
+With this ADR authored, P-0010's D6 forward-context note is discharged. *(Anchor: P-0010 D6, ratified.)*
+
+### Typed-DFD extension (Stage-2 review L3)
+
+The cluster's new elements, typed against the [architecture-overview DFD](../architecture/overview.md)'s element convention so each gets **per-element STRIDE coverage** (rather than the Frame §5's boundary-level treatment) when the overview's DFD and threat tables are updated at this cluster's pre-implementation security review:
+
+| Element | Type | Notes |
+|---|---|---|
+| `P-index-builder`, `P-edge-extractor`, `P-query-path`, `P-traversal-engine` | Process | host subsystems (Frame C1/C2/C4/C5) |
+| `get_context_for` / `search` / `get_artifact_by_citation` | Process (verbs on `P-mcp-handler`) | host-served (RA-4) |
+| `DS-retrieval-nodes`, `DS-edges`, `DS-citation-handles`, `DS-policy-write-audit`, `DS-retrieval-runs`, `DS-traversal-log`, `DS-egress-events`, `DS-index-builds` | Data store | workspace-scoped tables (spec Data Model) |
+| `EE-llm-provider` | External entity (existing) | now the **generative-placement** endpoint (RC-1: embeddings no longer egress) |
+| `EE-model-artifact-source` | External entity (new) | encoder-model fetch (TB-5, RA-8) |
+| `DF-egress-4.1` / `DF-egress-4.2` / `DF-egress-4.3` / `DF-egress-4.4` | Data flow | the four generative egress calls crossing TB-2 (policy-gated, bounded) |
+| `DF-model-fetch` | Data flow | crossing TB-5 (pin+verify); **deploy/provision-time only — no runtime fetch** (RA-8) |
+
+### Consequences
+
+**Good:**
+- One index space, one KNN, one fusion point, one counting function, one traversal path — the smallest topology that serves the intake's success criteria on the locked substrate.
+- Every deferral this topology makes (clustered builder, BM25, AGE, extra channels, local generative, granularity flag) is wired to a named instrument the cluster itself ships (RA-7).
+- The seam placement (TreeBuilder, config switches, counting function, host-fn primitives) bounds every anticipated change to one module.
+- P-0010's D6 deferral is closed without adopting any engine.
+
+**Bad / Trade-offs:**
+- V0 hybrid ships a non-BM25 keyword leg (`ts_rank` lacks IDF/TF-saturation); fidelity is a measured trip-wire, not a V0 guarantee (P-0010 D3).
+- The authored-first default may lose its eval — accepted deliberately; the clustered strategy is pre-designed behind the seam so the flip is bounded.
+- Summary nodes cost storage (~1.5–2× expected on high-structure shapes) — measured per run, flagged at 3.0× (RA-6).
+- Chunk-context's embed-only bounding (RA-9) trades a slice of the placement's potential lift (no lexical contribution) for a structural injection bound — the security default wins (Security ⇄ Simplicity resolves default-to-Security).
+
+## Pros and Cons of the Options
+
+### Postgres-side hybrid + collapsed tree + host-served verbs (chosen)
+
+- Pro: expressible entirely on the A1-clean locked substrate; managed-portability intact.
+- Pro: exact-key + semantic recall in one budget-shaped call; collapsed tree serves multi-resolution without staged traversal.
+- Pro: keeps P-0013's domain-verb trip-wire unfired and P-0002's partition untouched.
+- Con: application-side RRF and rerank are host code to maintain (accepted: the D6 borrow-1 reference shape bounds it).
+
+### Dedicated retrieval engine
+
+- Pro: richer native retrieval features (engine-native fusion, ANN at scale).
+- Con: violates the intake hard constraint and P-0010's A1-clean lock; capability unbankable at the product's scale envelope; license/ops costs paid from day one.
+
+### Plugin-exported retrieval verbs
+
+- Pro: uniform verb surface with content plugins.
+- Con: fires P-0013's deferred domain-verb machinery for no gain; retrieval is cross-family by nature (P-0002); inference is host-side (ONNX cannot live in the sandbox).
+
+### Clustered-first tree construction
+
+- Pro: corpus-shape-independent hierarchy; the research-external default.
+- Con: unvalidated *here* too (the cross-check refutes certainty in both directions); costs generative egress at index time; authored structure is already present in the corpus's high-structure shapes. Preserved behind the seam, not discarded.
+
+## More Information
+
+- Binding requirement text: [spec R-0023, R-0024, R-0028–R-0034](../../specs/2026-07-02-retrieval-cluster.md).
+- Companion contracts: [P-0015](P-0015-provenance-envelope-source-roles.md) (envelope, policy record, decision port — the query path's policy predicates and envelope assembly consume it); [P-0016](P-0016-edge-schema.md) (edge schema + traversal contract the traversal engine executes).
+- Upstream locks consumed: [Frame](../../intent/retrieval-cluster-frame.md) (blob `65b1d05`) §4/§5/§6 R1/R2/R5–R8/R10/R11; [intake](../../intent/retrieval-cluster.md) RC-1/RC-2/RC-3; [P-0010](P-0010-storage-substrate-engine.md) D2/D3/D4/D5/D6/D8; the locked retrieval research (2026-05-27, r3) + canon-free cross-check (2026-06-05) + use-case record: get_context_for (2026-06-05), cited by name and lock-date per the provenance-pointer convention.
+- Deferral instruments this ADR relies on are spec deliverables: R-0034 (run records, egress counters + audit, traversal log, coverage + overhead measures).
+
+<!-- ===== docs/src/adrs/P-0015-provenance-envelope-source-roles.md ===== -->
+
+---
+title: "P-0015: Provenance Envelope + Source-Roles Contract"
+summary: "Resolves the retrieval-cluster Frame's {{P-0015}} slot. Locks the two-axis envelope contract: a policy permissions RECORD (final V0 dimension set — dont_use / model_egress / visibility / tenant_share — each with a mechanical validator, a permissive not-set DDL default, named enforcement points, an undecidable-only fail-closed pole, and a governed operation, under the eight decomposer-ratified mechanics and a single Cedar-PARC-shaped decision port with a differential serving-path conformance test applied per-channel) and a trust axis (outdated/authoritative/background with mechanical validators, the per-kind lifecycle→authoritative mapping, and origin-weighted supersession). Locks the freshness schema (version-handle kinds, decay classes, structurally-recorded overrides), the displacement-event registry (closed three-kind V0 vocabulary), the citation form, the citation-resolution dispositions (dont_use stub vs visibility not-found), and the V0 write-authorization invariant. 'sensitive' dissolves permanently into model_egress:deny + visibility:admin-only."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-02"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0015: Provenance Envelope + Source-Roles Contract
+
+**Project:** mnemra-core
+
+## Status
+
+`accepted`
+
+Accepted 2026-07-02 at the retrieval-cluster **spec-exit gate** (reviewed with the spec [2026-07-02-retrieval-cluster](../../specs/2026-07-02-retrieval-cluster.md)). Authored at Stage 3 of the retrieval cluster, resolving the Frame's `{{P-0015}}` slot per [placeholder-resolution](placeholder-resolution.md). The two-axis redesign, the eight policy mechanics, and the V0 semantics below were **decomposer-ratified at the pre-gate maintainer walk and the frame-exit gate (2026-07-02)** and were not re-opened by the gate; what this ADR adds at spec precision — and what the gate reviewed — is the finalized labels, tables, dispositions, and the two rendering picks the Frame delegated here.
+
+## Context and Problem Statement
+
+Intake success criterion 2 commits every returned context item to a validator-gated provenance contract: how authoritative, how fresh, whether usable at all, with a stable citation. The intake's risk profile states the security fact precisely: the use-policy semantics **are an authorization control — a retrieval path that ignores them leaks by design**. The Frame's pre-gate maintainer walk replaced the round-1 single five-role value with **two orthogonal axes** — policy (a permissions record, enforced structurally) and trust (provenance, served as a label) — because a single value destroys information: an item can be sensitive *and* authoritative, or dont-use *and* background. The maintainer's framing, carried verbatim: **"capture the hard to change stuff now — the mechanics; the labels are the easy part."** This ADR is the slot that locks the contract. It reads and serves the G2/G3 substrate fields (cross-artifact authoritativeness + provenance/use-policy — knowledge-object survey, 2026-05-15) and renders the sources-with-roles finding's freshness and displacement advances (maintainer record, 2026-05-21).
+
+## Decision Drivers
+
+- **The envelope's policy side is a security layer, not metadata** (P-SecurityLayered keystone edge; intake risk profile (a)) — every security dimension needs structural enforcement at a named point, fail-closed, behind one decision boundary.
+- **Validator-gated or no slot** (intake hard constraint; P-ShiftLeft D2 — validator before field): every dimension and every trust value is a mechanical predicate over stored fields/edges; no inference, no prose judgment, anywhere in assignment.
+- **Lock the intrinsic mechanics; keep the labels easy to change** (P-LockContract; the maintainer's ratified framing): the record shape, enforcement discipline, and port boundary are the hard-to-change contract; dimension names and enums are deliberately ADR-amendable.
+- **Bound the blast radius of the future policy engine** (the maintainer's stated intent for mechanic 8): engine substitution must replace one module, not a rewrite — the Cedar/NGAC permission-model research (maintainer record, locked 2026-05-18): "the engine sits behind mnemra's policy port… port substitution, not a rewrite"; precedents G-0017 FlagProvider, P-0010 D5 Storage trait.
+- **No existence-disclosure oracle** (Stage-2 review M1): withholding must be caller-silent; the observability signal is operator-side.
+- **Retrofit posture** (pre-gate walk item 11): identity, permissions, and audit are hard to retrofit — the columns and write-attribution exist from day one even while V0 is single-user.
+
+## Considered Options
+
+1. **Two-axis contract: policy permissions record + trust label, hardcoded validator predicates behind a single decision port (chosen).**
+2. **The round-1 single five-role value** (`authoritative / background / outdated / sensitive / dont-use` with precedence) — **replaced at the pre-gate walk (ratified)**: single-value precedence destroys information across orthogonal facts. Recorded as the option the redesign chose against; its five validators survive as predicates feeding the two axes.
+3. **Adopt a policy engine (Cedar-class) at V0** — rejected for V0: the V0 policy is four dimensions with hardcoded mechanical predicates; an engine is mechanism ahead of evidence (P-Defer, Simplicity). The port (PE-3) is the designed substitution seam; QA-9 renders the swap as a bounded change.
+4. **Per-dimension config knobs** — rejected structurally (mechanic 6): a dimension without a declared validator + enforcement point + fail-closed pole + governed operation is not a dimension; config cannot declare those.
+
+## Decision Outcome
+
+**Chosen: Option 1**, rendered as PE-1..PE-11. Binding requirement text: spec [R-0025/R-0026](../../specs/2026-07-02-retrieval-cluster.md); QA-4/QA-7/QA-9 are the observable measures.
+
+### PE-1 — The two-axis contract under the eight locked mechanics
+
+Every returned item carries an envelope `{trust, freshness, citation}` (+ `re-eval pending` on decision-kind artifacts). The **policy record** is an enforcement input, not a served label (sole exception: the `dont_use` stub's policy reason). The eight mechanics are carried from the ratified walk record ([Frame §2/R3](../../intent/retrieval-cluster-frame.md)) verbatim in substance and bind every dimension, present and future: (1) orthogonal record shape, never a single enum; (2) validator-gated, no inference in assignment; (3) structural fail-closed — an **undecidable** security check resolves to **its** restrictive pole, per-dimension (undecidable = the validator's stored source field is present but malformed/unreadable, or missing where the schema requires presence — distinct from **not-set**, which is a defined permissive V0 default per dimension, PE-2, and never undecidable); a settable-but-unenforced security value may not exist in the schema; (4) named enforcement points — index-admission gate, model-egress gate (index- and query-time), serving predicate, citation stub (the citation-resolution point; the disposition is per-dimension — stub for `dont_use`, not-found for `visibility`, PE-4); no point, no dimension; (5) operation facet declared per dimension; write side anticipated structurally, not designed now; (6) closed-but-extensible at ADR tier — a new dimension is a P-0015 amendment declaring validator + enforcement point + fail-closed pole + governed operation, never a config knob; (7) permission-field writes are recorded, attributable, authorized writes; (8) one decision port (PE-3). *(Anchor: pre-gate walk ratification, 2026-07-02 — off-limits to reopen.)*
+
+### PE-2 — Final V0 dimension set (labels finalized; mechanics untouched)
+
+The Frame's proposed initial set is **adopted as the V0 set** — each dimension already conformed to mechanics 2–5, and no finding since has motivated a rename:
+
+| Dimension | Values | Not-set default (permissive, DDL) | Mechanical validator | Enforcement point(s) | Fail-closed pole (undecidable only) | Governed operation |
+|---|---|---|---|---|---|---|
+| `dont_use` | set / not set | not set | Explicit use-policy field = `deny` (G3 substrate field; author/curator-set, never inferred) | Index-admission gate + query predicates + citation resolution (metadata-only stub) | Excluded — never chunked, embedded, egressed, or served; citation resolves to a metadata-only stub with the policy reason | serve/egress |
+| `model_egress` | `allow` / `deny` | `allow` | Explicit egress field (G3 sensitivity-family; never inferred from content) | Model-egress gate — index-time (4.1/4.4 inclusion) and query-time (4.3 payloads) | `deny` | egress |
+| `visibility` | `workspace` / `admin-only` / `owner-only` | `workspace` | Explicit visibility field; `admin-only` predicate: caller's `WorkspaceCtx` role is `Admin` (role-gated, no identity plumbing — gate outcome, Frame §2 item 15) | Serving predicate + citation resolution (not-found — PE-4; deliberately NOT a stub) | `owner-only` (V0: serve to no one — PE-4) | serve |
+| `tenant_share` | `workspace-only` (fixed at V0) | `workspace-only` | Structural constant — a declarative hook over structural tenancy (P-0006); a future sharing capability must honor per-content holdbacks | Serving/tenancy predicates | `workspace-only` | serve/share |
+
+**Not-set is a value, not an absence (r1 fold):** every policy column carries the permissive DDL default above, applied at ingest and by the G2/G3 migration to the (unlabeled) `0.14.0` corpus — a stored artifact row always holds a decidable value for every dimension **on those sanctioned write paths**; a value written via a direct substrate-layer bypass of the R-0025-f gate can be malformed, which mechanic 3 resolves to that dimension's restrictive pole — so the mechanic-3 fail-closed law fires **only** on genuinely undecidable (present-but-malformed) values, never on unlabeled content. This is PE-11's opt-in-labeling residual rendered structurally: an unlabeled artifact is served to workspace callers and egress-eligible at V0. The fail-closed-pole column governs the undecidable case only.
+
+**`sensitive` does not survive — not as a stored value and not as a macro.** Its intent maps to `model_egress: deny` + `visibility: admin-only` (round-1 read semantics restored: admin-readable, observer-withheld). A macro would be a second name for the same stored facts (P-MinBlastRadius: one noun per concept) and a place for the composed meaning to drift from the enforced fields; documentation may explain the mapping, the schema carries only the two dimensions. `model_egress: deny` content is indexed **locally in full** (RC-1 local encoders are egress-free) — the policy record and the egress boundary reinforce rather than fight.
+
+### PE-3 — The decision port: PARC shape, system principal, conformance, serving-path equivalence
+
+All host-side enforcement points consult one boundary **`decide(principal, action, resource, context) → allow/deny + reason`** (Cedar PARC shape). V0 implementation: the hardcoded PE-2 validator predicates behind the port. Renderings the Frame delegated here:
+
+- **Index-time principal (Stage-2 r2 N7):** the index-admission gate and index-time model-egress gate fire during batch builds with no caller; they consult the port under a distinguished **system principal** — a dedicated principal variant naming the invoking subsystem (e.g. the index builder), *not* a workspace role and *not* a synthetic admin. The PARC shape is thereby well-defined at every enforcement point.
+- **Conformance is tested AT THE PORT:** a design-time conformance suite (fail-closed + attributes-only invariants; the P-0010 D5 two-adapter-test pattern) exists from V0 and runs against any implementation behind the port, including the seeded undecidable-dimension cases resolving to their restrictive poles (QA-9.3).
+- **Serving-path placement (r1 fold; Frame C4 keystone):** the serving predicate's fragments are applied **in every channel's WHERE clause (FTS, dense) and at every recursion level of the traversal CTE** — mirroring the workspace predicate's placement — so a policy-restricted row never enters RRF fusion, rerank, or budget accounting, and rank order + budget reports are computed over the caller's entitled set only (spec R-0025-g is the binding text). **The predicate equally binds the relations edge projection (r2 fold):** an edge surfaces in the caller-facing `relations` bundle only if the caller is serve-entitled to **both** endpoint artifacts — incoming edges' source endpoints and both ends of deeper-hop edges included — because the traversal CTE's reachable-node set is not the returned edge list; a withheld edge is caller-silent (PE-4) with the audit row. No caller-facing edge projection may be an existence oracle for a `visibility`-withheld neighbor.
+- **Serving-path equivalence — the pick (Stage-2 r2 N1):** the row-level serving predicate executes in Postgres and cannot consult `decide()` per row; it enforces through SQL fragments derived from the port's attribute vocabulary in **exactly one module**. Of the Frame's stated binary — (a) mechanically generate the fragment from the predicate definitions, or (b) mandate a differential conformance test — **this ADR locks (b): the differential conformance test.** The fragment and `decide()` must return identical allow/deny over a generated resource set covering every dimension × pole × undecidable case (QA-9.4), and the test demonstrably fails on a seeded divergence. Rationale: V0's predicates are a handful of hardcoded checks — a fragment *generator* is more mechanism than the evidence supports (Simplicity; P-Defer), while the differential test reuses an existing test pattern and directly renders the QA measure. Option (a) remains the recorded alternative a future amendment adopts if the dimension count grows enough that hand-maintained fragments become the drift risk — the differential test itself is the instrument that would catch that drift (a failing equivalence run is the firing signal).
+- **Port cardinality (Stage-2 r2 N8):** this content-policy port is a **distinct per-domain PDP instance** sharing the port *pattern* with the host-fn capability gate — not a shared engine. Unification, if ever, is a decision for a future amendment of this ADR together with the host-fn gate's record (minimal-coupling reading of P-MinBlastRadius). The Cedar/NGAC research anchor validates the port pattern and PARC-shaped boundary generally; its 1:1 PARC-fit finding was scoped to the host-fn capability gate and is not read as a content-policy-specific fit.
+
+*(Anchors: the Cedar/NGAC permission-model research (maintainer record, locked 2026-05-18); cedar-policy 4.x is Apache-2.0/Green when the engine substitution fires; P-LockContract; G-0017 FlagProvider + P-0010 D5 precedents.)*
+
+### PE-4 — V0 enforcement semantics + citation-resolution dispositions
+
+- **`visibility: owner-only` serves no one at V0** (ratified; mechanic 3 applied): caller identity is undecidable under the workspace+role context, so owner-only items are excluded from all retrieval, for every caller including `Admin`, until identity lands. The conservative enforcement IS the V0 semantics — not a settable-but-unenforced value.
+- **`visibility: admin-only`** serves callers whose `WorkspaceCtx` role is `Admin`; withheld from `read_observer` (gate outcome, Frame §2 item 15).
+- **Withholding is caller-silent** — no count, no placeholder — with an **operator-side audit event** per withheld decision, stored in the spec Data Model's `policy_decision_audit` table (`{workspace_id, artifact_id, action, dimension, decision, reason, principal, occurred_at}`; additionally emitted as telemetry, generation⊥storage) — the P-TrustworthySignal-satisfying signal; a caller-visible marker is an existence-disclosure oracle (Stage-2 M1). "Marker" includes an **edge** (r2 fold): a `relations`-bundle entry naming a withheld artifact would disclose its existence, relationship, edge type/origin, and citation, so the serving predicate filters the edge projection's endpoints (PE-3; spec R-0025-g) and a withheld edge is indistinguishable from no-edge. An edge to a `dont_use` artifact does surface — curatorial policy announces itself (the stub disposition below); the asymmetry follows each dimension's meaning exactly as at citation resolution.
+- **Citation-resolution dispositions (the Stage-2 L2 call, locked):** `get_artifact_by_citation` on a `dont_use` artifact returns a **metadata-only stub** carrying the policy reason and no content — the curatorial kill switch is *supposed* to tell the agent "this exists; do not use it." Resolution of a **visibility-withheld** artifact by an unauthorized caller returns **not-found, indistinguishable from a genuinely unresolvable reference** — visibility withholds *existence*, and a stub would be a probe-able oracle. The asymmetry is deliberate and follows each dimension's meaning: curatorial policy announces itself; audience restriction does not. *(Anchors: P-SecurityLayered fail-closed; QA-4 measures 1/3/4/8.)*
+
+### PE-5 — Enforcement-layer asymmetry; the owner-only index-partition question (deferred, named)
+
+`dont_use` gets dual-layer defense (index admission + query predicates — the content must not exist in the index at all); `visibility` enforces at serve time only, fully indexed — an audience restriction *within* the workspace, not a curatorial kill (Stage-2 r2 N6, stated deliberately). When per-user identity lands and `owner-only` becomes per-user, the serving predicate becomes the entire control for audience-restricted content in a shared index. **Whether that warrants an index-partition / admission-level control is deferred to the per-user identity feature** — decision content: partition-vs-predicate for per-user owner-only; deferral anchor: P-Defer (the mechanism's shape depends on the identity design, which does not exist); firing instrument: **self-announcing** — the per-user identity machinery register entry (added to the product brief with this change) cannot be designed without resolving owner-only serving semantics, so its intake fires this question by construction.
+
+### PE-6 — Write authorization: the V0 invariant, the audit record, the deferred write side
+
+- **V0 write gate (frame-exit gate outcome, item 14):** ALL writes to policy/trust-affecting fields — permission flips, freshness overrides — ride the existing **admin-gated content-mutation path** ([P-0009](P-0009-rls-admin-token.md)), with `read_observer` excluded; no other write path exists at V0. This closes the V0 authorization window on authorization-bearing writes: clearing an egress-deny flag makes restricted content servable; a spurious freshness override masks staleness (Frame §5 write-authorization surface, Stage-2 M3).
+- **Recorded, attributable writes (mechanic 7):** every label/permission change writes an audit row `{workspace_id, artifact_id, field, old_value, new_value, actor token_id, occurred_at}` (spec Data Model `policy_write_audit`); actor attribution is NOT NULL.
+- **Write-side policy dimensions stay undesigned** (mechanic 5): the read/write split is anticipated structurally; the write-operation dimension set arrives as P-0015 amendments (mechanic 6) when the **first surface granting a non-owner actor write/label capability** appears (per-user identity, `tenant_share` sharing, plugin-mediated writes) — self-announcing.
+- **Timed embargo** (auto-expiring permission values) is a recorded **design option, unbuilt**: if built, it is a dimension-model amendment declaring validator + enforcement point + expiry semantics. Firing: self-announcing — a real embargo case is asked for. Until then, permission changes are owner-mutable flips only (recorded writes).
+
+### PE-7 — Trust axis: validators, precedence, the per-kind mapping, origin weighting
+
+One value per item by first-match precedence **`outdated` → `authoritative` → `background`**; every predicate mechanical (no LLM, no prose judgment — spec R-0026-a).
+
+- **`outdated`** fires on (a) an incoming `supersedes` edge of origin `declared` or `system`, or (b) freshness-stale (PE-8) with no recorded override. **Origin weighting, locked:** an `origin = extracted` supersedes edge does **not** enter the trust predicate at V0 — it is recorded, traversable, surfaced in the relations bundle (to callers serve-entitled to both endpoints — PE-3's projection filter, spec R-0025-g), and raises an operator-side curatorial signal; promotion to trust effect happens only by re-writing it as `declared` through the PE-6 gate. Rationale: extraction reads free text, and adversarially-shaped corpus text ("…this supersedes P-0010…") must never demote a target's trust automatically (Frame §5 worked case; residual (iv)). **The `declared` weight itself rests on the first-party-corpus assumption** (Non-goal 1 — no ongoing ingest): frontmatter carries authority because only first-party authors write it. **Named trip-wire (Stage-2 r2 N10):** when register `1.2.0` (ongoing ingest) opens the first untrusted-submitter path into frontmatter, this weighting re-opens and the extraction/ingest-integrity contract extends to `declared` edges — the `1.2.0` feature's own intake is the self-announcing firing event.
+- **`authoritative`** fires iff the artifact kind's lifecycle field is in that kind's closed authoritative-state set AND `outdated` did not fire. The V0 mapping table (extending it is a P-0015 amendment, per-kind, validator-first):
+
+  | Artifact kind | Lifecycle field's authoritative-state set |
+  |---|---|
+  | Decision record (ADR) | `accepted` |
+  | Spec | `approved` |
+  | Intake / Frame / product brief | `locked` |
+  | Research brief | `locked` |
+  | *(any kind not in this table)* | *(none — the kind cannot fire `authoritative`; it resolves `background`)* |
+
+  Kinds without a mechanical lifecycle field (code, logs, tasks, living canon docs) resolve `background` by the total-function default — served, labeled, ranked normally. This is deliberately conservative and fail-safe: `background` under-claims rather than over-claims authority; adding a kind to the table is a cheap, validator-first amendment when the under-claim demonstrably misranks (the run records are the instrument that would show it).
+- **`background`** is the total-function default — no other predicate fires.
+- **Retrieval-path semantics** (per the Frame's trust table; mechanism defined at the r1 fold): **hard-superseded** means the artifact has an incoming `supersedes` edge of origin `declared`/`system` — the "`superseded-by` forward pointer" is exactly that edge read from the superseded side (the directional view; no second schema field, no topic-key inference — P-0016 ES-2, spec R-0029-e). Every predicate-(a) `outdated` item is therefore hard-superseded: **excluded** from default retrieval, point-in-time reachable. The served-with-label-and-demoted disposition applies exactly to **predicate-(b)** (freshness-stale) items. `authoritative` ranks trust-primary; `background` serves labeled.
+
+### PE-8 — Freshness schema: handle-diff primary, decay-class fallback, structural overrides
+
+- **Version handles (primary):** where an item cites a source with a handle, the envelope stores the handle-at-index and reports `current | moved | unknown` by diffing against the source's live handle. **Closed handle-kind set at V0:** `git-sha` (canon/repo citations — live handle is the repo's current state), `semver` (dependency/tool versions), `model-id` (model revisions — diffed against the configured pinned revision), `doc-version` (explicit version strings on versioned documents). An unreachable live handle reports `unknown` — never a fabricated state (in the zero-egress configuration, external live-handle checks resolve `unknown` by construction). Adding a handle kind is a P-0015 amendment declaring its differ (validator before field).
+- **Decay classes (fallback; bounds ignorance, does not measure staleness):** handle-less sources carry a volatility-matched class; TTL expiry without re-validation makes the item freshness-stale (feeding PE-7's predicate (b)). The V0 class table:
+
+  | Class | TTL | Domain examples |
+  |---|---|---|
+  | `volatile` | 30 d | vendor/dependency landscape, pricing, model availability |
+  | `moderate` | 90 d | comparative research, tool evaluations |
+  | `slow` | 180 d | project conventions, operational skills |
+  | `stable` | 365 d | principles, foundational decisions, values |
+
+  Time is the weakest signal — fallback, never primary. TTL values are class defaults, amendable per class; the class assignment is a stored field.
+- **Overrides are structural:** a freshness override is a recorded row `{by, reason, date}` accepted only through the PE-6 write gate — never a config toggle. An override restores the prior trust value and is itself visible in the envelope. Content-based staleness detection is rejected as circular (the maintainer's advance 1, 2026-05-21).
+
+### PE-9 — Displacement ≠ staleness: the event registry
+
+Handle-diff catches my-cited-source-changed, not the-world-moved-past-it. Containment, not solution: a **named displacement-event registry** (spec Data Model `displacement_events`) whose fired events set a `re-eval pending (axis)` envelope flag on decisions whose **recorded axes** intersect the event. The V0 event-kind vocabulary is **closed and enumerated** (r1 fold — an enumerable registry with zero enumerated kinds would have no buildable fixture); extending it is a P-0015 amendment declaring the kind's mechanical firing condition (validator-first, the mechanic-6 discipline):
+
+| Event kind | Fires (mechanically) |
+|---|---|
+| `canon-superseded` | A `supersedes` edge of origin `declared`/`system` lands on a canon-kind artifact (ADR, principle, spec) — detected on the edge-write path this cluster builds |
+| `dependency-major-change` | A `semver` version-handle diff (PE-8) crosses a major version boundary — detected by the freshness handle-diff this cluster builds |
+| `operator-declared` | The operator records an event through the PE-6 write gate, naming the axis + description — the catch-all for world-shifts no detector covers |
+
+**Single-axis displacement triggers re-evaluation, never auto-invalidation** — the trust value does not flip on a displacement flag; multi-axis decisions survive a single-axis shift. Decision-kind artifacts record their decision axes as substrate data. Honest limit, carried verbatim: trip-wires only cover enumerable displacement events; truly unforeseen shifts fall back entirely to the volatility TTL. *(Anchor: the maintainer's advance 2, 2026-05-21; P-PreserveDecisionSpace.)*
+
+### PE-10 — Citation form
+
+Every envelope item carries a stable citation: **artifact ID (content-addressed, per the V0 substrate) + block anchor where the item is a chunk**, resolvable by `get_artifact_by_citation`. The ID+name pairing and block addressability are what make citation-expansion retrieval work. *(Anchor: P-AgentPrimarySource.)*
+
+### PE-11 — Residuals owned here
+
+- **Labeling correctness + the adopter-facing polarity revisit (Frame residual (i), maintainer-accepted for V0):** labeling is opt-in at V0 — an unlabeled artifact is egressable at index time; the index-admission gate mitigates, the serving-time posture stays fail-closed. Rendered structurally as the PE-2 not-set DDL defaults: unlabeled = the permissive default values, stored — so the fail-closed law (mechanic 3) targets only genuinely undecidable values and can never silently withhold the unlabeled corpus. This ADR owns the revisit: whether the default polarity should flip (unlabeled ⇒ egress-deny — mechanically, flipping the `model_egress` DDL default for new rows) for adopter deployments. Firing: self-announcing — the first deployment beyond the maintainer's dogfood instance (an adopter standing up an instance is an explicit act), or register `1.2.0` ingest, whichever first.
+- **Query-time egress content-audit (Stage-2 L5):** which query text (4.2) / which retrieved chunk citations (4.3) egressed, keyed for incident response — landed as spec R-0034-b; recorded here as part of the envelope contract's enforcement observability.
+
+### Consequences
+
+**Good:**
+- The hard-to-change parts (record shape, enforcement discipline, port boundary, fail-closed law, write attribution) are locked while every label stays a cheap ADR amendment — the ratified cost asymmetry, honored.
+- Engine substitution is a bounded change (one PDP module + one fragment module), proven by a conformance suite that exists from V0 (QA-9).
+- No existence oracle anywhere on the caller surface; every withhold is operator-observable.
+- Adversarial corpus text cannot flip trust (PE-7's origin weighting) and cannot reach served payloads through 4.1 (P-0014 RA-9).
+
+**Bad / Trade-offs:**
+- `owner-only` over-blocks at V0 (serves no one, even the owner) — the deliberate price of mechanic 3 until identity lands; the identity feature's intake is the named re-open.
+- The differential conformance test must be maintained as dimensions evolve — accepted over a fragment generator at V0 scale; a failing equivalence run is itself the drift instrument.
+- Kinds outside the PE-7 mapping under-claim authority (`background`) — fail-safe, but a ranking cost until the table is extended on evidence.
+- Freshness `unknown` is common in zero-egress deployments (external handles unreachable) — honest by design; TTL still bounds ignorance.
+
+## Pros and Cons of the Options
+
+### Two-axis record + port, hardcoded predicates (chosen)
+
+- Pro: carries orthogonal facts without information loss; per-axis determinism retained.
+- Pro: enforcement is structural, fail-closed, single-boundary — and V0-simple (four predicates).
+- Con: two axes are more schema than one enum — paid once, at the layer that is hardest to retrofit.
+
+### Round-1 single five-role value (replaced)
+
+- Pro: one field, simple precedence.
+- Con: destroys information (sensitive+authoritative, dont-use+background are real); precedence fights itself. Ratified out at the pre-gate walk; its five validators survive as predicates.
+
+### Cedar-class engine at V0 (rejected for V0)
+
+- Pro: expressive policy language, forward-ready.
+- Con: mechanism ahead of evidence for four hardcoded predicates; the port makes later adoption a substitution, not a rewrite (QA-9 is the proof obligation).
+
+### Config-knob dimensions (rejected)
+
+- Pro: no ADR churn to add a label.
+- Con: violates mechanic 6 — config cannot declare a validator, enforcement point, fail-closed pole, or governed operation; a knob-created "dimension" is unenforced by construction.
+
+## More Information
+
+- Binding requirement text: [spec R-0025/R-0026](../../specs/2026-07-02-retrieval-cluster.md); observable measures QA-4/QA-7/QA-9 ([Frame §7](../../intent/retrieval-cluster-frame.md)).
+- Companions: [P-0014](P-0014-retrieval-architecture.md) (the query path and gates that consume `decide()`; the 4.1 control RA-9 co-owned with this contract); [P-0016](P-0016-edge-schema.md) (the edge `origin` column PE-7 weights; the extraction-integrity contract).
+- Ratification trail: the pre-gate maintainer walk + frame-exit gate outcomes (Frame §2, items 1–15 — the eight mechanics verbatim; `admin-only` added at the gate; the V0 write invariant confirmed at the gate).
+- Sources by name + lock-date (provenance-pointer convention): sources-with-roles finding + freshness/displacement advances (maintainer record, 2026-05-21); Cedar/NGAC permission-model research (maintainer record, locked 2026-05-18); knowledge-object survey G2/G3 (2026-05-15).
+- Substrate: [P-0006](P-0006-v0-tenant-enforcement.md) / [P-0009](P-0009-rls-admin-token.md) (the caller context and admin-gated mutation path the V0 enforcement rides).
+
+<!-- ===== docs/src/adrs/P-0016-edge-schema.md ===== -->
+
+---
+title: "P-0016: Edge Schema"
+summary: "Resolves the retrieval-cluster Frame's {{P-0016}} slot. Locks the single superset edge table extending the 0.8.0 relationships substrate: closed eight-type vocabulary (parent / blocks / depends-on / dispatched-by / extends / feeds / cites / supersedes), two discriminating closed-enum columns (edge_class: work-graph|citation; origin: declared|extracted|system) with the supersedes classing rule, one-logical-edge uniqueness with origin-authority upgrade (system > declared > extracted), the extraction contract (frontmatter + free-text sources, source-span provenance, idempotent re-extraction, per-source coverage measured every run), the recursive-CTE traversal contract carrying the workspace predicate at every recursion level with the D4 instrument's field set, and the dual-writer manifest-ownership semantics (repos-plugin CRUD path for work-graph rows; host-side extractor confined to origin=extracted)."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-02"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0016: Edge Schema
+
+**Project:** mnemra-core
+
+## Status
+
+`accepted`
+
+Accepted 2026-07-02 at the retrieval-cluster **spec-exit gate** (reviewed with the spec [2026-07-02-retrieval-cluster](../../specs/2026-07-02-retrieval-cluster.md)). Authored at Stage 3 of the retrieval cluster, resolving the Frame's `{{P-0016}}` slot per [placeholder-resolution](placeholder-resolution.md). The single-superset-table direction is Stage 2a direction 1, decomposer-ratified — not re-opened by the gate; this ADR locks the schema, classing, extraction, traversal, and ownership renderings the Frame delegated.
+
+## Context and Problem Statement
+
+The corpus's graph is authored but latent — frontmatter relation lists, free-text citations, prose. The retrieval cluster makes it traversable (intake SC5), and two edge vocabularies pre-exist the decision: the V0 `0.8.0` work-graph set (`parent / blocks / depends-on / supersedes / dispatched-by` — system-of-record rows created with their entities) and the retrieval citation set (`extends / feeds / cites / supersedes` — re-derivable from authored text). They overlap only on `supersedes`, and `supersedes` is **trust-affecting**: [P-0015](P-0015-provenance-envelope-source-roles.md)'s `outdated` predicate reads it, so where an edge *came from* is an authority question, not bookkeeping (the Frame §5 write-authorization worked case: adversarially-shaped free text must not demote a target's trust through the extractor). The Frame locked one substrate with a discriminating mechanism; this ADR is the slot that locks the schema.
+
+## Decision Drivers
+
+- **One vocabulary, one traversal, one extraction path** (P-MinBlastRadius; Stage 1c F6's preferred resolution) — parallel edge stores mean two query paths for "what relates to X" and a permanent reconciliation burden.
+- **Provenance discrimination is load-bearing** (P-0015 PE-7): a trust predicate that cannot distinguish a declared supersession from an extracted one is an authority-laundering vector.
+- **The substrate is locked** (P-0010 D4): shallow edge model, recursive CTEs, no graph engine; the traversal path carries D4's instrument.
+- **Extraction must be honest** (intake SC5): coverage over the migrated corpus is measured and reported, never assumed.
+- **Tenancy + identity are structural from day one** (P-0006; retrofit-prep walk item 11).
+
+## Considered Options
+
+1. **One superset table extending `0.8.0`, discriminated by `edge_class` + `origin` columns (chosen).**
+2. **Parallel vocabularies / two edge tables** (work-graph table + citation table) — rejected (Stage 1c F6; the intake carried the composition question to the Frame, which ratified the superset): two traversal code paths, two extraction targets, `supersedes` split across stores exactly where trust reads it.
+3. **A graph engine for the citation graph** — rejected upstream (P-0010 D4; intake hard constraint): recursive CTEs serve the shallow model; Apache AGE waits behind D4's strain trip-wire, which this cluster's instrument (ES-5) makes fireable.
+
+## Decision Outcome
+
+**Chosen: Option 1**, rendered as ES-1..ES-7. Binding requirement text: spec [R-0027, R-0034-c, R-0035](../../specs/2026-07-02-retrieval-cluster.md).
+
+### ES-1 — One superset table, closed vocabulary
+
+One edge table — the `0.8.0` relationships substrate, extended — carries the closed vocabulary **`{parent, blocks, depends-on, dispatched-by, extends, feeds, cites, supersedes}`**; `supersedes` unifies the two prior sets. An edge type outside the enum is rejected at write. Vocabulary changes are amendments to this ADR (closed-but-extensible at ADR tier — the P-0015 mechanic-6 discipline applied to edge types). Exactly one traversal code path and one extraction code path operate over the table.
+
+### ES-2 — Discriminating columns + the `supersedes` classing rule
+
+Every row carries two closed-enum columns:
+
+- **`edge_class`** ∈ `{work-graph, citation}` — `parent/blocks/depends-on/dispatched-by` are always `work-graph`; `extends/feeds/cites` are always `citation`; **`supersedes` is classed per its writer**: `work-graph` iff created by the work-graph system-of-record transactional path (entity lifecycle operations — task/dispatch supersession written atomically with its entities), `citation` otherwise (declared in content frontmatter or extracted from free text). The rule is mechanical at write time — the writing path, not a judgment, determines the class.
+- **`origin`** ∈ `{declared, extracted, system}` — `declared`: authored in structured frontmatter or a DB relation; `extracted`: derived from free text by the extractor, carrying a **source-span provenance pointer** back to the text it was read from; `system`: created by system operations (e.g. `dispatched-by`). Authority order for trust consumption: **`system` > `declared` > `extracted`** — and per P-0015 PE-7, `extracted` never enters a trust predicate at V0.
+
+**The `superseded-by` forward pointer is the directional view of this edge — not a schema field (r1 fold).** Retrieval's hard-supersession condition (spec R-0029-e; P-0015 PE-7) is: the artifact has an incoming `supersedes` edge of origin `declared` or `system`. "Forward pointer" names that edge read from the superseded artifact's side; there is no separate `superseded_by` column, no normalized-topic-key, and no second supersession mechanism (P-MinBlastRadius — one source of truth where trust reads; a topic-key deriver would put an inference in a trust path, barred by spec R-0026-a). An `origin = extracted` supersedes edge is *not* a forward pointer — it neither excludes nor demotes (PE-7's origin weighting).
+
+Work-graph rows are system-of-record, created transactionally with their entities. Citation rows are re-derivable.
+
+### ES-3 — Uniqueness + origin-authority upgrade
+
+**One logical edge per `(workspace_id, src_artifact_id, dst_artifact_id, edge_type)`.** A single row carries each logical edge so trust predicates and traversal read one source of truth (P-MinBlastRadius). Origin semantics on collision:
+
+- An extractor write finding an existing row at equal-or-higher authority (`declared`/`system`, or an existing `extracted` row) is a **no-op** (idempotent re-extraction refreshes `source_span` only).
+- A `declared`/`system` write finding an existing `extracted` row **upgrades the row's origin** (a recorded write — the row's provenance changed, and for `supersedes` that change is trust-affecting, so it rides the P-0015 PE-6 recorded-write discipline).
+- Nothing ever downgrades origin authority; deleting a `declared` relation from frontmatter removes the row on re-extraction only if no higher-authority writer owns it.
+
+Extracted rows carry `source_span` (the source artifact/path + span the citation was read from) — required iff `origin = extracted`. Every row carries `workspace_id NOT NULL` (indexed, explicitly passed) and `owner`/`created_by` (defaulted at V0 single-user) per spec R-0035.
+
+### ES-4 — Extraction contract: sources, idempotency, measured coverage, integrity
+
+- **Sources:** (a) frontmatter relation lists → rows with `origin = declared`; (b) free-text citations — markdown links to in-corpus artifacts, decision-record identifiers (`P-NNNN`/`G-NNNN`), requirement IDs, in-corpus path citations → rows with `origin = extracted` + `source_span`.
+- **Idempotency:** re-extraction over an unchanged corpus yields byte-identical edge rows (ES-3's upsert semantics); extraction re-fires on document change as part of the index pipeline.
+- **Coverage is measured, never assumed (intake SC5):** every index run records, per source class, how many frontmatter relations and free-text citations resolved to edges vs failed to resolve (unresolved citations are counted with their spans in the build record — they are *not* written as dangling edge rows). The count runs against the real migrated corpus, not a fixture.
+- **Extraction integrity (with P-0015):** the extractor writes only `origin = extracted` rows; it can never author `declared`/`system` authority. Promotion of an extracted trust-affecting edge to `declared` happens only through the admin-gated recorded-write path (P-0015 PE-6/PE-7). When register `1.2.0` (ongoing ingest) opens an untrusted-submitter path into frontmatter, the `declared` authority weight re-opens — the named trip-wire P-0015 PE-7 carries.
+
+### ES-5 — Traversal contract + the D4 instrument's field set
+
+- **Shape:** graph traversal is a recursive CTE over the edge table (P-0010 D4 — borrow the graph *model*, not a graph *engine*), powering `get_context_for`'s graph position (typed relations, lifecycle state, linked-artifact summaries).
+- **Tenancy + policy:** the workspace predicate appears **at every recursion level**, not only at the anchor (QA-6.2); the policy serving predicate rides at the same levels (P-0015's per-channel placement, spec R-0025-g). **Two distinct applications, both required (r2 fold):** the per-level predicate bounds the **reachable-node set** — a restricted node never enters the frontier, so edges beyond it are never reached — and the caller-facing **edge projection** (`get_context_for`'s `relations` bundle) is additionally **endpoint-filtered**: an edge is returned only if the caller passes the serving predicate on both endpoint artifacts (incoming edges' source endpoints included), because the reachable-node set is not the returned edge list; a withheld edge is caller-silent (P-0015 PE-4, spec R-0025-g).
+- **Bounds:** traversal depth defaults to **2** for `get_context_for`, per-call overridable up to a configured maximum (default **8**); the per-traversal latency flag bound defaults to **500 ms** (config-tunable — spec R-0034-c).
+- **The D4 instrument (field set, locked):** every multi-hop traversal writes a record `{workspace_id, verb, anchor_artifact_id, depth, row_count, latency_ms, flagged: bool, flag_reason: latency | inexpressible, created_at}`. A traversal exceeding the latency bound, or a needed traversal the CTE path cannot express, is flagged with the machine-readable reason — the logged dogfood incident that fires Apache AGE adoption (P-0010 D4), mechanically detectable from stored data. **P-0010 D5's second-adapter re-open rides the same record** (if D4 fires, D5 re-evaluates at the same time).
+
+### ES-6 — Manifest ownership: one table, two writers, origin is the discriminator
+
+The edge table remains **manifest-declared under the `repos` plugin's content family** (the `0.8.0` substrate it extends) — no re-homing, no second table. Two writers operate on it, discriminated by `origin` and bounded by ES-3/ES-4:
+
+- **The `repos` plugin's CRUD path** (host-mediated, via the typed content interface) writes work-graph rows and declared relations — `origin ∈ {declared, system}` — transactionally with their entities.
+- **The host-side extractor** writes through the host's storage layer (the same `Storage`-trait surface, under system actor attribution in `created_by`), confined to `origin = extracted` rows and the ES-3 no-op/refresh semantics.
+
+Schema/migration ownership follows the declaring family; the host extractor is a bounded second writer, not a second owner — it cannot mint authority (ES-4) and cannot touch work-graph rows. *(Anchors: P-0002 — cross-plugin aggregation is a projection concern; the extractor is host code by the same discriminator that host-places retrieval (P-0014 RA-4); P-0006 — both writers pass `WorkspaceCtx` structurally.)*
+
+### ES-7 — What this schema deliberately does not carry
+
+- **No edge weights, no confidence scores** — the discriminators are closed enums, not scalars; a "confidence" column without a validator is a prose judgment in disguise (validatability lens). If ranking ever needs edge-strength evidence, that is a run-record analysis first, an amendment second.
+- **No dangling-reference rows** — unresolved citations live in the coverage record (ES-4), not as half-edges.
+- **No cross-workspace edges** — structurally impossible (`workspace_id` on the row; both endpoints resolve within the workspace).
+
+### Consequences
+
+**Good:**
+- "What relates to X" has one answer surface: one table, one traversal, one extraction path; `supersedes` reads consistently wherever trust consumes it.
+- Provenance is first-class: every edge knows how it came to exist, and authority is monotone (never silently downgraded/upgraded outside the recorded-write path).
+- The D4/D5 deferral instruments are now real stored signals on the exact path they guard.
+- Coverage measurement makes extraction honesty checkable per run (SC5), not asserted.
+
+**Bad / Trade-offs:**
+- The superset table couples two lifecycles (system-of-record work-graph rows and re-derivable citation rows) in one relation — accepted for the single-path win; `edge_class` + ES-6's writer bounds keep the lifecycles from bleeding.
+- Origin-upgrade semantics add write-path logic a two-table design would not need — the price of one-row-per-logical-edge.
+- Depth/latency defaults (2/8 hops, 500 ms) are eval-calibrated guesses at V0 — config-tunable; the instrument they gate is the thing that will correct them.
+
+## Pros and Cons of the Options
+
+### One superset table with discriminating columns (chosen)
+
+- Pro: one vocabulary, one traversal, one extraction path (P-MinBlastRadius); `supersedes` unified where trust reads it.
+- Pro: extends the existing `0.8.0` substrate — no new store, no migration of prior work-graph rows into a new shape.
+- Con: dual-writer discipline needed (ES-6) and upgrade semantics on collision (ES-3).
+
+### Two edge tables / parallel vocabularies
+
+- Pro: each lifecycle owns its table; no collision semantics.
+- Con: two traversal paths, two extraction targets, `supersedes` split across stores exactly where the trust predicate reads it; permanent reconciliation burden. (Stage 1c F6 resolved against it; ratified.)
+
+### Graph engine
+
+- Pro: expressive traversal (openCypher), deep-graph performance.
+- Con: violates the A1-clean lock for a shallow graph CTEs serve; AGE's maturity cost paid without the named need. D4's trip-wire — now a real instrument (ES-5) — owns the upgrade.
+
+## More Information
+
+- Binding requirement text: [spec R-0027, R-0034-c, R-0035](../../specs/2026-07-02-retrieval-cluster.md); observable measures QA-1/QA-6/QA-8 ([Frame §7](../../intent/retrieval-cluster-frame.md)).
+- Companions: [P-0015](P-0015-provenance-envelope-source-roles.md) (the trust predicates that consume `origin`; the recorded-write discipline ES-3's upgrades ride); [P-0014](P-0014-retrieval-architecture.md) (the traversal engine and D6 borrow 4 — graph model, not engine).
+- Substrate: [P-0010](P-0010-storage-substrate-engine.md) D4/D5 (the carried deferral instruments this schema places); [P-0006](P-0006-v0-tenant-enforcement.md) (tenancy threading); [P-0002](P-0002-core-plugin-partition.md) (the partition ES-6 applies).
+- Upstream locks: [Frame](../../intent/retrieval-cluster-frame.md) R4 + §5 write-authorization surface (blob `65b1d05`); [intake](../../intent/retrieval-cluster.md) SC5 + the edge-vocabulary open item the Frame resolved.
+
+<!-- ===== docs/src/adrs/placeholder-resolution.md ===== -->
+
+---
+title: "Placeholder Resolution — Frame ADR Slots"
+summary: "Maps each Frame ADR placeholder to its resolution — an ADR file, a re-altituded non-ADR baseline, or PAUSED status — and carries the P-number reservation ledger. WS-E-2 Tier-A slots plus per-feature-cluster Frame slots (retrieval cluster added 2026-07-02)."
+primary-audience: agent
+---
+
+# Placeholder Resolution — Frame ADR Slots
+
+This document maps each ADR placeholder from a locked Frame to its current resolution state, and carries the P-number reservation ledger. Maintained by the implementing developer at Spec stage; back-references are updated in the Frame and overview as each slot resolves. Slots are grouped by originating Frame.
+
+**Sources:** [Frame: Mnemra Core](../intent/mnemra-core-frame.md), Tier A table; [Frame: retrieval cluster](../../intent/retrieval-cluster-frame.md), §8 Open ADR slots.
 
 ## Resolution Table
 
@@ -4734,6 +5389,18 @@ This document maps each Tier-A ADR placeholder from the Frame to its current res
 | `{{P-AdminTokenShape}}` | **RESOLVED** | [P-0008-admin-token-shape.md](P-0008-admin-token-shape.md) | — |
 | `{{P-RLSAdminToken}}` | **RESOLVED** | [P-0009-rls-admin-token.md](P-0009-rls-admin-token.md) | — |
 | *(no original placeholder — substrate was a hard-lock, not a slot)* | **FOLD-ADDED** | [P-0010-storage-substrate-engine.md](P-0010-storage-substrate-engine.md) | — |
+
+## Retrieval-cluster Frame slots (Stage 3, 2026-07-02)
+
+Slots named at [Frame: retrieval cluster](../../intent/retrieval-cluster-frame.md) §8 (locked 2026-07-02), resolved by the cluster's Stage-3 authoring in reservation order (next free numbers after P-0013):
+
+| Placeholder | Status | File | Blocking reason (if PAUSED) |
+|---|---|---|---|
+| `{{P-0014}}` (retrieval architecture) | **RESOLVED** | [P-0014-retrieval-architecture.md](P-0014-retrieval-architecture.md) | — |
+| `{{P-0015}}` (provenance envelope + source-roles contract) | **RESOLVED** | [P-0015-provenance-envelope-source-roles.md](P-0015-provenance-envelope-source-roles.md) | — |
+| `{{P-0016}}` (edge schema) | **RESOLVED** | [P-0016-edge-schema.md](P-0016-edge-schema.md) | — |
+
+The three ADRs are authored `proposed` and move to `accepted` at the retrieval-cluster spec-exit gate (they are part of the Stage-3 package the gate reviews, with [the cluster spec](../../specs/2026-07-02-retrieval-cluster.md)). The `{{P-00XX}}` placeholder references inside the locked `docs/intent/` artifacts are historical record and are left as written.
 
 ## Summary
 
@@ -4759,3 +5426,9 @@ Numbers are reserved in Frame Tier-A order for paused slots; authored slots fill
 | P-0008 | `{{P-AdminTokenShape}}` | authored |
 | P-0009 | `{{P-RLSAdminToken}}` | authored |
 | P-0010 | *(fold-added; no original placeholder)* | authored |
+| P-0011 | *(no placeholder — logging-facade dependency/topology decision)* | authored |
+| P-0012 | *(no placeholder — plugin runtime + MCP SDK record)* | authored |
+| P-0013 | *(no placeholder — plugin invocation model, forward decision)* | authored |
+| P-0014 | `{{P-0014}}` (retrieval-cluster Frame §8) | authored |
+| P-0015 | `{{P-0015}}` (retrieval-cluster Frame §8) | authored |
+| P-0016 | `{{P-0016}}` (retrieval-cluster Frame §8) | authored |

@@ -8,16 +8,9 @@ primary-audience: agent
 
 **Date:** 2026-05-22 · **Status:** draft (companion to Stage 2 Frame) · **Altitude:** component
 
-> This artifact ports the constraint inventory, quality-attribute utility tree, data-flow
-> diagram, and threat-modeling scaffold from the V0 architecture constraints record (draft
-> 2026-05-03), reconciled to the locked product brief (intake-exit 2026-05-20) and the
-> companion Frame document. Where the predecessor framing was stale, this port carries the
-> corrected framing. See the companion [Frame](../intent/mnemra-core-frame.md) section
-> "Framing corrections" for full provenance.
+> This artifact carries forward the constraint inventory, quality-attribute utility tree, data-flow diagram, and threat-modeling scaffold from the V0 architecture constraints record (draft 2026-05-03). It reconciles that record to the locked product brief (intake-exit 2026-05-20, the human checkpoint that closes Intake, the first stage of the workspace's three-stage work-shaping pipeline where structured intent gets captured) and to the companion [Frame](../intent/mnemra-core-frame.md) document (Frame is stage two of that pipeline: agents synthesize operating constraints from the validated intent; Spec, stage three, turns the Frame into a testable spec). Where the predecessor framing had gone stale, this port carries the corrected version. See the companion Frame document's "Framing corrections" section for full provenance.
 >
-> This overview is **agent-primary**: it's structured for parsing and machine addressing, per
-> the workspace-wide decision that source artifacts are written for agents first
-> ([P-WriteTimeAudience](../glossary.md#p-writetimeaudience); locked 2026-05-11).
+> This overview is **agent-primary**: it's structured for parsing and machine addressing, per the workspace-wide agent-primary-source-artifacts decision (locked 2026-05-11).
 
 ## Provenance
 
@@ -31,33 +24,24 @@ primary-audience: agent
 
 ## Threat-modeling trigger
 
-Mnemra-core V0 hits all four design-time threat-modeling triggers from the workspace
-security-layered principle. Each one is present:
+Mnemra-core V0 hits all four design-time threat-modeling triggers from the workspace's security-layered principle:
 
-- **Authentication.** Per-deployment OIDC authorization server via RFC 9728
-  protected-resource-metadata; static admin token at V0.
-- **Personally-identifiable-information-adjacent data.** Workspace artifact content
-  includes operational data and dispatch metadata.
+- **Authentication.** Per-deployment OIDC AS (OpenID Connect authorization server) via RFC 9728 protected-resource-metadata; a static admin token at V0.
+- **Personally-identifiable-information-adjacent data.** Workspace artifact content includes operational data and dispatch metadata.
 - **Network surface.** MCP transport (stdio at V0; streamable-HTTP at V0.1+).
-- **Multi-tenancy.** `workspace_id` is structural from V0; Row-Level Security column-shape
-  ships at V0, policy enforcement at V0.1+.
+- **Multi-tenancy.** `workspace_id` is structural from V0. Row-Level Security column-shape ships at V0; policy enforcement follows at V0.1+.
 
-Threat-modeling fires at the Stage 2 terminal review (a security-mode reviewer dispatch with the
-threat-modeling skill loaded). Threat callouts annotate the data-flow diagram below;
-mitigations become Spec-stage ADR proposals. The threats-by-DFD-element and trust-boundaries
-sections below are placeholders the terminal-review pass populates.
+Threat-modeling fires at the Stage 2 terminal review (a security-mode reviewer dispatch with the threat-modeling skill loaded). Threat callouts annotate the data-flow diagram below, and mitigations become proposals for Spec-stage ADRs (Architecture Decision Records produced at Spec, the pipeline's third stage, where agents turn the Frame document into a testable spec). The threats-by-DFD-element and trust-boundaries sections below are placeholders the terminal-review pass fills in.
 
 ## Constraint inventory
 
 ### Hard-locked
 
-The constraints below are locked by the product brief's Hard constraints section, the
-locked V0 discovery, and the workspace architecture canon. They're inputs to the Spec
-stage, not under re-derivation.
+The following constraints are locked by the product brief's Hard constraints section, the locked V0 discovery record, and the workspace architecture canon. They're inputs to the Spec stage, not open for re-derivation here.
 
 | Constraint | Source |
 |---|---|
-| PostgreSQL substrate ratified on merits, behind an engine-agnostic swappable `Storage` trait (Postgres the only implementation); V0 engine is **embedded Postgres** (`postgresql_embedded` + bundled `pgvector`); V0 stack is A1-clean (pgvector HNSW + native FTS + recursive CTEs + JSONB), TimescaleDB **demoted** off the V0 stack to a trip-wire | [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md) (folds the 2026-06-07 storage-engine evaluation, ratified after the spec lock); supersedes the prior "single-process Postgres + `pgvector` + `timescaledb` extensions present" hard-lock framing (brief Hard constraints; architecture alignment R4) |
+| PostgreSQL substrate ratified on merits, behind an engine-agnostic swappable `Storage` trait (Postgres the only implementation); V0 engine is **embedded Postgres** (`postgresql_embedded` + bundled `pgvector`); V0 stack is A1-clean (pgvector HNSW + native FTS + recursive CTEs + JSONB), TimescaleDB **demoted** off the V0 stack to a trip-wire | [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md), a project-scoped Architecture Decision Record (ADR) folding in the 2026-06-07 storage-engine evaluation (ratified after the spec lock); supersedes the prior "single-process Postgres + `pgvector` + `timescaledb` extensions present" hard-lock framing (brief Hard constraints; architecture alignment R4) |
 | WebAssembly Component Model plugin runtime via Wasmtime; plugin core logic IO-free; all plugin IO host-mediated; plugins are leaves (no sideways linkage) | Brief Hard constraints; architecture alignment R2 + R4 |
 | One MCP server with namespaced plugin verbs; stdio at V0; MCP specification 2025-06-18; streamable-HTTP a V0.1+ activation | Brief Hard constraints; architecture alignment R1 |
 | Mnemra is Resource Server only; per-deployment OIDC AS via RFC 9728 protected-resource-metadata | Architecture alignment R5 + R6 |
@@ -73,65 +57,36 @@ stage, not under re-derivation.
 | Rust-default toolchain; ecosystem-aligned tooling (non-Rust adopted only when no viable in-stack path exists) | Brief Hard constraints; workspace stack-discipline principle |
 | Test-Driven Development pairs on non-trivial work; worktrees mandatory; main is protected | Workspace test/worktree/main-protection principles |
 | Migration scope: the prior structured task-store tables (content / timeseries / log / state partitions) and a fixed subset of prior content-corpus subdirectories | V0 discovery (Migration scope) |
-| Workspace-level operational tooling (skill files, team profiles, internal memory store, inboxes, scratch, agent-harness state) is V0.1+ scope (the brief's idea-tier internal-workspace-absorption entry) | V0 discovery (Migration scope); brief idea-tier |
+| Workspace-level operational tooling (skill files, team profiles, internal memory store, inboxes, scratch, agent-harness state) is V0.1+ scope (the brief's idea-tier internal-workspace-absorption entry; idea-tier is a captured direction with no pipeline artifact yet) | V0 discovery (Migration scope); brief idea-tier |
 | Architecture MUST NOT be schedule-pressured; marketing-tier dates are not architectural inputs | Brief Hard constraints |
-| The system MUST NOT host a language model; embeddings call out to an external model | Brief Hard constraints + Non-goals |
+| The system MUST NOT host a **generative** LLM; generative work (query rewrite, chunk-context, tag generation, synthesis) calls out to an external model at V0; local **non-generative** inference (embedding, reranking: encoder models behind the host-fn seam) is permitted host-side *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake; was: "MUST NOT host a language model; embeddings call out to an external model")* | Brief Hard constraints + Non-goals, as amended 2026-07-02 (RC-1) |
 
 ### Reframed 2026-06-08 — storage substrate re-opened on merits
 
-The storage substrate started as an unexamined hard-locked carry-forward. A
-storage-engine evaluation (ratified 2026-06-07, after the 2026-05-24 substrate spec lock)
-re-opened it on merits, and the result is folded in here: **PostgreSQL ratified on merits, behind an
-engine-agnostic swappable `Storage` trait** (one implementation), **V0 embedded Postgres**,
-**A1-clean V0 stack**, and **TimescaleDB demoted** off the V0 stack to a latency/storage
-trip-wire (the V0 time-series *storage shape* is plain timestamped Postgres tables). The
-substrate constraint row above is updated; the decision lives in
-[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md).
+The storage substrate was originally an unexamined hard-locked carry-forward from an earlier draft. A storage-engine evaluation (ratified 2026-06-07, after the 2026-05-24 substrate spec lock) re-opened it on its merits. Four points came out of that review, folded in here:
 
-**Observability re-derived 2026-06-09 (E1 dispositioned = re-derive now).** D8's demote
-reached the observability metrics/events surfaces, which P-0004 had committed to TimescaleDB
-hypertables in the app's own Postgres. The maintainer dispositioned that collision (escalation
-E1 in P-0010) by separating observability **generation** from **storage**: the server EMITS
-telemetry (stdout structured logs + OTel metrics/events + health-endpoint-first) from the bare
-shell, storage-independently; it does NOT own where telemetry lands. The observability storage
-backend is deferred behind the separation (option set {Prometheus, InfluxDB, TimescaleDB, plain
-Postgres tables}, named tripwire), not locked; the standalone binary survives (observability
-storage is external operator infra). This was **re-altituded out of the project-ADR layer**:
-observability is a theory trait (the host emits its event stream for infra; never owns the
-service's own observability store) plus chassis mechanics, not a per-project ADR. The decision
-lives as the **[observability baseline](#observability) in this overview** (a theory-trait
-baseline); the original observability ADR [P-0004](../adrs/P-0004-observability-shape.md) is
-`deprecated` (its storage core falsified by D8; no successor ADR). The data-flow diagram (former
-`DS-ts-*` / `DS-pg-logs` nodes → a telemetry-egress sink), the quality-attribute observability
-scenarios, and the observability threat rows are re-derived around emission below. There is no
-in-app observability store at V0.
+- PostgreSQL ratified on its merits, behind an engine-agnostic swappable `Storage` trait (currently one implementation)
+- V0 engine is embedded Postgres
+- V0 stack is A1-clean
+- TimescaleDB demoted off the V0 stack to a latency/storage trip-wire (the V0 time-series *storage shape* is plain timestamped Postgres tables)
+
+The substrate constraint row above reflects this update; the decision lives in [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md).
+
+**Observability re-derived 2026-06-09 (escalation E1 dispositioned as: re-derive now).** D8's demotion of TimescaleDB reached the observability metrics and events surfaces, which the earlier ADR P-0004 had committed to TimescaleDB hypertables inside the app's own Postgres. The maintainer resolved that collision (escalation E1 in P-0010) by separating observability **generation** from **storage**. The server emits telemetry (stdout structured logs plus OTel metrics and events, with the health endpoint first) from the bare shell, storage-independently. It doesn't own where that telemetry lands. The observability storage backend is deferred behind that separation (the option set is Prometheus, InfluxDB, TimescaleDB, or plain Postgres tables, gated by a named tripwire) rather than locked. The standalone binary survives either way, since observability storage is external operator infrastructure.
+
+This decision was also **re-altituded out of the project-ADR layer**: observability is a theory trait (the host emits its event stream for infra and never owns the service's own observability store) plus chassis mechanics, not a per-project ADR. It now lives as the **[observability baseline](#observability)** in this overview (a theory-trait baseline). The original observability ADR [P-0004](../adrs/P-0004-observability-shape.md) is `deprecated`: its storage core was falsified by D8, and it has no successor ADR. Below, the data-flow diagram (the former `DS-ts-*` / `DS-pg-logs` nodes become a telemetry-egress sink), the quality-attribute observability scenarios, and the observability threat rows are all re-derived around emission. There is no in-app observability store at V0.
 
 ### Reframed since 2026-05-03
 
-The 2026-05-03 constraints draft listed a separate "External" block containing pre-
-announce target dates, an alpha invite-only target date, time-budget figures, a $0 budget
-figure, and a kill criterion. These are removed from the constraint inventory here for two
-reasons. First, the brief's Hard constraints explicitly state that architecture **MUST
-NOT** be schedule-pressured and that dates appearing in marketing or landing material are
-not architectural inputs. Second, the kill criterion and time-budget are commercial
-inputs. The brief carves commercial validation thresholds to a separate internal record
-and explicitly does not inline them. If any of these surface as architectural inputs at
-the Spec stage (for example, a trip-wire), they'll be re-introduced with the trip-wire
-specifically named, per the workspace deferral-trip-wire discipline.
+The 2026-05-03 constraints draft listed a separate "External" block containing pre-announce target dates, an alpha invite-only target date, time-budget figures, a $0 budget figure, and a kill criterion. Those are removed from the constraint inventory here, for two reasons. First, the brief's Hard constraints state explicitly that architecture **MUST NOT** be schedule-pressured, and that dates appearing in marketing or landing material aren't architectural inputs. Second, the kill criterion and time-budget are commercial inputs: the brief carves commercial validation thresholds out to a separate internal record and explicitly doesn't inline them here. Where any of these resurface as architectural inputs at the Spec stage (a trip-wire, for instance), they'll come back with the trip-wire specifically named, per the workspace's deferral-trip-wire discipline.
 
 ### Negotiable
 
-The constraint surface still under Spec-stage decomposition lives in the Frame's "Open ADR
-slots" section. Each candidate ADR is named with a `{{P-XXX}}` placeholder; the Spec
-stage authors them in tiered order (substrate-unblocking first, then migration mechanics,
-then operational hardening).
+The constraint surface still under Spec-stage decomposition lives in the Frame document's "Open ADR slots" section. Each candidate ADR is named with a `{{P-XXX}}` placeholder, and the Spec stage authors them in tiered order: substrate-unblocking first, then migration mechanics, then operational hardening.
 
 ## Quality-attribute utility tree
 
-Six axes. Four of these are workspace core values; two are mnemra-specific non-functional
-requirements that surfaced as load-bearing in V0 discovery. Reversibility is folded into
-conflict-resolution discipline (cutover rollback path preserved per V0 discovery WC.x)
-rather than scored as its own axis.
+Six axes make up the tree. Four are workspace core values; two are mnemra-specific non-functional requirements that surfaced as load-bearing during V0 discovery. Reversibility isn't scored as its own axis: it's folded into conflict-resolution discipline (the cutover rollback path preserved per V0 discovery WC.x).
 
 ### Security (load-bearing — multi-tenancy is structural)
 
@@ -162,23 +117,22 @@ rather than scored as its own axis.
 
 ### Observability
 
-**Observability baseline (theory trait — re-altituded 2026-06-09, E1 dispositioned).** Observability is a base-platform **theory trait plus chassis mechanics, not a per-project ADR**: the host emits its event stream for infra (stdout structured logs + OTel metrics/events + a health endpoint), storage-independently from the bare shell, and **never owns the service's own observability store**. Generation is separated from storage. The server emits; *where* telemetry lands is the operator's choice behind the separation (option set {Prometheus, InfluxDB, TimescaleDB, plain Postgres tables}, named tripwire), deferred and not in the binary at V0. This baseline is the home for the V0 observability generation decisions; the original observability ADR [P-0004](../adrs/P-0004-observability-shape.md) is `deprecated` (no successor ADR — its storage core was falsified by D8). The scenarios below are generation-side. They hold whatever sink, if any, the operator chooses.
+**Observability baseline (a theory trait, re-altituded 2026-06-09 when escalation E1 was dispositioned).** Observability is a base-platform **theory trait plus chassis mechanics, not a per-project ADR**. The host emits its event stream for infrastructure (stdout structured logs, OTel metrics and events, and a health endpoint), storage-independently from the bare shell, and it **never owns the service's own observability store**. Generation is separated from storage: the server emits, and *where* the telemetry lands is the operator's choice, deferred behind that separation (the option set is Prometheus, InfluxDB, TimescaleDB, or plain Postgres tables, gated by a named tripwire) and not baked into the binary at V0. This baseline is the home for the V0 observability generation decisions. The original observability ADR [P-0004](../adrs/P-0004-observability-shape.md) is `deprecated`, with no successor ADR, because its storage core was falsified by D8. The scenarios below are generation-side: they hold regardless of whatever sink, if any, the operator chooses.
 
-> **Storage-backend tripwire (named instrument, P-Defer/DF1).** A persistent observability store is adopted when persistent observability storage becomes load-bearing for a real operator deployment (telemetry must survive process restart, or be queried historically beyond what stdout retention plus the scrape target already provide). Until then the bare shell carries none. The *generation mechanism* (the emission call sites, the metric/event/log floor) routes to the chassis when `chassis new` lands; until then it's a documented invariant on the build. This defer-until-evidence pattern is [P-Defer](../glossary.md#p-defer) (defer mechanism choice until evidence forces it).
+> **Storage-backend tripwire (named instrument, P-Defer/DF1).** P-Defer is the workspace principle of deferring a mechanism choice until evidence forces it; DF1 names this specific instance. A persistent observability store gets adopted once persistent observability storage becomes load-bearing for a real operator deployment (telemetry needs to survive a process restart, or be queried historically beyond what stdout retention and the scrape target already provide). Until then, the bare shell carries none. The *generation mechanism* (the emission call sites, the metric/event/log floor) moves to the chassis once `chassis new` lands; until then it's a documented invariant on the build.
 
-> **Capability-manifest invariant (settled — generated-from-WIT, never hand-maintained).** The host's capability manifest — the machine-readable surface describing the host functions and verbs the host exposes — is **generated from the WIT interface definitions, never hand-maintained**, so it cannot drift from the actual ABI. This is a settled invariant at V0, not a live fork. Its *generation mechanism* (the build-time WIT → manifest step) routes to the chassis with a named tripwire: when `chassis new` exists, the manifest-generation step lands there; until then it's a documented invariant on the build. (Distinct from the per-plugin signed manifest at [P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md). That is a plugin's *declaration* of the surface it requires; this is the host's *generated* description of the surface it offers.)
+> **Capability-manifest invariant (settled: generated from WIT, never hand-maintained).** The host's capability manifest (the machine-readable surface describing the host functions and verbs the host exposes) is **generated from the WIT interface definitions, never hand-maintained**, so it can't drift from the actual ABI. This is a settled invariant at V0, not a live fork. Its *generation mechanism* (the build-time WIT → manifest step) moves to the chassis with a named tripwire: once `chassis new` exists, the manifest-generation step lands there; until then it's a documented invariant on the build. (This is distinct from the per-plugin signed manifest at [P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md), which is a plugin's *declaration* of the surface it requires. This capability manifest is the host's *generated* description of the surface it offers.)
 
 | Refinement | Scenario |
 |---|---|
-| Per-verb metrics (emitted) | After a dogfood session, the per-verb metric records emitted to the OTel/stdout surface carry `workspace_id`, `verb`, `outcome`, `duration_ms`; p50 / p95 / p99 per verb are derivable from the emitted `duration_ms` values (computed at the operator-chosen sink — there is no in-app metrics hypertable). |
+| Per-verb metrics (emitted) | After a dogfood session, the per-verb metric records emitted to the OTel/stdout surface carry `workspace_id`, `verb`, `outcome`, `duration_ms`; p50 / p95 / p99 per verb are derivable from the emitted `duration_ms` values (computed at the operator-chosen sink; there is no in-app metrics hypertable). |
 | Storage-independent emission | With no persistent observability backend configured, N MCP verb calls produce N observable metric emissions on the OTel/stdout surface; `\d+` shows no metrics/events hypertable and `\dx` does not list `timescaledb`. |
 | Generation at the bare shell | A structured log line appears on stdout and `GET /health` returns a response *before* the embedded Postgres is initialized (health endpoint is the first API). |
-| Health-endpoint shape | A request to `/health` returns a structured detail body identifying which dependency failed (Postgres reachable / `pgvector` loaded / workspace=default exists), e.g. 503 when a dependency is down. The listener binds loopback-only (`127.0.0.1`) at V0, so **loopback IS the gate** — every caller is necessarily on loopback and receives the detail body; there is no admin-token gating at V0. *(Named tripwire: if the `/health` listener ever binds non-loopback, admin-token gating on the detail body becomes required.)* |
+| Health-endpoint shape | A request to `/health` returns a structured detail body identifying which dependency failed (Postgres reachable / `pgvector` loaded / workspace=default exists), e.g. 503 when a dependency is down. The listener binds loopback-only (`127.0.0.1`) at V0, so **loopback IS the gate**: every caller is necessarily on loopback and receives the detail body, and there is no admin-token gating at V0. *(Named tripwire: if the `/health` listener ever binds non-loopback, admin-token gating on the detail body becomes required.)* |
 
 ### ABI evolution discipline (mnemra-NFR)
 
-Load-bearing once third-party plugin install activates at V0.1+; the V0 work that hardens
-this is the discipline of marking each host function with a stability tier.
+This becomes load-bearing once third-party plugin install activates at V0.1+. The V0 work that hardens it now is the discipline of marking each host function with a stability tier.
 
 | Refinement | Scenario |
 |---|---|
@@ -194,11 +148,7 @@ this is the discipline of marking each host function with a stability tier.
 
 ## Data-flow diagram
 
-The data-flow diagram below uses D2 (the project's chosen graph format per the project
-defaults — mdBook + D2 + Mermaid wiring is at `G-0026`). Each typed element ID
-(`TB-*` trust boundary, `EE-*` external entity, `P-*` process inside the host,
-`DS-*` data store, edge labels `DF-*`) is targetable for STRIDE-per-element annotations
-at the terminal-review threat-modeling pass.
+The data-flow diagram below uses D2 (the project's chosen graph format per the project defaults; the mdBook + D2 + Mermaid wiring decision is recorded at `G-0026`, a workspace-wide architecture decision). Each typed element ID (`TB-*` for a trust boundary, `EE-*` for an external entity, `P-*` for a process inside the host, `DS-*` for a data store, and edge labels `DF-*`) is targetable for STRIDE-per-element annotations at the terminal-review threat-modeling pass.
 
 ```d2
 direction: down
@@ -456,51 +406,18 @@ TB-mnemra-host.P-health-handler -> TB-postgres.DS-pg-content: "DF-health-probe"
 
 ### Notes on the diagram
 
-- **REST surface is deliberately absent.** V0 has no REST surface; admin operations route
-  through the admin CLI's local IPC, agent operations route through MCP. The plugin-
-  defined REST routes from the earlier alignment record (round 1 deferred) and any admin
-  REST from predecessor specs are not present at V0. A REST surface lands at V0.1+ if and
-  when streamable-HTTP MCP transport activates (the microVM appliance trip-wire).
-- **External authorization server is absent at V0.** V0 dogfood uses the static admin
-  token at the filesystem secrets boundary. OIDC AS integration is V0.1+ (brief idea-tier
-  entry).
-- **Builtin components are inside the host process, not in the plugin sandbox.** The
-  seven `P-builtin-*` nodes (`P-builtin-projects`, `P-builtin-agents`,
-  `P-builtin-workspaces`, `P-builtin-auth`, `P-builtin-users`, `P-builtin-sessions`,
-  `P-builtin-permissions`) execute as host code. This corrects the predecessor framing
-  where projects and agents were drawn as plugins inside `TB-plugin-sandbox`. The
-  corrected framing aligns with the locked brief's `0.1.0` substrate description and the
-  Frame's enumeration of builtins (Workspace, Users, Agents, Authentication, Agent
-  sessions, Per-plugin permissions, Projects).
-- **The persisted storage shapes are visible; observability is emitted, not stored in-app.**
-  Content (`DS-pg-content`) and state (`DS-pg-state`) substrates are regular Postgres tables —
-  the two persisted shapes at V0. *(Re-derived 2026-06-09 per the [observability
-  baseline](#observability):
-  the former timeseries (`DS-ts-metrics`, `DS-ts-events`) and log (`DS-pg-logs`) shapes are
-  observability **emission** surfaces — the host emits structured logs to stdout and OTel
-  metrics/events to a configurable export, drawn as the external `TB-obs-sink` telemetry-egress
-  node. They are NOT in-app Postgres storage; the storage backend is the operator's choice
-  behind the generation⊥storage separation, deferred and not in the binary at V0.)*
-- **The trust boundary `TB-build-pipeline` is conceptual.** The signing authority operates
-  at build time; runtime sees the signature, not the key. Custody of the actual key
-  material (whether it lives on the deployment node, in an HSM, is fetched at runtime, or
-  is never on the node at all) is the open ADR slot `{{P-SigningKeyCustodyHardening}}`
-  (Tier C; activated by the `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` multi-deployment trip-wire).
-- **External LLM is for embeddings only.** Per the brief's Hard constraints, mnemra-core
-  MUST NOT host a language model. The embeddings call out to an external provider via the
-  embedding-batch pathway (`DF-embed-call`): artifact content is routed through host
-  functions, batched, and sent to the configured provider's embedding endpoint; resulting
-  vectors are written into the projection substrate. The API key configuration surface is
-  folded into `0.1.0` (brief T-5 resolution). MCP sampling (`DF-sampling-up`) is the
-  separate path by which plugins ask the connected agent's MCP client to run an LLM
-  completion; the LLM provider that completion uses is external to mnemra-core.
+- **REST surface is deliberately absent.** V0 has no REST surface. Admin operations route through the admin CLI's local IPC; agent operations route through MCP. The plugin-defined REST routes from the earlier alignment record (round 1, deferred) and any admin REST from predecessor specs aren't present at V0. A REST surface lands at V0.1+ if and when streamable-HTTP MCP transport activates (the microVM appliance trip-wire).
+- **External authorization server is absent at V0.** V0 dogfood uses the static admin token at the filesystem secrets boundary. OIDC AS integration is V0.1+ (a brief idea-tier entry).
+- **Builtin components live inside the host process, not in the plugin sandbox.** The seven `P-builtin-*` nodes (`P-builtin-projects`, `P-builtin-agents`, `P-builtin-workspaces`, `P-builtin-auth`, `P-builtin-users`, `P-builtin-sessions`, `P-builtin-permissions`) execute as host code. This corrects the predecessor framing, where projects and agents were drawn as plugins inside `TB-plugin-sandbox`. The corrected framing aligns with the locked brief's `0.1.0` substrate description and the Frame document's enumeration of builtins: Workspace, Users, Agents, Authentication, Agent sessions, Per-plugin permissions, Projects.
+- **The persisted storage shapes are visible; observability is emitted, not stored in-app.** Content (`DS-pg-content`) and state (`DS-pg-state`) substrates are regular Postgres tables: the two persisted shapes at V0. *(Re-derived 2026-06-09 per the [observability baseline](#observability): the former timeseries (`DS-ts-metrics`, `DS-ts-events`) and log (`DS-pg-logs`) shapes are observability **emission** surfaces. The host emits structured logs to stdout and OTel metrics/events to a configurable export, drawn as the external `TB-obs-sink` telemetry-egress node. They are NOT in-app Postgres storage. The storage backend is the operator's choice behind the generation⊥storage separation (generation kept independent of storage), deferred and not in the binary at V0.)*
+- **The trust boundary `TB-build-pipeline` is conceptual.** The signing authority operates at build time; runtime sees only the signature, not the key. Custody of the actual key material (whether it lives on the deployment node, in an HSM, is fetched at runtime, or is never on the node at all) is the open ADR slot `{{P-SigningKeyCustodyHardening}}` (Tier C, activated by the [P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md) multi-deployment trip-wire).
+- **External LLM use is for generative work only; embeddings and reranking run locally (MODIFIED 2026-07-02 per RC-1, the retrieval-cluster intake's model-hosting amendment; this bullet is the named lagging copy of the brief's ELT external-embedding framing, reconciled here).** Per the amended Hard constraints, mnemra-core MUST NOT host a *generative* LLM. Local *non-generative* inference (BGE-M3 embedding, BGE-reranker reranking: encoder models behind the host-fn seam) runs host-side and never egresses. What calls out to the external provider are the four generative placements of the retrieval cluster: index-time chunk-context and tag generation, and query-time HyDE rewrite and optional synthesis. Each is policy-gated at the model-egress gate, individually disable-able, and bounded, so the zero-egress configuration (all four OFF) is a supported V0 configuration. The API key configuration surface stays folded into `0.1.0` (brief T-5 resolution) and now serves these generative call-outs.
+
+  The drawn DFD below still shows the pre-RC-1 `DF-embed-call` flow and the `EE-llm-provider` "(embeddings endpoint)" label. The retyped elements for the retrieval cluster (the four `DF-egress-4.x` flows crossing `TB-external-llm`, the `EE-model-artifact-source` entity, and the new retrieval processes and stores) are recorded in [P-0014's typed-DFD extension](../adrs/P-0014-retrieval-architecture.md). The diagram and threat tables get redrawn against that extension when the retrieval cluster's pre-implementation security review updates this overview (a named follow-up; the prose in this file is reconciled now). MCP sampling (`DF-sampling-up`) is a separate path: it's how plugins ask the connected agent's MCP client to run an LLM completion, and the LLM provider that completion uses is external to mnemra-core.
 
 ## Threats by data-flow element
 
-Populated by the Stage 2 terminal security review (2026-05-22) per the workspace
-threat-modeling skill. Each row keys on a typed DFD element ID above and applies
-STRIDE-per-element discipline. The element-type relevance bar is applied — categories
-not applicable to an element type are skipped rather than padded.
+Populated by the Stage 2 terminal security review (2026-05-22) per the workspace threat-modeling skill. Each row keys on a typed DFD element ID from above and applies STRIDE-per-element discipline. The element-type relevance bar is applied: categories that don't apply to a given element type are skipped rather than padded out.
 
 | Element type | Applicable STRIDE |
 |---|---|
@@ -509,11 +426,7 @@ not applicable to an element type are skipped rather than padded.
 | Data stores (`DS-*`) | T, R, I, D |
 | Data flows (`DF-*`) | T, I, D |
 
-The table below extends the placeholder column set with **Severity** and **Confidence**
-(0–100) per the workspace threat-modeling discipline. Severity vocabulary is
-Critical/High/Medium/Low. The Mitigation column references the Frame's Open ADR Slot IDs
-(`{{P-XXX}}`) when one already covers the control class; new slots are flagged
-`{{P-XXX — new}}` to surface them as Spec-stage follow-ups.
+The table below extends the placeholder column set with **Severity** and **Confidence** (0 to 100) per the workspace threat-modeling discipline. Severity vocabulary is Critical, High, Medium, or Low. The Mitigation column references the Frame document's Open ADR Slot IDs (`{{P-XXX}}`) when one already covers the control class; new slots are flagged `{{P-XXX — new}}` to surface them as Spec-stage follow-ups.
 
 | Element ID | STRIDE | Threat | Severity | Confidence | Mitigation candidate |
 |---|---|---|---|---|---|
@@ -522,7 +435,7 @@ Critical/High/Medium/Low. The Mitigation column references the Frame's Open ADR 
 | `EE-specialist-agent` | S | A specialist runs under a delegated session and is impersonated by another specialist sharing the same workspace token; sub-agent identity is not distinguishable from the orchestrator's identity at the host. | Medium | 70 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (per-agent token derivation); designed-for at session model |
 | `EE-specialist-agent` | R | A specialist's destructive write is not attributable beyond "agent inside workspace X" because the MCP session does not name the specific specialist. | Medium | 70 | Same as `EE-orchestrator-agent`/R |
 | `EE-operator` | S | A second user on the deployment host reads the admin token file (file-mode regression, backup-tooling leak, accidental world-readable mode after restore) and impersonates the operator. | Critical | 80 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (token rotation, file-mode invariant check at startup); `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` informs the V0 secrets-management posture; `{{P-SigningKeyCustodyHardening}}` for production-grade secrets posture |
-| `EE-operator` | R | An operator runs a destructive admin operation (`drop-workspace`, force-restore-overwrite) and denies it; the operator's identity is the local UNIX user — no second factor, no audit trail beyond OS audit. | High | 75 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (admin-action audit log; tie destructive ops to a distinct audit event); accepted-risk R-0006 if deferred |
+| `EE-operator` | R | An operator runs a destructive admin operation (`drop-workspace`, force-restore-overwrite) and denies it; the operator's identity is the local UNIX user: no second factor, no audit trail beyond OS audit. | High | 75 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (admin-action audit log; tie destructive ops to a distinct audit event); accepted-risk R-0006 if deferred |
 | `EE-mnemra-root` | S | A compromised CI environment forges a "mnemra-root-signed" plugin artifact, and the runtime accepts it because signature verification uses a key the attacker controls. | Critical | 70 | `{{P-SigningKeyCustodyHardening}}` (key isolation; ceremony; offline-root pattern); separate from runtime entirely |
 | `EE-mnemra-root` | R | A signing event is non-repudiable only if signing is logged; absent a transparency log of signed plugins, a malicious "core: true" plugin could be denied as ever having been signed. | Medium | 60 | `{{P-SigningKeyCustodyHardening}}` (transparency log; sigsum or rekor-style append-only signing log) |
 | `EE-llm-provider` | S | The host fetches embeddings from a TLS endpoint that an attacker has positioned as the configured provider (DNS rebind, typo-squatted hostname, untrusted CA injection); embeddings are tampered or harvested for content-corpus reconstruction. | High | 70 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` + outbound HTTPS pinning policy (cert pin or trusted-CA bundle declared in config); LLM-API-key surface in `0.1.0` ships hostname allowlist |
@@ -530,27 +443,27 @@ Critical/High/Medium/Low. The Mitigation column references the Frame's Open ADR 
 | `P-mcp-handler` | S | A bogus MCP client presents a forged token; the handler accepts because it does not bind the token to an authenticated session and does not consult `P-builtin-auth` on every request. | Critical | 85 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (mandatory `DF-auth-check` on every request; per-request token verification with replay defense) |
 | `P-mcp-handler` | T | A stdin-fed MCP request injects oversized or malformed JSON-RPC that breaks the parser into a non-conforming state; subsequent requests on the same stream are routed incorrectly. | High | 70 | `{{P-MCPWriteSemantics}}` (input-size cap, framing-error fail-shut, structured `parse_error` JSON-RPC code); explicit MCP 2025-06-18 input validation |
 | `P-mcp-handler` | I | A correctly-authenticated workspace-A token issues a verb whose handler's query was malformed; without RLS policy enforcement at V0, workspace-B rows surface in the response. | Critical | 85 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (RLS policy enforcement at V0.1+; column-shape at V0); pre-mitigation: a workspace-scope-on-every-query lint and integration test in the host-fn surface |
-| `P-mcp-handler` | D | An adversarial client floods stdio with verbs that exercise the most-expensive code path (vector search, projection rebuild) — single connection, no rate limit. | High | 75 | `{{P-MCPWriteSemantics}}` (per-session rate limit; cost-aware queueing); observability ships from `0.1.0` so the floor is detectability |
+| `P-mcp-handler` | D | An adversarial client floods stdio with verbs that exercise the most-expensive code path (vector search, projection rebuild), from a single connection, with no rate limit. | High | 75 | `{{P-MCPWriteSemantics}}` (per-session rate limit; cost-aware queueing); observability ships from `0.1.0` so the floor is detectability |
 | `P-mcp-handler` | E | An MCP verb invokes a host function that was meant for control-plane only (e.g., a debug-only "dump tokens" verb left exposed by a builtin's manifest mis-declaration); the agent gains operator-level capability. | High | 65 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (verb-to-capability allowlist; control-plane verbs not exposed via MCP); compile-time enforcement preferred |
 | `P-cli-handler` | S | A second process on the host invokes the CLI as the operator user; OS-level checks alone (the UID match) accept it. | Medium | 70 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (admin token mandatory for destructive ops; OS-uid alone is insufficient gate) |
-| `P-cli-handler` | T | A CLI argv injection arises when a subcommand interpolates a parameter into a Postgres role-management call (`role-grant`, `workspace-create`) without escaping. | High | 70 | `{{P-MCPWriteSemantics}}` covers MCP write semantics; CLI surface needs its own parameter-binding discipline — surface as `{{P-AdminCLIDiscipline — new}}` |
+| `P-cli-handler` | T | A CLI argv injection arises when a subcommand interpolates a parameter into a Postgres role-management call (`role-grant`, `workspace-create`) without escaping. | High | 70 | `{{P-MCPWriteSemantics}}` covers MCP write semantics; CLI surface needs its own parameter-binding discipline: surface as `{{P-AdminCLIDiscipline — new}}` |
 | `P-cli-handler` | E | A schema-driven dynamic subcommand generated from a malicious or mis-declared plugin manifest exposes a destructive op (`migrate-overwrite`) at the operator CLI without intent. | High | 70 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (manifest validation; capability tier on subcommands; destructive ops behind an explicit confirmation gate); `core: true` only for the V0 dogfood path |
-| `P-host-fns` | T | A host-fn writes content with caller-supplied `workspace_id` rather than deriving it from the session — a plugin (or builtin) supplies an attacker-chosen value and writes into a foreign workspace. | Critical | 90 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` + `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (host derives `workspace_id` from the session/token; ABI MUST NOT accept `workspace_id` as a parameter on write paths); structural invariant |
+| `P-host-fns` | T | A host-fn writes content with caller-supplied `workspace_id` rather than deriving it from the session: a plugin (or builtin) supplies an attacker-chosen value and writes into a foreign workspace. | Critical | 90 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` + `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (host derives `workspace_id` from the session/token; ABI MUST NOT accept `workspace_id` as a parameter on write paths); structural invariant |
 | `P-host-fns` | I | A read-side host-fn returns rows that pass workspace-scope but include columns the plugin has no manifest declaration for; cross-content-type leak inside one workspace. | High | 70 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (per-plugin column projection; manifest declares readable columns; host-fn enforces) |
 | `P-host-fns` | E | A host-fn intended for a `core: true` plugin (e.g., `mnemra.workspace.add_user`) is callable from a non-core plugin because the ABI does not key on plugin identity. | Critical | 80 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (per-plugin host-fn allowlist keyed on signed manifest; non-core plugin's allowlist is a strict subset) |
-| `P-host-fns` | R | Embedding-call (`DF-embed-call`) traffic carrying artifact-derived inputs lacks a structured trail tying which workspace's content was sent to which external request. | Medium | 65 | [observability baseline](#observability) (per-egress audit event *emitted* with `(workspace_id, artifact_id, provider_hostname)` — generation-side, lands in the operator-chosen sink) |
-| `P-migration-handler` | T | Migration writes to substrate tables (`DS-pg-content`, `DS-pg-state`) using a privileged DB role; if migration is re-runnable, an attacker who can trigger it could mass-corrupt content under cover of "resume from checkpoint." *(Re-derived 2026-06-09: the former `DS-ts-*`/`DS-pg-logs` in-app stores are gone — migration emits progress/audit telemetry via the egress path per the observability baseline, not in-app storage writes.)* | High | 65 | `{{P-MigrationID}}` + `{{P-CutoverDualWrite}}` (migration gated on admin-token capability; idempotency keyed on per-record manifest, not "rerun whole import") |
+| `P-host-fns` | R | Embedding-call (`DF-embed-call`) traffic carrying artifact-derived inputs lacks a structured trail tying which workspace's content was sent to which external request. | Medium | 65 | [observability baseline](#observability) (per-egress audit event *emitted* with `(workspace_id, artifact_id, provider_hostname)`, generation-side, landing in the operator-chosen sink) |
+| `P-migration-handler` | T | Migration writes to substrate tables (`DS-pg-content`, `DS-pg-state`) using a privileged DB role; if migration is re-runnable, an attacker who can trigger it could mass-corrupt content under cover of "resume from checkpoint." *(Re-derived 2026-06-09: the former `DS-ts-*`/`DS-pg-logs` in-app stores are gone; migration emits progress/audit telemetry via the egress path per the observability baseline, not in-app storage writes.)* | High | 65 | `{{P-MigrationID}}` + `{{P-CutoverDualWrite}}` (migration gated on admin-token capability; idempotency keyed on per-record manifest, not "rerun whole import") |
 | `P-migration-handler` | I | Migration reads source frontmatter that may contain credentials, private-note content, or secrets embedded in markdown; if the migration log captures source content (for debugging), the log becomes a sink for sensitive data. | High | 70 | `{{P-MigrationID}}` + [observability baseline](#observability) (migration log emits IDs and per-record outcome only, never content; redaction at the emission boundary; policy named in the migration spec) |
 | `P-migration-handler` | D | A SIGKILL mid-migration leaves the substrate in a partial state; a re-run that did not consult the per-record progress manifest could re-process records and exhaust connection-pool / disk-space budgets. | Medium | 75 | `{{P-MigrationID}}` (per-record progress manifest mandatory; resume reads manifest first) |
-| `P-backup-handler` | I | The backup stream contains every row of every substrate (including tokens, secrets-stored-as-content, dispatch artifacts) — the backup file is a higher-value compromise target than the live DB. | Critical | 85 | `{{P-BackupRestore}}` (backup encryption-at-rest mandatory; key separate from `DS-admin-token`); access-control on `DS-fs-backup` path |
+| `P-backup-handler` | I | The backup stream contains every row of every substrate (including tokens, secrets-stored-as-content, dispatch artifacts); the backup file is a higher-value compromise target than the live DB. | Critical | 85 | `{{P-BackupRestore}}` (backup encryption-at-rest mandatory; key separate from `DS-admin-token`); access-control on `DS-fs-backup` path |
 | `P-backup-handler` | T | An attacker with write access to `DS-fs-backup` poisons a backup that a future restore consumes (introducing a malicious admin token, a forged workspace, or rewritten `core: true` plugin metadata). | Critical | 80 | `{{P-BackupRestore}}` (backup signed at write; restore verifies signature; round-trip-verify before destructive operations) |
 | `P-backup-handler` | D | An adversary triggers continuous backups (CLI-exposed or scheduled-job-exposed) to exhaust disk space, taking the substrate read-only and the host degraded. | Low | 60 | `{{P-BackupRestore}}` (backup-trigger rate-limit; disk-space precondition check) |
-| `P-health-handler` | I | A health-endpoint detail body leaks substrate state to an unauthenticated probe (extension list, table presence, workspace count). | Medium | 70 | [observability baseline](#observability) (health response shape: the listener binds loopback-only at V0, so **loopback IS the gate** — no non-loopback caller can reach the detail body; named tripwire: if the listener ever binds non-loopback, admin-token gating on the detail body becomes required) |
+| `P-health-handler` | I | A health-endpoint detail body leaks substrate state to an unauthenticated probe (extension list, table presence, workspace count). | Medium | 70 | [observability baseline](#observability) (health response shape: the listener binds loopback-only at V0, so **loopback IS the gate**: no non-loopback caller can reach the detail body; named tripwire: if the listener ever binds non-loopback, admin-token gating on the detail body becomes required) |
 | `P-health-handler` | S | The health endpoint is unauthenticated and shares a transport with MCP; a load-balancer probe could be fabricated and used as an oracle for substrate state. | Low | 55 | [observability baseline](#observability) (separate handler binding for `/health`, the first API on a dedicated loopback-only listener; not on MCP transport at V0 since transport is stdio) |
-| `P-plugin-runtime` | T | A WASM module exploits a Wasmtime sandbox-escape primitive (rare, but the load-bearing assumption — sandbox integrity — is exactly what plugin-IO-free buys); host invariants violated. | High | 50 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` + `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Wasmtime version pinning under SBOM; `core: true` only at V0; supply-chain review on Wasmtime upgrades); see also `{{P-SigningKeyCustodyHardening}}` for production-grade supply-chain hardening |
+| `P-plugin-runtime` | T | A WASM module exploits a Wasmtime sandbox-escape primitive (rare, but the load-bearing assumption, sandbox integrity, is exactly what plugin-IO-free buys); host invariants violated. | High | 50 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` + `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Wasmtime version pinning under SBOM; `core: true` only at V0; supply-chain review on Wasmtime upgrades); see also `{{P-SigningKeyCustodyHardening}}` for production-grade supply-chain hardening |
 | `P-plugin-runtime` | E | A plugin whose signature verification was skipped under a load-time error path (e.g., "key not loaded yet, defer to background") gets executed before verification completes. | Critical | 70 | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (verification is synchronous on plugin load; load fails closed; no "verify-async" path) |
 | `P-plugin-runtime` | D | A plugin infinite-loops or allocates without bound; absent kill-and-replace from the pool, the host hangs the verb. | Medium | 70 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` (per-instance fuel/memory budget; pool kill-and-replace; per-verb timeout) |
-| `P-plugin-runtime` | R | A plugin failure (panic, sandbox abort) is not durably attributed to a specific plugin+version+sig — operator cannot tell which artifact misbehaved across deployments. | Medium | 60 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` + [observability baseline](#observability) (per-plugin-instance event stream *emitted* with signed-artifact identity — generation-side; durability is the operator-chosen sink's) |
+| `P-plugin-runtime` | R | A plugin failure (panic, sandbox abort) is not durably attributed to a specific plugin, version, and signature, so the operator can't tell which artifact misbehaved across deployments. | Medium | 60 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` + [observability baseline](#observability) (per-plugin-instance event stream *emitted* with signed-artifact identity, generation-side; durability belongs to the operator-chosen sink) |
 | `P-plugin-instance` | E | A plugin requests a host-fn (`DF-host-fn-call`) outside its manifest's declared surface; if the host's permission check is at call-time and the plugin's manifest was loaded laxly, the plugin gains a capability it did not declare. | Critical | 80 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (manifest-declared host-fn surface compiled into the per-instance allowlist; calls outside the allowlist fail at the WIT boundary, not at the host-fn body) |
 | `P-plugin-instance` | T | A plugin returns crafted bytes intended to defeat host-side parsing of plugin output (e.g., NUL bytes that desynchronize a downstream JSON serializer, oversized fields that DoS a projection rebuilder). | High | 65 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (host validates plugin output against the WIT-declared schema; size caps per field; parser is fail-shut on schema mismatch) |
 | `P-plugin-instance` | I | A plugin uses `DF-sampling-up` (MCP sampling: plugin → host → MCP client's LLM) to exfiltrate content from one workspace into a prompt the connected agent's LLM provider sees, even though the plugin had no outbound network. | High | 75 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (manifest declares `sampling: allowed/denied`; if allowed, content fields the plugin can put in prompts are typed-restricted); at V0.1+ with third-party plugins this becomes Critical |
@@ -559,130 +472,90 @@ Critical/High/Medium/Low. The Mitigation column references the Frame's Open ADR 
 | `P-builtin-workspaces` | E | A workspace-create / workspace-delete verb is exposed to non-admin tokens because the builtin authorizes on workspace-claim presence rather than on a distinct admin scope. | Critical | 75 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (workspace lifecycle ops require admin scope; admin-scope tokens are a strict superset, distinguished by claim) |
 | `P-builtin-projects` | I | Project metadata (project names, repo paths, dispatch-time references) is queryable cross-tenant before RLS policy enforcement; the structural `workspace_id` column is present but reads are not policy-filtered. | High | 75 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (RLS policy enforcement is V0.1+; pre-mitigation at V0 = manual host-side scope check on every read path, lint coverage on absence) |
 | `P-builtin-agents` | R | An agent registration recorded the wrong principal (mis-mapped from token) and later actions are attributed to the wrong agent identity; the audit log records the action but not the discrepancy. | Medium | 60 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (agent identity derivation is canonical at registration; mismatch surfaces a structured error rather than silent registration) |
-| `DS-pg-content` | T | A SQL-injection-style write through a host-fn that interpolates a content field into a query body — content-typed columns are not the obvious vector; metadata-typed (e.g., tag-name) columns are. | Critical | 70 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` + `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` (parameterized queries only; metadata fields normalized + length-capped; type-tightening at host-fn boundary) |
+| `DS-pg-content` | T | A SQL-injection-style write through a host-fn that interpolates a content field into a query body. Content-typed columns aren't the obvious vector here; metadata-typed columns (e.g., tag-name) are. | Critical | 70 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` + `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` (parameterized queries only; metadata fields normalized + length-capped; type-tightening at host-fn boundary) |
 | `DS-pg-content` | I | Direct DB access from a process other than `P-host-fns` (a misconfigured backup tool with read-anywhere role, an operator with full Postgres credentials, a future read-replica without RLS) returns cross-workspace rows. | High | 75 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (RLS column-shape ships V0; policy enforcement at V0.1+); deployment-side: separate DB role per host process, least-privilege |
 | `DS-pg-content` | R | Content deletions or modifications are not recorded with prior-value snapshots; an operator-issued destructive op is repudiable as "the agent did it." | Medium | 65 | `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` + `{{P-FKPreservation}}` (immutable activity log per write; prior-value capture for destructive ops; ties to `0.5.0` activity log) |
 | `DS-pg-content` | D | A pathological projection rebuild triggered by a content write storms the substrate, blocking reads on `DS-pg-projections` (and indirectly `DS-pg-content` via FK consistency checks). | Medium | 65 | `{{P-ProjectionRebuild}}` (rebuild queueing; backpressure; out-of-band rebuild path) |
 | `DS-pg-state` | T | State writes from a builtin (e.g., agent-session state) interleave with concurrent CLI writes (e.g., admin token rotation), producing torn state that no constraint catches. | Medium | 65 | `{{P-MCPWriteSemantics}}` (OCC or transactional discipline on state shape; constraint-checked writes only) |
-| `DS-pg-projections` | I | A projection contains denormalized content from cross-tenant sources (a vector index over content not partitioned by workspace) — a query inadvertently reaches it. | High | 70 | `{{P-ProjectionRebuild}}` + `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (projections partitioned by workspace; vector indexes keyed on `(workspace_id, vector)`) |
-| `DS-ts-metrics` (emitted metric records) | I | Emitted metric records include verb names, argument shapes (low-card sketches), and per-tenant counts; a sink that mixes tenants leaks usage patterns cross-tenant. | Medium | 65 | [observability baseline](#observability) (`workspace_id` on every emitted metric record — the tenant dimension is emission-side, so the operator's sink can partition; no in-app hypertable to cross-query); `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (admin-tier visibility distinct) |
-| `DS-ts-events` (emitted event records) | T | Event-shape evolution is uncontrolled (new event-types from new capability families) and downstream consumers misread old events when types are reused. | Medium | 60 | [observability baseline](#observability) (versioned event schema; `event_version` field — an emission-side invariant; backward-compatible additions only without explicit migration) |
-| `DS-ts-events` (emitted event records) | I | Dispatch events capture content fragments in their description / payload (the dogfood telemetry-no-leak AC is a check, not a structural barrier). | Medium | 70 | Accepted-risk R-0005 at V0 (dogfood AC); [observability baseline](#observability) (typed event payload, content-IDs only, never bodies — emission-side, holds whatever the sink) |
-| `DS-pg-logs` (emitted stdout logs) | I | Emitted logs include token fragments, query strings with PII content, or stack traces with workspace identifiers; a log-tail-as-debugging affordance leaks across tenants if logs are not workspace-scoped. | Medium | 70 | [observability baseline](#observability) (`workspace_id` on every tenant-scoped emitted log record; redaction at the emission/log-write boundary for high-entropy strings — emission-side, regardless of sink) |
+| `DS-pg-projections` | I | A projection contains denormalized content from cross-tenant sources (a vector index over content not partitioned by workspace), and a query inadvertently reaches it. | High | 70 | `{{P-ProjectionRebuild}}` + `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (projections partitioned by workspace; vector indexes keyed on `(workspace_id, vector)`) |
+| `DS-ts-metrics` (emitted metric records) | I | Emitted metric records include verb names, argument shapes (low-card sketches), and per-tenant counts; a sink that mixes tenants leaks usage patterns cross-tenant. | Medium | 65 | [observability baseline](#observability) (`workspace_id` on every emitted metric record: the tenant dimension is emission-side, so the operator's sink can partition; there's no in-app hypertable to cross-query); `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (admin-tier visibility distinct) |
+| `DS-ts-events` (emitted event records) | T | Event-shape evolution is uncontrolled (new event-types from new capability families) and downstream consumers misread old events when types are reused. | Medium | 60 | [observability baseline](#observability) (versioned event schema; `event_version` field, an emission-side invariant; backward-compatible additions only, without explicit migration) |
+| `DS-ts-events` (emitted event records) | I | Dispatch events capture content fragments in their description / payload (the dogfood telemetry-no-leak AC is a check, not a structural barrier). | Medium | 70 | Accepted-risk R-0005 at V0 (dogfood AC); [observability baseline](#observability) (typed event payload, content-IDs only, never bodies; emission-side, so it holds regardless of the sink) |
+| `DS-pg-logs` (emitted stdout logs) | I | Emitted logs include token fragments, query strings with PII content, or stack traces with workspace identifiers; a log-tail-as-debugging affordance leaks across tenants if logs are not workspace-scoped. | Medium | 70 | [observability baseline](#observability) (`workspace_id` on every tenant-scoped emitted log record; redaction at the emission/log-write boundary for high-entropy strings; emission-side, regardless of sink) |
 | `DS-admin-token` | I | The admin token file is read by a backup process whose role has read-everywhere and writes the token into the backup stream in clear; the backup file then carries the admin secret. | Critical | 80 | `{{P-BackupRestore}}` (secrets excluded from backups by path policy; or backups encrypted with a separate key, not the admin token) |
 | `DS-admin-token` | T | A second process on the host overwrites the admin token file (e.g., a misbehaving config tool); the host accepts the new token because it is read on-demand. | High | 70 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (token-file inode pinning at startup; modification fail-shut, with explicit rotation operation) |
-| `DS-admin-token` | R | Operator-side rotation of the admin token is not logged structurally; rotation events cannot be audited after the fact. | Low | 60 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (rotation is a CLI verb that emits a structured rotation event — destination per the [observability baseline](#observability) — and writes the activity log) |
-| `DS-mnemra-root-key` | I | The signing key material lives on the deployment node (the V0 dogfood position); a host-read primitive recovers the key, and an attacker thereafter signs forged `core: true` plugins. | Critical | 85 | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (V0: build-host-on-disk for dogfood only; multi-deployment trip-wire fires `{{P-SigningKeyCustodyHardening}}`); `{{P-SigningKeyCustodyHardening}}` (key NOT on deployment node — offline-root + per-release certificate; or HSM-backed) |
+| `DS-admin-token` | R | Operator-side rotation of the admin token is not logged structurally; rotation events cannot be audited after the fact. | Low | 60 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (rotation is a CLI verb that emits a structured rotation event, destination per the [observability baseline](#observability), and writes the activity log) |
+| `DS-mnemra-root-key` | I | The signing key material lives on the deployment node (the V0 dogfood position); a host-read primitive recovers the key, and an attacker thereafter signs forged `core: true` plugins. | Critical | 85 | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (V0: build-host-on-disk for dogfood only; multi-deployment trip-wire fires `{{P-SigningKeyCustodyHardening}}`); `{{P-SigningKeyCustodyHardening}}` (key NOT on deployment node; offline-root plus per-release certificate, or HSM-backed) |
 | `DS-mnemra-root-key` | T | Even if custody is offline, a transitively-trusted intermediate signing key (sub-CA pattern) on the build pipeline could be tampered if the pipeline is compromised. | High | 60 | `{{P-SigningKeyCustodyHardening}}` (build-pipeline integrity invariants; signed pipeline configuration; signing-environment attestation) |
 | `DS-source-taskdb` | T | The migration source is read-only by intent; if migration writes-back (e.g., to mark records "migrated"), an attacker who can modify the source taskdb during migration can replay or rewrite migrated records. | High | 70 | `{{P-MigrationID}}` (source is strictly read-only; migration manifest is mnemra-side; source-side "migrated" markers are out-of-band, not source-side state) |
 | `DS-source-corpus` | I | Source markdown frontmatter contains arbitrary content; if migration logs verbatim source paths and titles, log readers may see internal-project codenames or sensitive identifiers that were never meant to surface in operational telemetry. | Medium | 65 | `{{P-MigrationID}}` + [observability baseline](#observability) (migration log emits derived IDs only; source paths hashed in emitted log lines if needed for resume) |
 | `DS-fs-backup` | I | Backup contents include the full substrate (tokens, secrets, content); same compromise surface as the live DB plus offline-accessibility. | Critical | 85 | `{{P-BackupRestore}}` (encryption-at-rest mandatory; key custody separate from substrate; backup file ACLs explicit) |
 | `DS-fs-backup` | T | An adversary swaps in a poisoned backup; restore consumes it without integrity verification. | Critical | 80 | `{{P-BackupRestore}}` (backup-manifest hash verified before restore; signed manifest if backup-key custody allows) |
-| `DF-mcp-stdio` | T | Stdio framing is non-self-describing; a man-in-the-stream (e.g., a wrapping process the agent invoked) modifies request/response bytes after the handshake. | Medium | 60 | `{{P-MCPWriteSemantics}}` (transport hardening — stdio at V0 trusts the spawning process; streamable-HTTP V0.1+ ships TLS) |
+| `DF-mcp-stdio` | T | Stdio framing is non-self-describing; a man-in-the-stream (e.g., a wrapping process the agent invoked) modifies request/response bytes after the handshake. | Medium | 60 | `{{P-MCPWriteSemantics}}` (transport hardening: stdio at V0 trusts the spawning process; streamable-HTTP at V0.1+ ships TLS) |
 | `DF-mcp-stdio` | I | The same wrapper observes content responses; at V0 stdio there is no transport-level confidentiality. | Medium | 60 | Accepted-risk R-0003 (stdio-only at V0; transport confidentiality lands with `{{P-MCPWriteSemantics}}` and V0.1+ streamable-HTTP) |
 | `DF-host-fn-call` | T | Host-fn arguments are passed as raw bytes the host trusts to be well-typed; a plugin crafts a struct-shape that exploits a host-side deserializer (e.g., an enum with an unexpected discriminant). | High | 65 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (WIT-defined types only; codegen-generated bindings on both sides; size-bounded fields) |
-| `DF-host-fn-call` | I | A host-fn returns content (e.g., search results) whose row set was filtered by `workspace_id` after database read rather than as a WHERE-clause condition — a query plan change or bug surfaces foreign rows the filter then drops; an interposed metric on row-count leaks cross-workspace counts. | High | 65 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (workspace filter is WHERE-clause-mandatory; lint enforces; metric exports redact row-counts to per-workspace buckets) |
+| `DF-host-fn-call` | I | A host-fn returns content (e.g., search results) whose row set was filtered by `workspace_id` after database read rather than as a WHERE-clause condition. A query plan change or bug can surface foreign rows that the filter then drops, and an interposed metric on row-count leaks cross-workspace counts. | High | 65 | `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (workspace filter is WHERE-clause-mandatory; lint enforces; metric exports redact row-counts to per-workspace buckets) |
 | `DF-sampling-up` | T | A plugin shapes prompt content that, when the connected agent's MCP client runs the LLM completion, induces the LLM to emit a destructive verb the orchestrator then executes. (Prompt-injection through the plugin surface.) | High | 70 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (sampling-allowed plugins are an explicit manifest capability; at V0 all plugins are `core: true` so the surface is contained; V0.1+ third-party plugins escalate this to Critical) |
-| `DF-sampling-up` | I | The plugin can include arbitrary content in the sampling prompt, including content from other workspace artifacts the plugin is read-authorized for, which then traverses the agent's MCP client and reaches the agent's LLM provider — content leaves the deployment trust boundary by design. | High | 75 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (sampling-prompt fields typed; content-IDs only, not bodies, for cross-artifact references; LLM-provider hostname allowlist) |
+| `DF-sampling-up` | I | The plugin can include arbitrary content in the sampling prompt, including content from other workspace artifacts the plugin is read-authorized for, which then traverses the agent's MCP client and reaches the agent's LLM provider; content leaves the deployment trust boundary by design. | High | 75 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (sampling-prompt fields typed; content-IDs only, not bodies, for cross-artifact references; LLM-provider hostname allowlist) |
 | `DF-embed-call` | I | Artifact bodies are sent to an external LLM provider for embedding; the provider has full content access by design. | High | 90 | Accepted-risk R-0005 (external-LLM embed-call is the brief's explicit non-goal carve-out; LLM-API-key surface is in `0.1.0` and a hostname allowlist applies); compensating: BYO-provider deployment posture |
 | `DF-embed-call` | T | A man-in-the-middle on the embed path could rewrite embedding vectors, poisoning the vector index. | Medium | 55 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` (cert pinning on the embed provider; TLS verification mandatory; out-of-band vector-index integrity verification on rebuild) |
 | `DF-signing-attest` | T | The signing-attestation flow trusts the build pipeline's identity assertion; a compromised pipeline forges an attestation. | High | 60 | `{{P-SigningKeyCustodyHardening}}` (attestation is signed by the offline root; pipeline-identity claims are inputs to attestation, not the attestation itself) |
-| `DF-migration-write` | T | Migration writes interleave with concurrent CLI / MCP writes during cutover — the brief's cutover dual-write window — and content diverges between source and substrate. | Critical | 70 | `{{P-CutoverDualWrite}}` (cutover is single-writer; migration window holds an exclusive lock or operates pre-cutover; explicit "no concurrent writes" gate) |
+| `DF-migration-write` | T | Migration writes interleave with concurrent CLI / MCP writes during cutover (the brief's cutover dual-write window), and content diverges between source and substrate. | Critical | 70 | `{{P-CutoverDualWrite}}` (cutover is single-writer; migration window holds an exclusive lock or operates pre-cutover; explicit "no concurrent writes" gate) |
 | `DF-key-custody` | I | If key material flows from the build pipeline to the deployment node at any point, the network transit and the storage at rest are both leak surfaces. | High | 70 | `{{P-SigningKeyCustodyHardening}}` (key NEVER flows to deployment; runtime sees signature only; or HSM-backed where applicable) |
 
 ## Trust boundaries
 
-Populated by the Stage 2 terminal security review (2026-05-22). The placeholder column
-set is extended with **Threats at crossing** — element-ID + STRIDE references that key
-into the threats-by-element table. Trust assumption changes at each crossing are named
-under Authentication and Authorization.
+Populated by the Stage 2 terminal security review (2026-05-22). The placeholder column set is extended with **Threats at crossing**: element-ID plus STRIDE references that key into the threats-by-element table above. Trust assumption changes at each crossing are named under Authentication and Authorization.
 
-**Canonical TB enumeration.** This table is the canonical source for the mnemra-core
-trust-boundary set. The DFD lives in this document and the TB table sits adjacent to it,
-so this artifact (not the Frame) owns the enumeration. The Frame doc carries a
-steady-state subset (eight boundaries) used in Frame-altitude prose; this overview adds
-the two migration-and-backup-scoped boundaries (`TB-fs-source`, `TB-fs-backup`) for the
-core nine-row set. **A tenth row, `TB-obs-sink`, is a *deferred, egress-only* boundary
-added 2026-06-09 (the [observability baseline](#observability)):** at V0 the
-host EMITS telemetry to stdout + OTel and there is no in-app observability store; the
-external sink is operator-chosen and *deferred* behind the generation⊥storage separation.
-It's modeled as the telemetry-egress surface (where emission leaves the host), not as a
-present V0 storage dependency. The binary does not require a sink to run. The V0 storage
-dependency set stays at the nine core boundaries; `TB-obs-sink` materializes as a present
-dependency only when the operator wires a sink (the L4 tripwire). When the Frame's TB
-table and this one disagree, this one wins.
+**Canonical TB enumeration.** This table is the canonical source for the mnemra-core trust-boundary set. The data-flow diagram lives in this document, and the trust-boundary table sits right next to it, so this artifact (not the Frame document) owns the enumeration. The Frame document carries a steady-state subset (eight boundaries) used in its Frame-altitude prose; this overview adds the two migration-and-backup-scoped boundaries (`TB-fs-source`, `TB-fs-backup`) for the core nine-row set. **A tenth row, `TB-obs-sink`, is a *deferred, egress-only* boundary added 2026-06-09 (the [observability baseline](#observability)).** At V0 the host emits telemetry to stdout and OTel, and there's no in-app observability store; the external sink is operator-chosen and *deferred* behind the generation⊥storage separation (generation kept independent of storage). It's modeled as the telemetry-egress surface, where emission leaves the host, not as a present V0 storage dependency: the binary doesn't require a sink to run. The V0 storage dependency set stays at the nine core boundaries; `TB-obs-sink` becomes a present dependency only once the operator wires up a sink (the L4 tripwire). When the Frame document's trust-boundary table and this one disagree, this one wins.
 
 | Trust boundary | Crosses | Direction | Authentication | Authorization | Threats at crossing |
 |---|---|---|---|---|---|
 | `TB-agent-runtime` ↔ `TB-mnemra-host` | `DF-mcp-stdio` (MCP stdio transport) | bidirectional (request/response) | Bearer-token presented per MCP session; `P-builtin-auth` verifies against OIDC AS or static admin token. **V0:** static admin token suffices; OIDC verification is V0.1+. | Workspace claim in token scopes every operation; per-verb capability check at `P-mcp-handler` against the plugin manifest. Admin scope distinct from user scope. | `EE-orchestrator-agent`/S,R; `EE-specialist-agent`/S,R; `P-mcp-handler`/S,T,I,D,E; `DF-mcp-stdio`/T,I |
-| `TB-human` ↔ `TB-mnemra-host` | `DF-cli-invoke` (admin CLI local IPC); `DF-token-read` (token-file read by CLI handler) | bidirectional (CLI invocation; structured responses) | UNIX UID match for CLI invocation; admin token mandatory for destructive operations. | Admin scope only — agent-facing CRUD does not route through the CLI. Schema-driven dynamic subcommands generated from plugin manifests; `core: true` plugins shipped at V0. | `EE-operator`/S,R; `P-cli-handler`/S,T,E; `DS-admin-token`/I,T,R |
+| `TB-human` ↔ `TB-mnemra-host` | `DF-cli-invoke` (admin CLI local IPC); `DF-token-read` (token-file read by CLI handler) | bidirectional (CLI invocation; structured responses) | UNIX UID match for CLI invocation; admin token mandatory for destructive operations. | Admin scope only; agent-facing CRUD doesn't route through the CLI. Schema-driven dynamic subcommands generated from plugin manifests; `core: true` plugins shipped at V0. | `EE-operator`/S,R; `P-cli-handler`/S,T,E; `DS-admin-token`/I,T,R |
 | `TB-mnemra-host` ↔ `TB-plugin-sandbox` | `DF-plugin-invoke` (host → plugin); `DF-host-fn-call` (plugin → host) | host-mediated; cross-plugin calls always traverse the host | Plugin identity is the signed-manifest identity (signature verified at load); host derives session context at invocation. Plugin core is IO-free; ambient capability is the empty set. | Per-plugin host-fn allowlist compiled into the per-instance binding from the signed manifest; `workspace_id` is host-derived from the calling session, NEVER a plugin parameter on write paths; sampling, network, and filesystem are manifest-declared. | `P-plugin-instance`/E,T,I; `DF-host-fn-call`/T,I; `DF-sampling-up`/T,I; `P-plugin-runtime`/T,E,D,R |
-| `TB-mnemra-host` ↔ `TB-postgres` | `DF-substrate-rw`, `DF-projection-rebuild`, `DF-migration-write`, `DF-backup-read`, `DF-health-probe` | bidirectional (host issues queries; receives result sets) | Host-process DB user; ideally **role-separated per host process** (host-fns role, migration role, backup role, health-probe role) with least-privilege grants. | RLS column-shape ships V0 (`workspace_id` NOT NULL, indexed); RLS **policy enforcement** is V0.1+ — at V0 the host-side WHERE-clause discipline is the structural barrier (lint-enforced). | `P-host-fns`/T,I,E; `DS-pg-content`/T,I,R,D; `DS-pg-state`/T; `DS-pg-projections`/I; `DF-host-fn-call`/I |
-| `TB-mnemra-host` → `TB-obs-sink` | `DF-telemetry-emit` (stdout structured logs + OTel metrics/events egress) | outbound from host (emission only; no read-back) | None at the egress itself; the external sink is operator-chosen and operator-secured. The host's emission boundary enforces redaction + no-content. | Emission carries `workspace_id` on every tenant-scoped record and never artifact bodies; the operator's sink partitions/retains. *(Re-derived 2026-06-09 — generation⊥storage, per the [observability baseline](#observability): telemetry is emitted, not stored in-app; the former `DS-ts-*`/`DS-pg-logs` in-app storage threats are now emission-surface threats — `DS-ts-metrics`/I, `DS-ts-events`/T,I, `DS-pg-logs`/I — carried in the threats-by-element table.)* | `P-host-fns`/I (no-leak at emission); `DF-telemetry-emit`/I |
+| `TB-mnemra-host` ↔ `TB-postgres` | `DF-substrate-rw`, `DF-projection-rebuild`, `DF-migration-write`, `DF-backup-read`, `DF-health-probe` | bidirectional (host issues queries; receives result sets) | Host-process DB user; ideally **role-separated per host process** (host-fns role, migration role, backup role, health-probe role) with least-privilege grants. | RLS column-shape ships V0 (`workspace_id` NOT NULL, indexed); RLS **policy enforcement** is V0.1+; at V0 the host-side WHERE-clause discipline is the structural barrier (lint-enforced). | `P-host-fns`/T,I,E; `DS-pg-content`/T,I,R,D; `DS-pg-state`/T; `DS-pg-projections`/I; `DF-host-fn-call`/I |
+| `TB-mnemra-host` → `TB-obs-sink` | `DF-telemetry-emit` (stdout structured logs + OTel metrics/events egress) | outbound from host (emission only; no read-back) | None at the egress itself; the external sink is operator-chosen and operator-secured. The host's emission boundary enforces redaction + no-content. | Emission carries `workspace_id` on every tenant-scoped record and never artifact bodies; the operator's sink partitions/retains. *(Re-derived 2026-06-09, generation⊥storage, per the [observability baseline](#observability): telemetry is emitted, not stored in-app. The former `DS-ts-*`/`DS-pg-logs` in-app storage threats are now emission-surface threats (`DS-ts-metrics`/I, `DS-ts-events`/T,I, `DS-pg-logs`/I), carried in the threats-by-element table.)* | `P-host-fns`/I (no-leak at emission); `DF-telemetry-emit`/I |
 | `TB-mnemra-host` ↔ `TB-fs-secrets` | `DF-token-read` (CLI handler reads admin token); `DF-signature-verify` (plugin-runtime reads signing key/cert) | inbound to host (filesystem reads) | Filesystem ACLs (mode 600) + OS-uid match. **No second factor at V0.** | The host is the sole reader. Secrets are read lazily on-demand; file-mode invariant check at startup; modification fail-shut. | `DS-admin-token`/I,T,R; `DS-mnemra-root-key`/I,T; `P-plugin-runtime`/E (verify-async path) |
 | `TB-mnemra-host` ↔ `TB-fs-source` | `DF-migration-read` (one-shot read of prior tooling state) | inbound to host (read-only by intent) | OS-side: read-as-host-process-uid; logical: migration handler is invoked from CLI under admin token. | Migration handler is the sole reader; source is **never** written-back; migration manifest is mnemra-side. | `DS-source-taskdb`/T; `DS-source-corpus`/I; `P-migration-handler`/T,I,D |
 | `TB-mnemra-host` ↔ `TB-fs-backup` | `DF-backup-write` (host → backup); restore consumes inbound | outbound from host (write); inbound at restore | OS-side: write-as-backup-process-uid; logical: backup handler is invoked from CLI under admin token. | Backup handler is the sole writer; restore is admin-gated. **Backup contents are higher-value than the live DB by virtue of offline accessibility.** | `P-backup-handler`/I,T,D; `DS-fs-backup`/I,T |
 | `TB-mnemra-host` ↔ `TB-external-llm` | `DF-embed-call` (HTTPS to embedding provider) | outbound from host | TLS server identity check; **hostname allowlist** at config; provider API key as a separate secret. | Per-deployment LLM-API-key configuration ships in `0.1.0`; no in-host LLM hosting (Hard constraint). Hostnames pinned via config; cert validation mandatory. | `EE-llm-provider`/S,R; `DF-embed-call`/I,T |
-| `TB-build-pipeline` ↔ `TB-mnemra-host` | `DF-signing-attest` (build-time signing); `DF-signature-verify` (runtime verification reads only the signature) | inbound to host (signature only at runtime) | Runtime: signed-artifact signature verified against the mnemra root cert/key (V0 custody per `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`; production-grade hardening per `{{P-SigningKeyCustodyHardening}}`); build-pipeline identity is a pre-runtime concern. | Only `core: true` plugins at V0 — runtime accepts artifacts whose signature chains to the mnemra root; non-`core` plugin install is V0.1+ scope and requires a separate trust decision. | `EE-mnemra-root`/S,R; `DF-signing-attest`/T; `DF-key-custody`/I; `P-plugin-runtime`/E |
+| `TB-build-pipeline` ↔ `TB-mnemra-host` | `DF-signing-attest` (build-time signing); `DF-signature-verify` (runtime verification reads only the signature) | inbound to host (signature only at runtime) | Runtime: signed-artifact signature verified against the mnemra root cert/key (V0 custody per `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`; production-grade hardening per `{{P-SigningKeyCustodyHardening}}`); build-pipeline identity is a pre-runtime concern. | Only `core: true` plugins at V0: runtime accepts artifacts whose signature chains to the mnemra root. Non-`core` plugin install is V0.1+ scope and requires a separate trust decision. | `EE-mnemra-root`/S,R; `DF-signing-attest`/T; `DF-key-custody`/I; `P-plugin-runtime`/E |
 
-**Notes on the boundary set.** Two boundaries call out particular fragility worth surfacing
-inline:
+**Notes on the boundary set.** Two boundaries call out particular fragility worth surfacing here directly.
 
-- **`TB-mnemra-host` ↔ `TB-postgres`** is the structural multi-tenancy fence. RLS
-  column-shape ships V0 but **policy enforcement is V0.1+**. At V0 the WHERE-clause
-  discipline at the host-fn layer is the only enforcement mechanism. A lint or test that
-  asserts every read path carries a workspace filter is a Spec-stage mitigation that
-  belongs in `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)`.
-- **`TB-build-pipeline` ↔ `TB-mnemra-host`** is conceptual. The build pipeline is not a
-  runtime adjacency. But the key custody choice (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` for V0 dogfood;
-  `{{P-SigningKeyCustodyHardening}}` for production-grade posture) determines whether the
-  boundary's actual asymmetry favors the attacker or the defender. The V0 decision is
-  now locked at Tier A (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`); the production hardening is Tier C
-  (`{{P-SigningKeyCustodyHardening}}`), activated by the multi-deployment trip-wire.
+- **`TB-mnemra-host` ↔ `TB-postgres`** is the structural multi-tenancy fence. The RLS column-shape ships at V0, but **policy enforcement is V0.1+**; at V0 the WHERE-clause discipline at the host-fn layer is the only enforcement mechanism. A lint or test asserting that every read path carries a workspace filter is a Spec-stage mitigation that belongs in [P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md).
+- **`TB-build-pipeline` ↔ `TB-mnemra-host`** is conceptual (the build pipeline isn't a runtime adjacency), but the key custody choice ([P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md) for V0 dogfood; `{{P-SigningKeyCustodyHardening}}` for production-grade posture) determines whether the boundary's actual asymmetry favors the attacker or the defender. The V0 decision is now locked at Tier A ([P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)); production hardening is Tier C (`{{P-SigningKeyCustodyHardening}}`), activated by the multi-deployment trip-wire.
 
 ## Accepted risks
 
-Populated by the Stage 2 terminal security review (2026-05-22). Each entry is a risk
-the V0 architecture accepts on the basis of the V0-dogfood-vs-V0.1+-commercial-tier
-carve-out the locked product brief authorizes. Entries are numbered `R-NNNN`. Per the
-workspace threat-modeling skill convention, every entry carries a **trip-wire** naming
-the condition under which the deferred mitigation must be revisited. Owner is the
-maintainer at V0; ownership transfers to a named role at commercial-tier transition.
+Populated by the Stage 2 terminal security review (2026-05-22). Each entry is a risk the V0 architecture accepts, on the basis of the V0-dogfood-versus-V0.1+-commercial-tier carve-out the locked product brief authorizes. Entries are numbered `R-NNNN`. Per the workspace threat-modeling skill convention, every entry carries a **trip-wire** naming the condition under which the deferred mitigation must be revisited. The owner is the maintainer at V0; ownership transfers to a named role at the commercial-tier transition.
 
-The placeholder column set is extended with a **Rationale** column to make the
-deferral basis legible without external reference. Every entry maps to one or more
-threat rows above by Risk ID.
+The placeholder column set is extended with a **Rationale** column, so the deferral basis is legible without needing an external reference. Every entry maps to one or more threat rows above by Risk ID.
 
 | Risk ID | Description | Owner | Trip-wire | Rationale |
 |---|---|---|---|---|
 | `R-0001` | RLS policy enforcement deferred to V0.1+; only the column-shape ships at V0. Cross-tenant disclosure on `P-mcp-handler`/I, `P-builtin-projects`/I, `DS-pg-content`/I, `DF-host-fn-call`/I depends on the host-side WHERE-clause discipline rather than database-enforced policy. | maintainer | First deployment serving more than one workspace (production multi-tenant traffic), OR the column-shape's lint coverage drops below 100% on read paths, OR a third-party plugin is loaded at runtime. | The brief locks tenant scoping key as structural from V0 precisely so policy enforcement can land later without substrate migration. V0 is single-workspace dogfood; the structural barrier is the WHERE-clause discipline, not policy enforcement. Defer-with-trip-wire matches `P-Defer`. |
 | `R-0002` | External-authorization-server integration deferred to V0.1+. `P-builtin-auth` at V0 accepts a static admin token; per-deployment OIDC AS via RFC 9728 is in `0.1.0` substrate but federation/SSO is not. Operator-impersonation risk (`EE-operator`/S, `EE-orchestrator-agent`/S) hinges on token file ACLs and rotation discipline. | maintainer | First deployment integrating with an existing identity provider for the operator, OR shared-workstation use of the deployment node, OR external onboarding of agents beyond the maintainer's. | Brief Hard constraints scope mnemra as Resource Server only at V0; AS integration is brief idea-tier (D7). The static admin token bootstrap is the V0 dogfood pattern. |
-| `R-0003` | MCP transport at V0 is stdio. Transport confidentiality is process-spawning trust — a wrapping process the agent invokes can observe request/response bytes (`DF-mcp-stdio`/I, T). | maintainer | `{{P-MCPWriteSemantics}}` resolution OR streamable-HTTP transport activates (the microVM-appliance trip-wire from the brief), whichever lands first. | Brief Hard constraints fix stdio at V0; streamable-HTTP is V0.1+ activation gated on the microVM-appliance trip-wire. Stdio confidentiality is "the agent's host process is the trust unit." |
-| `R-0004` | Plugin signing-key custody at V0 is dogfood-scoped to the maintainer's single deployment under `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A) — build-host-on-disk, single-instance, maintainer-controlled. `DS-mnemra-root-key`/I and `EE-mnemra-root`/S are Critical-severity threats whose production-grade mitigation depends on `{{P-SigningKeyCustodyHardening}}`. The V0 commitment is made; the hardening is deferred to Tier C. | maintainer | Multi-deployment trip-wire fires — `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`'s stated condition: the moment mnemra-core is deployed beyond the maintainer's single dogfood instance. `{{P-SigningKeyCustodyHardening}}` (Tier C) must lock before that point. The risk register entry retires when `{{P-SigningKeyCustodyHardening}}` locks. | V0 dogfood scoped to single-operator single-deployment; key-on-build-host is a named and trip-wired V0 decision, not a gap. Production-grade custody (offline-root, HSM, never-on-node) is deferred under `P-Defer` with the multi-deployment trip-wire as the mandatory activation condition. |
-| `R-0005` | External-LLM embedding calls (`DF-embed-call`/I) and the brief's "no in-host LLM" Hard constraint together mean **artifact bodies leave the deployment trust boundary** at every embedding call. Telemetry no-leak is a dogfood acceptance criterion (audit script against a known-content corpus), not a structural barrier. | maintainer | First deployment that is not single-operator-only (any deployment with telemetry-sensitive content beyond the maintainer's), OR Bring-Your-Own-Model (BYOM) is not configured and a hosted provider sees production content. | The brief explicitly carves "no in-host LLM" and "calls out to an external model" as Hard constraints. The compensating control is BYOM deployment posture — the LLM-API-key configuration surface is in `0.1.0`. The risk is acknowledged, structurally bounded by deployment posture, not mitigated by code. |
+| `R-0003` | MCP transport at V0 is stdio. Transport confidentiality is process-spawning trust: a wrapping process the agent invokes can observe request and response bytes (`DF-mcp-stdio`/I, T). | maintainer | `{{P-MCPWriteSemantics}}` resolution OR streamable-HTTP transport activates (the microVM-appliance trip-wire from the brief), whichever lands first. | Brief Hard constraints fix stdio at V0; streamable-HTTP is V0.1+ activation gated on the microVM-appliance trip-wire. Stdio confidentiality is "the agent's host process is the trust unit." |
+| `R-0004` | Plugin signing-key custody at V0 is dogfood-scoped to the maintainer's single deployment under `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A): build-host-on-disk, single-instance, maintainer-controlled. `DS-mnemra-root-key`/I and `EE-mnemra-root`/S are Critical-severity threats whose production-grade mitigation depends on `{{P-SigningKeyCustodyHardening}}`. The V0 commitment is made; the hardening is deferred to Tier C. | maintainer | Multi-deployment trip-wire fires: [P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)'s stated condition is the moment mnemra-core is deployed beyond the maintainer's single dogfood instance. `{{P-SigningKeyCustodyHardening}}` (Tier C) must lock before that point. The risk register entry retires when `{{P-SigningKeyCustodyHardening}}` locks. | V0 dogfood scoped to single-operator single-deployment; key-on-build-host is a named and trip-wired V0 decision, not a gap. Production-grade custody (offline-root, HSM, never-on-node) is deferred under `P-Defer` with the multi-deployment trip-wire as the mandatory activation condition. |
+| `R-0005` | External-LLM embedding calls (`DF-embed-call`/I) and the brief's "no in-host LLM" Hard constraint together mean **artifact bodies leave the deployment trust boundary** at every embedding call. Telemetry no-leak is a dogfood acceptance criterion (audit script against a known-content corpus), not a structural barrier. | maintainer | First deployment that is not single-operator-only (any deployment with telemetry-sensitive content beyond the maintainer's), OR Bring-Your-Own-Model (BYOM) is not configured and a hosted provider sees production content. | The brief explicitly carves "no in-host LLM" and "calls out to an external model" as Hard constraints. The compensating control is BYOM deployment posture; the LLM-API-key configuration surface is in `0.1.0`. The risk is acknowledged, structurally bounded by deployment posture, not mitigated by code. |
 | `R-0006` | Operator-action repudiation at V0 is partially mitigated. CLI destructive ops (`drop-workspace`, force-restore-overwrite) tie to the OS UID; there is no second factor and no admin-action audit log that survives a substrate restore. Repudiation threats on `EE-operator`/R, `DS-admin-token`/R rely on OS-side audit. | maintainer | First deployment with more than one operator on the host, OR the activity-log capability (`0.5.0`) lands and admin actions can be tied to a durable audit event independent of the substrate. | Solo dogfood: the maintainer is sole operator; repudiation is not a meaningful threat in that topology. Activity log lands at `0.5.0`, after the substrate; the dependency is correct, the trip-wire fires on multi-operator topology, not on time. |
 | `R-0007` | Plugin sampling (`DF-sampling-up`) at V0 is unrestricted because all plugins at V0 are `core: true` and signed by the mnemra root. The plugin-to-orchestrator prompt-injection surface (`DF-sampling-up`/T, `P-plugin-instance`/I) is High at V0 and **becomes Critical at V0.1+ when third-party plugin install activates** (brief idea-tier D11). | maintainer | Third-party plugin install activates (brief D11), OR `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` locks the sampling capability shape without typed-prompt restrictions. | At V0 the plugin set is trusted by build provenance; signed artifacts are the only execution surface. The mitigation cost is high relative to V0 value; the trip-wire is structural (third-party install), not temporal. |
 
-**Cross-reference.** Each accepted risk maps to one or more threat rows in the threats-
-by-element table. A future risk-register file (workspace canon names `RISK-REGISTER.md`
-as the storage shape, but the durable register lives with the project per `P-PerRepoFirst`)
-holds the long-form per-entry record with review dates; this table is the per-Frame
-snapshot the Spec stage operates against.
+**Cross-reference.** Each accepted risk maps to one or more threat rows in the threats-by-element table above. A future risk-register file (workspace canon names `RISK-REGISTER.md` as the storage shape, but the durable register lives with the project, per `P-PerRepoFirst`: build shared structure per-repo first, and extract a common abstraction only once a pattern has actually repeated three times) holds the long-form per-entry record with review dates. This table is the per-Frame snapshot the Spec stage operates against.
 
 ## Consultations
 
-Mid-Frame expert dispatches that affect the architectural shape. This section grows as
-the Frame matures.
+Mid-Frame expert dispatches that affect the architectural shape. This section grows as the Frame document matures.
 
 | Date | Agent | Question | Outcome | Affects ADR slot |
 |---|---|---|---|---|
-| *(none yet — port pass is reconciliation against locked predecessors)* | | | | |
+| *(none yet; this port pass is reconciliation against locked predecessors)* | | | | |
 
 ## Feedback to product brief
 
-*Populated if Frame surfaces issues that would change the locked product brief. Each entry
-names the brief section, the tension, and the proposed amendment for human-decomposer
-resolution. Empty at port-time — Frame work did not surface a brief-level tension.*
+*Populated if Frame work surfaces issues that would change the locked product brief. Each entry names the brief section, the tension, and the proposed amendment, for the human decomposer to resolve. This is empty at port-time: Frame work didn't surface a brief-level tension.*
 
 | Brief section | Tension | Proposed amendment |
 |---|---|---|
@@ -690,104 +563,18 @@ resolution. Empty at port-time — Frame work did not surface a brief-level tens
 
 ## Session log
 
-- **2026-06-09** — Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
-  out of the project-ADR layer**. The maintainer dispositioned escalation E1 (D8 vs the accepted
-  observability ADR) by separating observability **generation** from **storage**, and ruled that
-  observability is a **theory trait + chassis mechanism, not a per-project ADR**. The generation
-  decisions land in the [observability baseline](#observability) in this overview (a theory-trait
-  baseline); the original observability ADR [P-0004](../adrs/P-0004-observability-shape.md) is
-  `deprecated` (its storage core falsified by D8; **no successor ADR**). Re-derived the
-  observability surfaces this overview left frozen on 2026-06-08: the "Reframed 2026-06-08"
-  subsection's frozen-pending-E1 marker is replaced with the resolved separation; the DFD
-  `DS-ts-*` / `DS-pg-logs` in-app storage nodes are replaced with an external `TB-obs-sink`
-  telemetry-egress node (host EMITS stdout logs + OTel metrics/events via `DF-telemetry-emit`;
-  the in-app `DF-timeseries-write` / `DF-log-write` and migration-to-ts-store edges are removed);
-  the QA observability scenarios are generation-side (emitted metrics, p50/p95/p99 derivable at
-  the sink; no in-app hypertable); the observability threat rows are re-derived to emission
-  surfaces and re-pointed to the observability baseline. The `/health` detail body is gated by
-  the loopback-only listener bind (loopback IS the gate at V0; named tripwire if the listener
-  ever binds non-loopback). The host capability-manifest is a settled invariant (generated from
-  WIT, never hand-maintained; generation mechanism routes to the chassis). The observability
-  storage backend is deferred behind the separation (option set + named tripwire); the standalone
-  binary survives. No in-app observability store at V0.
-- **2026-06-08** — Storage-substrate fold. Reclassified the storage substrate from the
-  prior hard-lock framing ("single-process Postgres + `pgvector` + `timescaledb`
-  extensions present") to "PostgreSQL ratified on merits, behind an engine-agnostic
-  swappable `Storage` trait" per the new
-  [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md) (folding the
-  2026-06-07 storage-engine evaluation, ratified after the spec lock). Updated the
-  hard-locked constraint-inventory substrate row; added a "Reframed 2026-06-08" subsection.
-  TimescaleDB demoted off the V0 stack (D8); the V0 time-series *storage shape* is plain
-  timestamped tables. The DFD `DS-ts-*` hypertable nodes, the QA "Per-verb metrics" /
-  "Retention discipline" scenarios, and the TimescaleDB threat rows were left frozen pending
-  escalation **E1** (D8 vs P-0004) — **since re-derived in the 2026-06-09 entry above** (E1
-  dispositioned).
-- **2026-05-23** (Stage 3 entry housekeeping) — Slot citation routing pass and R-0004
-  rewrite. All 13 stale signing-key-custody citations and 3 stale plugin-pool-memory
-  citations in threats-by-element, trust-boundary, accepted-risks tables, DFD notes, and
-  TB-notes prose were routed per-row: V0-scoped rows → `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`; production-
-  posture rows → `{{P-SigningKeyCustodyHardening}}`; span-both rows → both with
-  cross-reference. All plugin-pool-memory citations → `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)`
-  uniformly. R-0004 risk register entry rewritten: shifted from "open ADR slot" framing
-  to "V0 commitment + trip-wire to hardening" — description now reflects
-  `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A, single-deployment dogfood decision made) and
-  `{{P-SigningKeyCustodyHardening}}` (Tier C, activated by multi-deployment trip-wire).
-  The stale "(Tier C in the Frame's Open ADR Slots)" parenthetical was removed as part
-  of the rewrite. ELT subsystem description in DFD notes updated to use inline mechanism
-  description, consistent with the companion Frame's L1 fix.
-- **2026-05-23** — Frame-exit gate revision. The companion Frame doc returned a Revise
-  verdict at Frame-exit (G-0028 cold-start amendment, 2026-05-23). Overview revisions:
-  (M1) the trust-boundaries table above is designated canonical for the mnemra-core TB
-  set, with the Frame's eight-row steady-state table as a subset; (M2) the DFD's
-  builtin component set extended from four (`P-builtin-projects`, `P-builtin-agents`,
-  `P-builtin-workspaces`, `P-builtin-auth`) to seven (adds `P-builtin-users`,
-  `P-builtin-sessions`, `P-builtin-permissions`) with the uniform host-fn edge pattern.
-  Threats-by-element / trust-boundary-crossings / accepted-risks tables from the
-  2026-05-22 terminal security review are preserved unchanged. Cross-reference: Frame
-  doc Changelog 2026-05-23 entry for the full revision tally; Warden Stage 2
-  code+security review of 2026-05-22 supplies the original findings.
-- **2026-05-22** — Stage 2 terminal security review (security-mode reviewer pass with
-  the threat-modeling skill loaded). The three threat-scaffold tables (threats by data-
-  flow element, trust boundaries, accepted risks) populated by STRIDE-per-element walk
-  of the DFD. The element-type relevance bar was applied — S/R for external entities;
-  full STRIDE for processes; T/R/I/D for data stores; T/I/D for data flows. **72 threat
-  rows recorded across 35 DFD elements; 9 trust boundaries annotated with crossings,
-  trust-direction, authentication, authorization, and threats-at-crossing references;
-  7 accepted risks recorded with rationale and named trip-wires.** Severity distribution:
-  18 Critical, 29 High, 21 Medium, 4 Low. Mitigation candidates map to the Frame's 14
-  Open ADR Slots wherever the control class fits; one new candidate slot surfaced
-  (`{{P-AdminCLIDiscipline — new}}` — CLI parameter-binding hygiene, distinct from
-  `{{P-MCPWriteSemantics}}`). Material risks naming themselves at the architectural
-  layer: signing-key custody (`R-0004`), RLS policy enforcement deferral
-  (`R-0001`), plugin sampling at V0.1+ third-party install (`R-0007`),
-  workspace-id-supplied-by-plugin host-fn shape (`P-host-fns`/T Critical). Followups:
-  the 14 `{{P-XXX}}` slots' Spec-stage authorship is the mitigation surface this pass
-  produced; the new `{{P-AdminCLIDiscipline}}` candidate joins the Tier-C operational
-  hardening set; the V0 dogfood scope underwrites every accepted risk and its
-  trip-wire.
-- **2026-05-22** — Port of the 2026-05-03 constraints draft into the project repo's
-  agent-primary architecture overview. Reconciliation to the locked product brief
-  (intake-exit 2026-05-20) applied:
-  - Constraint inventory updated to the brief's Hard constraints (Apache-2.0 with
-    future-relicense clause; license-lock 2026-05-20) and `0.1.0` substrate description
-    (LLM-API-key configuration surface folded into substrate; builtin tenancy/identity
-    core).
-  - External-constraints rows from the 2026-05-03 draft removed (pre-announce dates,
-    alpha invite-only target date, time budget, kill criterion) — the brief explicitly
-    de-anchors architecture from marketing-tier dates and carves commercial inputs to
-    a separate internal record.
-  - DFD redrawn in D2 (project default `G-0026`) with `P-builtin-projects`,
-    `P-builtin-agents`, `P-builtin-workspaces`, and `P-builtin-auth` moved out of
-    `TB-plugin-sandbox` and into `TB-mnemra-host` (Frame correction 1: builtin not
-    plugins).
-  - DFD typed-element-ID convention preserved (`TB-*` / `EE-*` / `P-*` / `DS-*` / `DF-*`)
-    so STRIDE-per-element annotation by the security-mode reviewer at Stage 2 terminal
-    review can target each element directly.
-  - Threats-by-element, trust-boundaries, accepted-risks tables present as placeholders
-    the terminal-review pass populates.
-- **2026-05-03 (port source)** — Original constraints draft authored as an
-  orchestrator-direct elicitation session against the V0 discovery + architecture
-  alignment R6 mental model. Constraint inventory, 6-axis QA tree, 35-domain-question
-  triage, DFD draft. A storage-layout strawman was forked off this draft by a researcher
-  dispatch (recommended single-document storage layout for V0, kept open here as the
-  Spec-stage ADR slot `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)`).
+- **2026-07-02**: RC-1 reconciliation (a rider on the retrieval-cluster Stage-3 docs change; this overview's ELT external-embedding framing was the named lagging copy of the brief's model-hosting amendment). Updated the hard-locked constraint-inventory model-hosting row and the DFD-notes "External LLM" bullet to the RC-1 posture: MUST NOT host a *generative* LLM. Local non-generative inference (embedding, reranking) runs host-side and never egresses. The external provider serves the retrieval cluster's four policy-gated, individually disable-able generative placements, and zero-egress is a supported V0 configuration. The drawn DFD's `DF-embed-call` flow and `EE-llm-provider` "(embeddings endpoint)" label are now pre-RC-1 renderings: the retyped retrieval-cluster elements (four `DF-egress-4.x` flows, `EE-model-artifact-source`, new processes and stores) are recorded in [P-0014's typed-DFD extension](../adrs/P-0014-retrieval-architecture.md). The diagram and per-element threat rows get redrawn against it at that cluster's pre-implementation security review (a named follow-up with its own firing event; the prose here is reconciled now).
+- **2026-06-09**: Observability re-derivation (escalation E1 dispositioned as: re-derive now), **re-altituded out of the project-ADR layer**. The maintainer dispositioned escalation E1 (D8 versus the accepted observability ADR) by separating observability **generation** from **storage**, and ruled that observability is a **theory trait plus chassis mechanism, not a per-project ADR**. The generation decisions land in the [observability baseline](#observability) in this overview (a theory-trait baseline); the original observability ADR [P-0004](../adrs/P-0004-observability-shape.md) is `deprecated` (its storage core falsified by D8; **no successor ADR**).
+
+  This re-derives the observability surfaces this overview had left frozen on 2026-06-08: the "Reframed 2026-06-08" subsection's frozen-pending-E1 marker is replaced with the resolved separation. The DFD's `DS-ts-*` / `DS-pg-logs` in-app storage nodes are replaced with an external `TB-obs-sink` telemetry-egress node (the host emits stdout logs and OTel metrics/events via `DF-telemetry-emit`; the in-app `DF-timeseries-write` / `DF-log-write` and migration-to-ts-store edges are removed). The QA observability scenarios are generation-side (emitted metrics, with p50/p95/p99 derivable at the sink; no in-app hypertable). The observability threat rows are re-derived to emission surfaces and re-pointed to the observability baseline. The `/health` detail body is gated by the loopback-only listener bind (loopback IS the gate at V0, with a named tripwire if the listener ever binds non-loopback). The host capability manifest is a settled invariant (generated from WIT, never hand-maintained; the generation mechanism routes to the chassis). The observability storage backend is deferred behind the separation (an option set plus a named tripwire); the standalone binary survives. There is no in-app observability store at V0.
+- **2026-06-08**: Storage-substrate fold. Reclassified the storage substrate from the prior hard-lock framing ("single-process Postgres + `pgvector` + `timescaledb` extensions present") to "PostgreSQL ratified on merits, behind an engine-agnostic swappable `Storage` trait," per the new [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md) (folding in the 2026-06-07 storage-engine evaluation, ratified after the spec lock). Updated the hard-locked constraint-inventory substrate row, and added a "Reframed 2026-06-08" subsection. TimescaleDB was demoted off the V0 stack (D8); the V0 time-series *storage shape* is plain timestamped tables. The DFD's `DS-ts-*` hypertable nodes, the QA "Per-verb metrics" and "Retention discipline" scenarios, and the TimescaleDB threat rows were left frozen pending escalation **E1** (D8 versus P-0004), **since re-derived in the 2026-06-09 entry above** (E1 now dispositioned).
+- **2026-05-23** (Stage 3 entry housekeeping): slot citation routing pass and R-0004 rewrite. All 13 stale signing-key-custody citations and 3 stale plugin-pool-memory citations in the threats-by-element, trust-boundary, and accepted-risks tables, the DFD notes, and the TB-notes prose were routed per-row: V0-scoped rows → `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`; production-posture rows → `{{P-SigningKeyCustodyHardening}}`; rows spanning both → both, with a cross-reference. All plugin-pool-memory citations route uniformly to `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)`. The R-0004 risk register entry was rewritten, shifting from "open ADR slot" framing to "V0 commitment plus trip-wire to hardening": the description now reflects `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A, the single-deployment dogfood decision already made) and `{{P-SigningKeyCustodyHardening}}` (Tier C, activated by the multi-deployment trip-wire). The stale "(Tier C in the Frame's Open ADR Slots)" parenthetical was removed as part of the rewrite. The ELT subsystem description in the DFD notes was updated to use an inline mechanism description, consistent with the companion Frame document's L1 fix.
+- **2026-05-23**: Frame-exit gate revision. The companion Frame document returned a Revise verdict at Frame-exit (the G-0028 cold-start amendment, 2026-05-23). Overview revisions: (M1) the trust-boundaries table above is designated canonical for the mnemra-core trust-boundary set, with the Frame document's eight-row steady-state table as a subset; (M2) the DFD's builtin component set was extended from four (`P-builtin-projects`, `P-builtin-agents`, `P-builtin-workspaces`, `P-builtin-auth`) to seven, adding `P-builtin-users`, `P-builtin-sessions`, and `P-builtin-permissions` with the uniform host-fn edge pattern. The threats-by-element, trust-boundary-crossings, and accepted-risks tables from the 2026-05-22 terminal security review are preserved unchanged. Cross-reference: see the Frame document's Changelog 2026-05-23 entry for the full revision tally; the Warden Stage 2 code-and-security review of 2026-05-22 supplies the original findings.
+- **2026-05-22**: Stage 2 terminal security review (a security-mode reviewer pass with the threat-modeling skill loaded). The three threat-scaffold tables (threats by data-flow element, trust boundaries, accepted risks) were populated by a STRIDE-per-element walk of the DFD. The element-type relevance bar was applied: S/R for external entities, full STRIDE for processes, T/R/I/D for data stores, T/I/D for data flows. **72 threat rows were recorded across 35 DFD elements. 9 trust boundaries were annotated with crossings, trust-direction, authentication, authorization, and threats-at-crossing references. 7 accepted risks were recorded with rationale and named trip-wires.** Severity distribution: 18 Critical, 29 High, 21 Medium, 4 Low. Mitigation candidates map to the Frame document's 14 Open ADR Slots wherever the control class fits; one new candidate slot surfaced (`{{P-AdminCLIDiscipline — new}}`: CLI parameter-binding hygiene, distinct from `{{P-MCPWriteSemantics}}`). Material risks naming themselves at the architectural layer: signing-key custody (`R-0004`), RLS policy enforcement deferral (`R-0001`), plugin sampling at V0.1+ third-party install (`R-0007`), and the workspace-id-supplied-by-plugin host-fn shape (`P-host-fns`/T, Critical). Follow-ups: the 14 `{{P-XXX}}` slots' Spec-stage authorship is the mitigation surface this pass produced; the new `{{P-AdminCLIDiscipline}}` candidate joins the Tier-C operational hardening set; the V0 dogfood scope underwrites every accepted risk and its trip-wire.
+- **2026-05-22**: port of the 2026-05-03 constraints draft into the project repo's agent-primary architecture overview. Reconciliation to the locked product brief (intake-exit 2026-05-20) applied:
+  - Constraint inventory updated to the brief's Hard constraints (Apache-2.0 with future-relicense clause; license-lock 2026-05-20) and the `0.1.0` substrate description (LLM-API-key configuration surface folded into the substrate; builtin tenancy/identity core).
+  - External-constraints rows from the 2026-05-03 draft removed (pre-announce dates, alpha invite-only target date, time budget, kill criterion), because the brief explicitly de-anchors architecture from marketing-tier dates and carves commercial inputs out to a separate internal record.
+  - DFD redrawn in D2 (project default `G-0026`), with `P-builtin-projects`, `P-builtin-agents`, `P-builtin-workspaces`, and `P-builtin-auth` moved out of `TB-plugin-sandbox` and into `TB-mnemra-host` (Frame correction 1: these are builtins, not plugins).
+  - DFD typed-element-ID convention preserved (`TB-*` / `EE-*` / `P-*` / `DS-*` / `DF-*`), so STRIDE-per-element annotation by the security-mode reviewer at the Stage 2 terminal review can target each element directly.
+  - Threats-by-element, trust-boundaries, and accepted-risks tables present as placeholders for the terminal-review pass to populate.
+- **2026-05-03 (port source)**: original constraints draft authored as an orchestrator-direct elicitation session against the V0 discovery and architecture alignment R6 mental model. It produced the constraint inventory, the 6-axis QA tree, a 35-domain-question triage, and the DFD draft. A storage-layout strawman was forked off this draft by a researcher dispatch (recommending a single-document storage layout for V0), kept open here as the Spec-stage ADR slot [P-0001-storage-layout](../adrs/P-0001-storage-layout.md).
