@@ -5,7 +5,7 @@ primary-audience: agent
 ---
 
 ---
-status: "proposed"
+status: "accepted"
 date: "2026-07-02"
 decision-makers: ["the maintainer"]
 consulted: ["the architect", "the researcher", "the orchestrator"]
@@ -21,9 +21,9 @@ overrides: null
 
 ## Status
 
-`proposed`
+`accepted`
 
-Authored at the foundational-ADR-cluster stage alongside [P-0017-storage-cluster-model](P-0017-storage-cluster-model.md), formalizing the core-entity short list locked during the system-overview walk. It flips to `accepted` at the maintainer's review gate; what the gate reviews is this rendering at ADR precision and the two reconciliations flagged in "Decision Drivers" and "More Information" (the unified `actors` entity vs the [P-0002](P-0002-core-plugin-partition.md) builtin split; the audit-log/events surface vs the P-0010 D8 / E1 observability re-altitude).
+Authored at the foundational-ADR-cluster stage alongside [P-0017-storage-cluster-model](P-0017-storage-cluster-model.md), formalizing the core-entity short list locked during the system-overview walk. Accepted at the maintainer's review gate (2026-07-03), which reviewed this rendering at ADR precision and confirmed the two reconciliations flagged in "Decision Drivers" and "More Information" (the unified `actors` entity vs the [P-0002](P-0002-core-plugin-partition.md) builtin split; the audit-log/events surface vs the P-0010 D8 / E1 observability re-altitude).
 
 **Substrate-independent.** This ADR locks *which entities are core* and *how they are referenced* (the reference model), not their storage mechanics. The core entities are laid out per [P-0017](P-0017-storage-cluster-model.md) / [P-0001](P-0001-storage-layout.md) under the engine-agnostic `Storage` trait ([P-0010](P-0010-storage-substrate-engine.md) D5); the audit/events surface's storage shape is owned elsewhere (see D-SURFACE).
 
