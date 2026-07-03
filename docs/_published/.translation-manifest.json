@@ -88,8 +88,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "f5b7eea2c2071e1958a2ed5a776eb8e30738626a186ad67efae8ac5809795d5a",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "eef4daca5480380b3d8f0c7a84e583010274b6e39e51bbb8c74592fd281ec51d",
+      "translated_at": "2026-07-03T18:08:41Z"
     },
     "adrs/P-0013-plugin-invocation-model.md": {
       "primary_audience": "agent",
@@ -119,12 +119,33 @@
       "source_sha256": "97791b870b230774322b7051605481f1fb6fd16d2b751668e1aa463e2f22cabf",
       "translated_at": "2026-07-03T17:27:41Z"
     },
+    "adrs/P-0017-storage-cluster-model.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "1d7b5d5bd473cc6f310974c59716fbee8000d48108e1ea9f562e0e76ff8acca3",
+      "translated_at": "2026-07-03T18:08:41Z"
+    },
+    "adrs/P-0018-core-entity-manifest.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "4ccca77d89c4b40a5deaf8f6d3ca482f3463cc3697334765df755d77bd00905e",
+      "translated_at": "2026-07-03T18:08:41Z"
+    },
+    "adrs/P-0019-plugin-contract.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "d2f60a22730f904fd8d89de2eeaf9f069460bb924093dfe2d09d75c2f61304ee",
+      "translated_at": "2026-07-03T18:08:41Z"
+    },
     "adrs/README.md": {
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "7e02b9727e5688a66a6c2e93d1da281d602cab1b5489e46a2e48fad5312599c3",
-      "translated_at": "2026-07-03T17:27:41Z"
+      "source_sha256": "e4a1643c2a4dee3dc4c63e29329ea54e5625f93786362e527855cc7641899ce9",
+      "translated_at": "2026-07-03T18:08:41Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
