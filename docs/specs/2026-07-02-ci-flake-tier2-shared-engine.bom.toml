@@ -15,7 +15,7 @@ intent_version = "c382678c516f0a50d4fce8726a6a8e39a0e64d7a"
 
 [audit_chain.spec]
 ref = "2026-07-02-ci-flake-tier2-shared-engine.md"
-version = "d5d87cbcbdd5d4448a77523049386c796591a41c"
+version = "b0cbae0fcf852cc33318ffb3e1d8a91979ca3641"
 internal_conformance = "pass"
 
 [audit_chain.spec.generated_against]
