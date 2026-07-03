@@ -2237,15 +2237,15 @@ primary-audience: human
 
 # Architecture Decision Records
 
-This section tracks mnemra-core's architectural decisions using the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
+This section tracks mnemra-core's architectural decisions in [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
 
 ## What is an ADR?
 
-An Architecture Decision Record (ADR) captures a single architectural decision, its context, and its rationale. ADRs are immutable once accepted: not edited to reflect changing opinions, but superseded by newer ADRs when decisions evolve.
+An Architecture Decision Record (ADR) captures a single architectural decision, its context, and rationale. ADRs are immutable once accepted: not edited for changing opinions, only superseded by newer ADRs as decisions evolve.
 
 ## ADR Lifecycle
 
-ADR statuses:
+Each ADR moves through the following statuses:
 
 | Status | Meaning |
 |--------|---------|
@@ -2257,22 +2257,22 @@ ADR statuses:
 
 ## G/P Prefix Projection Pattern
 
-ADRs use a two-tier identifier convention reflecting decision origin and propagation.
+ADRs use a two-tier identifier convention reflecting where a decision originates and how it propagates.
 
-- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files here; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot of each general standard as a concise entry, without the full rationale chain. Frozen at projection: upstream G-* changes do not auto-sync.
+- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files in this directory; projected once into [`DEFAULTS.md`](DEFAULTS.md) as a concise entry per standard, without the full rationale chain. Frozen at projection time: upstream changes to a G-* decision do not auto-sync into this file.
 - **P-NNNN (project)** — project-specific architecture decisions, stored as individual `P-NNNN-*.md` files in this directory. Two sub-categories:
   - *Project-specific:* a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
-  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. The override P-ADR's Status field names the default it overrides (e.g., `Status: accepted, Overrides G-0017`).
+  - *Override:* a deviation from a `DEFAULTS.md` baseline entry. An override P-ADR names the default it overrides explicitly in its Status field (e.g., `Status: accepted, Overrides G-0017`).
 
 *The default is the starting point; any deviation is a new P-ADR.*
 
 ## Using the Template
 
-To record a new project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, and write the body sections. Overrides of a `DEFAULTS.md` entry are stated explicitly in the Status section.
+New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, write the body sections. An override states the overridden `DEFAULTS.md` entry explicitly in the Status section.
 
 ## Current ADRs
 
-Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine ADR (P-0010, folded in 2026-06-08 from a post-spec-lock storage-engine evaluation), the logging-facade ADR (P-0011, recording the `tracing` facade-from-binary choice, merged 2026-06-17), and the plugin-runtime + MCP-SDK ADR (P-0012, recording the raw-Wasmtime-over-Extism runtime choice — retroactive, shipped Tasks 20–22 — and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice — forward, implemented by Task 23). P-0012 corrects the two halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed on both halves without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR, so its decisions live in the [observability baseline](../architecture/overview.md#observability), and the original observability ADR P-0004 is `deprecated` (no successor ADR). P-0011 is *not* an observability-shape ADR — it is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract, per `P-LockContract`), and is the plumbing foundation under that baseline. All Tier-A placeholder slots are resolved (see [`placeholder-resolution.md`](placeholder-resolution.md) for full status). The three retrieval-cluster ADRs (P-0014/P-0015/P-0016, authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster's Frame slots; `accepted` (2026-07-02, at the retrieval-cluster spec-exit gate).
+Nine Tier-A ADRs from WS-E-2 Stage 3; the storage substrate/engine ADR (P-0010, folded 2026-06-08 from a post-spec-lock storage-engine evaluation); the logging-facade ADR (P-0011, recording the `tracing` facade-from-binary choice, merged 2026-06-17); the plugin-runtime + MCP-SDK ADR (P-0012, recording the raw-Wasmtime-over-Extism runtime choice — retroactive, shipped Tasks 20–22 — and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice — forward, implemented by Task 23 — correcting the two halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed on both halves without an ADR). The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) is **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR; its decisions live in the [observability baseline](../architecture/overview.md#observability), and P-0004 is `deprecated` (no successor ADR). P-0011 is not an observability-shape ADR — a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract) — the plumbing foundation under that baseline. All Tier-A placeholder slots resolved; see [`placeholder-resolution.md`](placeholder-resolution.md). The three retrieval-cluster ADRs (P-0014/P-0015/P-0016, authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster's Frame slots; `accepted` (2026-07-02, at the retrieval-cluster spec-exit gate).
 
 | ADR | Summary |
 |-----|---------|
@@ -2285,12 +2285,16 @@ Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine A
 | [P-0007-plugin-resource-limits](P-0007-plugin-resource-limits.md) | Wasmtime per-instance resource limits: fuel (10B ticks), epoch-interruption (5s), memory ceiling (64 MiB), table/instance limits at Wasmtime defaults; both fuel and epoch ON at V0. |
 | [P-0008-admin-token-shape](P-0008-admin-token-shape.md) | Static admin token: opaque 32-byte random value, BLAKE3-hashed in DB, workspace claim from server-side lookup row; trivial revocation, no second signing key at V0. |
 | [P-0009-rls-admin-token](P-0009-rls-admin-token.md) | Binary admin/read-observer role enum; permission matrix per role for MCP verb categories and CLI control-plane ops; `WorkspaceCtx` carries `token_id` for write attribution; V0 app-layer enforcement with V0.1+ RLS policy hardening path. |
-| [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) | PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (one implementation); V0 embedded Postgres; A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series on named trip-wires (D3/D4/D8 — TimescaleDB demoted); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. Reframes P-0001/Frame/overview. Escalation E1 (D8 vs observability hypertables) dispositioned 2026-06-09 → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
+| [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) | PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (one implementation); V0 embedded Postgres; A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series on named trip-wires (D3/D4/D8 — TimescaleDB demoted); D6 method-borrows deferred to the retrieval ADR ([P-0014](P-0014-retrieval-architecture.md)); D7 managed-tier skipped. Reframes P-0001/Frame/[overview](../architecture/overview.md). Escalation E1 (D8 vs observability hypertables) dispositioned 2026-06-09 → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
 | [P-0011-logging-facade](P-0011-logging-facade.md) | `tracing` + `tracing-subscriber` (Green/MIT) as the logging facade, wired **facade-from-binary**: the binary (`cmd/mnemra`) owns the one global subscriber (JSON → stdout + `EnvFilter`); library crates use `tracing` macros only and never depend on `tracing-subscriber`. Macros = locked contract, subscriber = binary-owned implementation. Foundation + crate-topology only (impl-crate-only); the full emission layer (semantics, per-verb metrics, OTel export, redaction) is deferred to Task 25 / R-0004. A dependency/topology choice (P-0010-shaped), not an observability *shape* decision (which the 2026-06-09 E1 disposition keeps in the [observability baseline](../architecture/overview.md#observability)). |
 | [P-0012-plugin-runtime-and-mcp-sdk](P-0012-plugin-runtime-and-mcp-sdk.md) | Two orthogonal substrate-layer choices the never-ratified `adr-001-plugin-runtime` proposal had bundled, and the build reversed on both halves without an ADR. **Decision A (retroactive; shipped Tasks 20–22):** host plugins on **raw Wasmtime, not Extism** — P-0007's resource-limit mechanism (fuel + epoch + `ResourceLimiter`) needs direct Wasmtime `Config`/`Store` control an Extism abstraction would mediate. **Decision B (forward; implemented by Task 23):** adopt the official MCP Rust SDK **`rmcp` v1.7.0 (Apache-2.0/Green)** for the single stdio MCP server rather than hand-rolling MCP/JSON-RPC — R-0010-a mandates MCP-2025-06-18 conformance and the MCP server is the auth+dispatch trust boundary, the worst place to hand-roll a mandated external wire contract; mnemra's R-0010 handler logic rides on top as the `rmcp` `ServerHandler`, unchanged. Dependency-selection decisions (P-0010/P-0011-shaped), anchored to `P-StackDiscipline` applied per-layer. |
+| [P-0013-plugin-invocation-model](P-0013-plugin-invocation-model.md) | Typed per-verb `content` exports (create/get/list/update/delete) invoked per authenticated verb; the universal `run(input: string) -> string` string-dispatch export is RETIRED; symmetric typing both directions, no string verb-resolution on the V0 surface. Fills the export/invocation-side gap P-0012 scoped out; accepted-on-landing (maintainer lock 2026-06-20). |
 | [P-0014-retrieval-architecture](P-0014-retrieval-architecture.md) | Retrieval topology for the retrieval cluster: per-shape chunking + one collapsed-tree multi-resolution index behind a `TreeBuilder` seam (authored-first under a named eval); hybrid FTS+dense fused by application-side RRF with local cross-encoder rerank; three host-served MCP verbs with disclosure-budget mechanics; degraded-mode matrix (zero-egress a supported configuration; model artifacts deploy-time-provisioned, never runtime-fetched); instrumentation shape; model pin+verify (TB-5) + encoder footprint disclosure. P-0010 D6's four method-borrows land here (deferral closed). |
 | [P-0015-provenance-envelope-source-roles](P-0015-provenance-envelope-source-roles.md) | The two-axis envelope contract: a policy permissions record (`dont_use` / `model_egress` / `visibility` / `tenant_share` — mechanical validators, permissive not-set DDL defaults, named enforcement points, undecidable-only fail-closed poles) under the eight ratified mechanics and a single PARC-shaped decision port with per-channel serving-predicate placement + differential conformance; a trust axis (`outdated`/`authoritative`/`background`, origin-weighted supersession); freshness schema (handle kinds, decay classes, structural overrides); the closed three-kind displacement-event registry; citation form + per-dimension citation dispositions (`dont_use` stub vs `visibility` not-found); the V0 write-authorization invariant. `sensitive` dissolves into `model_egress: deny` + `visibility: admin-only`. |
-| [P-0016-edge-schema](P-0016-edge-schema.md) | One superset edge table extending the `0.8.0` substrate: closed eight-type vocabulary; `edge_class` + `origin` discriminating columns with the `supersedes` classing rule; one-logical-edge uniqueness with origin-authority upgrade (`system` > `declared` > `extracted`); the `superseded-by` forward pointer defined as the directional view of the origin-weighted `supersedes` edge (no second field); extraction contract (source-span provenance, idempotent re-extraction, per-run measured coverage); recursive-CTE traversal contract carrying workspace + policy predicates at every recursion level with the D4 instrument field set; dual-writer manifest ownership. |
+| [P-0016-edge-schema](P-0016-edge-schema.md) | One superset edge table extending the `0.8.0` substrate: closed eight-type vocabulary; `edge_class` + `origin` discriminating columns with the `supersedes` classing rule; one-logical-edge uniqueness with origin-authority upgrade (`system` > `declared` > `extracted`); the `superseded-by` forward pointer defined as the directional view of the origin-weighted `supersedes` edge (no second field); extraction contract (source-span provenance, idempotent re-extraction, per-run measured coverage); recursive-CTE traversal contract carrying workspace + policy predicates at every recursion level with the P-0010 D4 instrument field set; dual-writer manifest ownership. |
+| [P-0017-storage-cluster-model](P-0017-storage-cluster-model.md) | Refines P-0001: per-artifact-type tables classified by a closed four-shape data-shape taxonomy (state-bearing / narrative / reference / associative), with cluster membership — not the table — carrying the shared index/RLS/retention/projection/promotion policy. Locks the source-of-truth principle (content row authoritative; derived surfaces rebuildable; cross-plugin refs are soft, only core entities are hard FK targets) and the column-promotion policy (JSONB default; additive/non-destructive; physical extraction forbidden at V0). Carves out P-0001's `tasks_history` trigger-shadow, superseded by host-fn audit emission. |
+| [P-0018-core-entity-manifest](P-0018-core-entity-manifest.md) | The core opinionated entity set every plugin may reference: projects, actors (single table, `actor_type ∈ {human, agent, system}`), tags, attachments as the four hard-FK-target core entities, plus audit-log/events as a core-owned emit-target surface (storage deferred to the observability baseline + event-bus ADR). Locks the negative space: workflow primitives (tasks, dispatches, skill-runs, specs, comments) are NOT core — they are plugin-introduced. |
+| [P-0019-plugin-contract](P-0019-plugin-contract.md) | Foundational plugin-contract capstone: Path B (WebAssembly Component Model + WIT), locked 2026-05-04, proven by the V0.01 spike (`c9018e3`). Locks the cross-cutting contract no sibling owns — WIT ABI shape invariants (sync WIT both directions, Layer-1 async, per-concern interfaces, `@since`/`@unstable`/`@deprecated` gates, host-derived workspace-ctx), Wasmtime `>=44` floor, `wasm32-wasip2`-via-`wit-bindgen` toolchain, the closed Extism door, and the composite lifecycle. Four tripwired deferrals; cites P-0003/P-0007/P-0012/P-0013 for the detail each owns; supersedes/overrides null. |
 
 <!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
 
@@ -4668,7 +4672,7 @@ This ADR records *how* the substrate is built; it does not alter *what* the spec
   - Epoch supervisor: `libs/mnemra-host/plugin/epoch_thread.rs`.
   - Pool + kill-and-replace: `libs/mnemra-host/plugin/pool.rs`, `libs/mnemra-host/plugin/trap_recovery.rs`.
   - Manifest + host-fn allowlist: `libs/mnemra-host/plugin/manifest.rs`, `libs/mnemra-host/plugin/allowlist.rs`.
-  - Wasmtime dependency pin: `libs/mnemra-host/Cargo.toml` (`wasmtime = "=45.0.2"`, features `cranelift` + `component-model`; no `extism` dependency present).
+  - Wasmtime dependency pin: `libs/mnemra-host/Cargo.toml` (`wasmtime = "=45.0.2"`, features `cranelift` + `component-model`; no `extism` dependency present). This bullet records the **shipped** feature state only; the runtime-feature *forward contract* — the `async` feature's adoption path and the `component-model-async` off-switch — is owned by [P-0019-plugin-contract](P-0019-plugin-contract.md) D3, the single source for those commitments. (Cross-reference added 2026-07-03 at the P-0019 gate.)
   - Merged in `8bb2326` (Tasks 20–21) and `d378118` (Task 22).
 - Decision B — **planned location** (these paths do **not** resolve in-repo yet; Task 23 creates them, following the crate's dominant sibling-file module-entrypoint convention established in `df2d0f0` — `<module>.rs` beside the `<module>/` directory, as `auth.rs`/`auth/`, `storage.rs`/`storage/`, etc.; the one `plugin/mod.rs` is a pre-existing exception, not the pattern to follow): the MCP module entrypoint `libs/mnemra-host/mcp.rs` with `libs/mnemra-host/mcp/server.rs` (the `rmcp` `ServerHandler` replacing the would-be hand-rolled transport/framing), `libs/mnemra-host/mcp/dispatch.rs` (R-0010-c/d auth-check + capability check + single `WorkspaceCtx` construction per R-0006-b), and `libs/mnemra-host/mcp/errors.rs` (R-0010-f distinguishable JSON-RPC error codes). `rmcp` is added to `libs/mnemra-host/Cargo.toml` (features `server`, `transport-io`; no HTTP-transport feature) by Task 23.
 - Spec requirements: [R-0006-b](../../specs/2026-05-24-mnemra-core-v0-substrate.md), [R-0007-a…i](../../specs/2026-05-24-mnemra-core-v0-substrate.md), [R-0010-a/c/d/e/f](../../specs/2026-05-24-mnemra-core-v0-substrate.md), [R-0016](../../specs/2026-05-24-mnemra-core-v0-substrate.md), in [`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`](../../specs/2026-05-24-mnemra-core-v0-substrate.md) at content-lock git blob `9f4695f3a9c5f0906a7ce2e3848eb65bbd47834f` (the live spec on `main`).
@@ -5360,6 +5364,609 @@ Schema/migration ownership follows the declaring family; the host extractor is a
 - Companions: [P-0015](P-0015-provenance-envelope-source-roles.md) (the trust predicates that consume `origin`; the recorded-write discipline ES-3's upgrades ride); [P-0014](P-0014-retrieval-architecture.md) (the traversal engine and D6 borrow 4 — graph model, not engine).
 - Substrate: [P-0010](P-0010-storage-substrate-engine.md) D4/D5 (the carried deferral instruments this schema places); [P-0006](P-0006-v0-tenant-enforcement.md) (tenancy threading); [P-0002](P-0002-core-plugin-partition.md) (the partition ES-6 applies).
 - Upstream locks: [Frame](../../intent/retrieval-cluster-frame.md) R4 + §5 write-authorization surface (blob `65b1d05`); [intake](../../intent/retrieval-cluster.md) SC5 + the edge-vocabulary open item the Frame resolved.
+
+<!-- ===== docs/src/adrs/P-0017-storage-cluster-model.md ===== -->
+
+---
+title: "P-0017: Storage Cluster Model, Source-of-Truth Principle, and Column Promotion Policy"
+summary: "Refines P-0001: the content substrate's per-artifact-type tables are classified by a four-shape data-shape taxonomy (state-bearing / narrative / reference / associative); cluster membership — not the table — is what carries the shared index / RLS / retention / projection policy. Locks the source-of-truth principle (the content row is authoritative; every derived surface is non-authoritative and rebuildable; cross-plugin references are soft refs, only core entities are hard FK targets) and the column-promotion policy (JSONB is the default; promotion is additive and non-destructive; the JSONB field stays the source of truth; physical extraction is forbidden at V0)."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-02"
+decision-makers: ["the maintainer"]
+consulted: ["the architect", "the researcher", "the orchestrator"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0017: Storage Cluster Model, Source-of-Truth Principle, and Column Promotion Policy
+
+**Project:** mnemra-core
+
+## Status
+
+`accepted`
+
+Authored at the foundational-ADR-cluster stage as the formalization of the storage-layout verdicts already locked in the working docs — the Round-2 cluster review (verdict pressure-tested and accepted 2026-05-04) and the system-overview walk that folded in the subsequent use-case deltas — plus the remaining details (source-of-truth principle, column-promotion policy) locked against canon here. Accepted at the maintainer's review gate (2026-07-03); the core cluster-model choice was not re-opened by that gate (it formalizes a locked verdict) — the gate reviewed this rendering at ADR precision and confirmed the three explicit reconciliations flagged in "Decision Drivers" and "More Information".
+
+This ADR **refines** — it does not supersede — [P-0001-storage-layout](P-0001-storage-layout.md) (C1 single-document layout: whole artifact in one row, JSONB frontmatter + body + system fields, per-artifact-type tables). P-0001's C1 layout choice **and** its per-artifact-type-table granularity both stand. P-0017 adds the layer P-0001 left open: the **cluster-shape taxonomy** that classifies each per-type table by its data shape, and the two governing principles (source-of-truth, column-promotion) that a per-shape policy hangs off.
+
+**One P-0001 mechanism does *not* stand, and this ADR names the carve-out so two accepted ADRs do not silently contradict.** P-0001 specifies mutation history as "a `tasks_history` shadow table populated by trigger on UPDATE." That trigger-shadow audit mechanism is **superseded** — by the Round-2 correction that reshaped audit into a host-fn-emitted, append-only, artifact-outliving surface (locked as a core-owned emit surface in [P-0018-core-entity-manifest](P-0018-core-entity-manifest.md) D-SURFACE; its storage shape owned by the [observability baseline](../architecture/overview.md#observability) per [P-0010](P-0010-storage-substrate-engine.md) D8 escalation E1). What stands from P-0001 is **C1 + per-artifact-type tables**; what is superseded is the `tasks_history` trigger-shadow. The `associative`/state-bearing per-shape policies below emit audit via host-fn, never via a per-type trigger-shadow table.
+
+P-0017 also refines the cohesion framing of [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md) (4 `core: true` plugins, each owning its artifact-family tables) and sits under the engine-agnostic `Storage` trait locked by [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) (D5 — one swappable trait, Postgres the only V0 implementation; `libs/mnemra-host/storage.rs`), which is mnemra-core's application of the workspace-general engine-agnostic-seam standard `G-0015` (relational substrate behind a locked `Storage` seam; second adapter deferred behind a trip-wire — see [DEFAULTS.md](DEFAULTS.md)).
+
+**Substrate-independent.** The taxonomy, the source-of-truth principle, and the promotion policy are expressed against the `Storage` trait's record/transaction contract, not against Postgres specifics. Postgres index/RLS mechanics appear only as the V0 implementation illustration under P-0010's Postgres adapter; a conforming second adapter would carry the same taxonomy and principles by a different mechanism.
+
+## Context and Problem Statement
+
+[P-0001-storage-layout](P-0001-storage-layout.md) locked *how a single artifact is laid out* (C1: one row, JSONB frontmatter + body) and *the table granularity* (one per-artifact-type table, e.g. `tasks`). It deliberately left open the layer above the individual table: **how the growing set of per-type tables is organized, and what policy is shared across tables of the same data shape.** Without that layer, index strategy, row-level-security shape, retention, and projection/source-of-truth posture are decided ad hoc per table — a policy that must be restated (and can drift) on every new content type a plugin declares. mnemra-core's V0 migration scope alone is ~10 artifact types across 4 `core: true` plugins ([P-0002](P-0002-core-plugin-partition.md)), and third-party plugins at V0.1+ multiply that.
+
+The Round-2 storage review found the organizing axis: **data shape.** Artifacts fall into a small number of shapes — structured-state-bearing (status/owner/priority mutate; frontmatter dominates), narrative (body dominates; frontmatter sparse), reference (read-mostly lookups), and associative (links/edges between artifacts). Tables of the same shape want the same index strategy, the same RLS shape, the same retention and projection posture. The review's insight is that a **shape taxonomy is the unit a shared policy attaches to** — one policy per shape serves every table of that shape (P-MinBlastRadius: one policy, N tables, not N policies).
+
+Two further questions the working docs raised but did not pin at ADR precision, and which this ADR must close because every capability plugin gates on them:
+
+1. **Source of truth.** When an artifact's data is also visible through a materialized projection, a promoted index column, a derived "inbox" queue view, or a cross-artifact edge, *which representation is authoritative* — and what invariant keeps the derived ones honest? An unstated answer is how a review ends up trusting a stale secondary source over the primary (the 2026-06-08 schema-excavation case: two session tables that duplicated one entity and disagreed on 100% of shared rows, undetected until queried).
+2. **Column promotion.** A hot frontmatter field (e.g. `status`) wants a real index, and sometimes a typed column, for query performance. *When* does a field inside the JSONB document graduate to a first-class index or column, *how* is that done without a table rebuild, and *what keeps the promotion from silently moving the source of truth* or breaking the R2.7 frontmatter round-trip?
+
+This ADR does **not** re-decide C1 vs C2 vs C3 (that is [P-0001](P-0001-storage-layout.md)), the substrate/engine (that is [P-0010](P-0010-storage-substrate-engine.md)), the plugin manifest/ABI (that is [P-0003-plugin-manifest](P-0003-plugin-manifest.md)), the edge schema (that is [P-0016-edge-schema](P-0016-edge-schema.md), accepted pending merge), or observability storage (re-altituded out of the ADR layer per P-0010 D8 escalation E1, 2026-06-09 — the [observability baseline](../architecture/overview.md#observability)). It composes with all of them.
+
+## Decision Drivers
+
+- **A shared policy needs a unit to attach to (P-MinBlastRadius).** Index / RLS / retention / projection policy stated per-table drifts across tables and ripples on every new content type. A shape taxonomy gives one policy per shape that N same-shape tables inherit — a change to a shape's policy lands once.
+- **The accepted corpus already fixed the table granularity, and the manifest encodes it.** [P-0003-plugin-manifest](P-0003-plugin-manifest.md) (accepted) declares `[content_types]` where **each content type maps to its own named per-artifact-type table** (`task = { table = "tasks", schema_doc = "docs/schemas/task.md" }`; "Under C1, each type is a per-artifact-type Postgres table"). Any cluster model that collapsed those into shared physical tables would contradict two accepted ADRs (P-0001's per-type tables, P-0003's per-type-table manifest declarations) and force a cascade amendment into the built manifest schema. The taxonomy must therefore sit **over** per-type tables, not replace them (reconciliation flagged for maintainer confirmation).
+- **Plugin sandbox isolation is per-plugin-table-shaped (Security).** Under [P-0003](P-0003-plugin-manifest.md) the plugin sees only its own declared tables; the host mediates all DDL and enforces `workspace_id` from `WorkspaceCtx` ([P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md)). Per-plugin-namespaced tables keep that isolation crisp; a shared physical table holding many plugins' rows blurs table-level ownership and RLS attribution.
+- **Frontmatter must round-trip byte-equal (R2.7).** Source frontmatter is stored literally in JSONB and serializes back byte-equal (modulo system fields) per [P-0001](P-0001-storage-layout.md). Any promotion mechanism that physically extracted a field out of the JSONB document would break that round-trip — so promotion must be additive over the JSONB, not destructive.
+- **Additions must be non-breaking (R2.4 migration parsimony).** pgvector / full-text / edge promotion at V0.1+ are non-breaking column/table additions under C1. Column promotion inherits the same constraint: an index or generated column is an additive migration, never a table rebuild.
+- **Defer speculative mechanism until evidence forces it (P-Defer, Simplicity).** JSONB with expression indexes is sufficient at V0 dogfood scale; a promotion is a mechanism added on measured evidence, not anticipated need. The promotion *policy* locks now; specific numeric thresholds defer to the query-instrumentation surface behind a named trip-wire.
+- **Instrument before the heavy lift, backfillable-first (P-InstrumentBefore / IB1).** The signal that fires a promotion (predicate frequency, planner mis-estimate, latency over budget) is reconstructable from existing query logs, so the promotion decision reads real baseline evidence rather than waiting for forward-only capture.
+- **Honesty about the decision space (P-PreserveDecisionSpace).** The Round-2 review's alternative mechanization — a shared polymorphic table per cluster — is a real, argued option with real wins (RLS-policy-count reduction, GIN-selectivity-at-scale, non-breaking collapse to a single table). It is recorded below as a rejected alternative with its reasons, not dissolved as "refined away".
+
+## Considered Options
+
+The organizing axis (data-shape clusters) is the locked Round-2 verdict and is **not** re-litigated. The live decision this ADR closes is the *mechanization* — how the cluster taxonomy relates to the physical tables:
+
+1. **T1 — Per-artifact-type tables classified into cluster shapes (chosen).** Each plugin-declared content type keeps its own per-type table ([P-0001](P-0001-storage-layout.md) / [P-0003](P-0003-plugin-manifest.md)); every table is tagged with exactly one of four data-shape clusters; cluster membership carries the shared index / RLS / retention / projection / promotion policy for all tables of that shape. The cluster is a **taxonomy label + policy carrier**, not a physical table.
+2. **T2 — One shared polymorphic table per cluster (the Round-2 literal mechanization).** Each cluster is a single physical table (`artifacts_state_bearing`, etc.) discriminating types by a `type` column; multiple plugins' content types are rows in the same table. Fewer physical tables; ~4 RLS policies instead of ~10.
+3. **T3 — Per-type tables with no cluster taxonomy (P-0001 as-is).** Keep per-type tables; add no organizing layer; state index/RLS/retention/promotion policy per table.
+
+## Decision Outcome
+
+**T1 — per-artifact-type tables classified into cluster shapes.** Three decisions lock.
+
+### D-CM — The cluster model: a four-shape taxonomy over per-type tables
+
+The content substrate is organized by a **closed four-shape taxonomy**. Each per-artifact-type table ([P-0001](P-0001-storage-layout.md) C1 layout; [P-0003](P-0003-plugin-manifest.md) manifest declaration) is classified into **exactly one** cluster shape by its data shape. The cluster is the unit a shared per-shape policy attaches to; it is not a physical table and does not merge any plugin's tables. *(Anchors: the Round-2 storage review verdict, 2026-05-04 — the data-shape organizing axis, pressure-tested and accepted at that review; P-MinBlastRadius — one policy per shape, N tables inherit; Simplicity — a small closed shape set over the growing type set.)*
+
+| Cluster shape | Data shape | Example content types | Governing per-shape policy |
+|---|---|---|---|
+| **state-bearing** | Structured frontmatter dominates; status/owner/priority mutate; hot query fields | tasks, dispatches, skill-runs, repos, job-applications, contacts, inbox items | Expression indexes on hot frontmatter fields; recency index on `updated_at`; audit emission on mutation |
+| **narrative** | Body dominates; frontmatter sparse; R2.7 round-trip primacy | articles, daily logs, decisions, research briefs, prompts | Body-oriented; full-text promotion path (V0.1+); minimal frontmatter indexing |
+| **reference** | Read-mostly shared lookups; long-lived | about, memory, reference, templates | Read-optimized; low write-amplification; cache-friendly |
+| **associative** | Links/edges/joins between artifacts | the edge table ([P-0016](P-0016-edge-schema.md)), tag associations | Traversal-oriented; the edge schema and traversal contract are owned by [P-0016](P-0016-edge-schema.md), not re-decided here |
+
+Binding rules:
+
+- **The taxonomy is closed at four shapes at V0.** A new content type is classified into one of the four; it does not mint a fifth shape. Adding a shape is an amendment to this ADR (closed-but-extensible at ADR tier). *(Anchor: Simplicity — a bounded shape set is what makes the shared-policy claim hold.)*
+- **Classification is a property of the content type, declared once.** The host records each declared content type's cluster at manifest-load time; the plugin does not choose storage mechanics ("plugin says what shape; host decides where it lives" — the [architecture overview](../architecture/overview.md) Layer-1 storage-contract framing). Where a content type's cluster is not self-evident from its schema, the assignment is a maintainer call recorded against the type.
+- **`associative` defers its schema to [P-0016](P-0016-edge-schema.md).** The edge table (one superset table extending the `0.8.0` relationships substrate, closed edge-type vocabulary, `edge_class`/`origin` discriminators, recursive-CTE traversal) is **already owned by P-0016** (accepted pending merge). P-0017 places the `associative` cluster *shape* and the per-shape policy slot; it does **not** re-decide the edge schema. Double-deciding it is forbidden.
+- **Inbox is not a cluster shape — it is a derived view.** The Round-2 predecessor named a fifth `inbox` cluster; the system-overview walk demoted it: inbox *items* are state-bearing content (they carry lifecycle state and mutate — validated by the inbox-triage use case, 2026-05-04, whose own finding is "queue-shape doesn't need a special substrate — it's content-shape with appropriate indexing"), and the *inbox queue* is a derived view over those state-bearing rows (`ORDER BY arrived_at WHERE triage_state = 'pending'`). This is a direct consequence of D-SoT below. *(Anchor: the use-case delta surfaced in the overview walk; D-SoT — a queue projection is non-authoritative.)*
+
+### D-SoT — Source-of-truth principle
+
+**The artifact content row (its JSONB frontmatter + body, in its per-type table) is the single source of truth for that artifact's data.** Every other representation of that data is *derived* and *non-authoritative*. *(Anchors: Honesty — one authoritative source, everything else labeled derived; P-LockContract — the content row is the locked contract, derived surfaces vary behind it; P-MinBlastRadius — one place a value changes.)*
+
+Binding rules:
+
+- **Every derived surface is reconstructable from source rows with no external input.** Materialized projections, promoted index columns, derived queue views (the inbox view), and cross-artifact edges of `origin = extracted` ([P-0016](P-0016-edge-schema.md)) are all rebuildable by replaying from their cluster's source rows. *Binary-observable:* dropping and rebuilding any derived surface yields a result equal (modulo row ordering) to the pre-drop surface, given only the source rows as input. A derived surface that cannot be reconstructed from source rows is a defect, not a source of truth.
+- **A derived surface is never written as if authoritative.** Writes land on the source row; derived surfaces are refreshed from it (host-owned projection refresh per [P-0001](P-0001-storage-layout.md)). No write path treats a projection, a promoted column, or a view as the write target for artifact data.
+- **Cross-plugin references are soft refs; only core entities are hard FK targets.** A reference from one plugin's artifact to another plugin's artifact is an opaque ID with **no** database foreign key ([P-0002](P-0002-core-plugin-partition.md) — cross-plugin aggregation is a projection concern; the [architecture overview](../architecture/overview.md) Layer-2 API contract — soft refs, host-mediated). The *authoritative* copy of a referenced entity lives in its owning plugin/core; the soft ref is a pointer, never a duplicated copy. Hard foreign keys are reserved for references to the **core opinionated entities** locked in [P-0018-core-entity-manifest](P-0018-core-entity-manifest.md) (projects, actors, tags, attachments), which every plugin may FK to. *(Migration delta: the legacy task-store `task.repo_id → repos` foreign key becomes a soft ref, because `repos` is a plugin entity under [P-0002](P-0002-core-plugin-partition.md), not a core entity; `task.project_id → projects` stays a hard FK, because `projects` is core. Surfaced by the schema-context-excavation use case, 2026-06-08.)*
+- **Derivation across clusters carries a lineage pointer.** When an artifact is derived from another (an inbox item routed into a task; an ELT transform producing a canonical entity from staged source), the derived artifact carries a `derived_from` soft ref to its source, and the source remains the source-of-record for the derived-from relationship ([architecture overview](../architecture/overview.md) ingest-ELT framing; the inbox-triage use case, 2026-05-04). Source and derived are distinct rows with a known relationship, not the same data restructured.
+
+### D-CP — Column promotion policy
+
+A **column promotion** graduates a hot frontmatter field from *inside* the JSONB document to a first-class query mechanism. JSONB is the default home for every frontmatter field; promotion is the exception, taken on measured evidence. *(Anchors: Simplicity + P-Defer — JSONB is the smallest sufficient mechanism, promote only when evidence forces it; P-InstrumentBefore / IB1 — the firing signal is backfillable from query logs; R2.4 — additive migrations only; R2.7 + D-SoT — the JSONB field stays the source of truth.)*
+
+Binding rules:
+
+- **Promotion is additive and non-destructive; the JSONB field stays the source of truth.** The promotion ladder, cheapest first: (1) an **expression index** over the JSONB field (`CREATE INDEX ... ((frontmatter->>'status'))`, optionally partial `WHERE type = 'X'`); (2) a **generated column** derived from the JSONB field, plus an index on it, when typed comparison or repeated projection warrants it. In every case the promoted artifact is a *derivation* of the JSONB field, which remains the source of truth (D-SoT). *Binary-observable:* after any promotion, the source frontmatter still round-trips byte-equal (R2.7), and dropping the promoted index/column and re-reading from JSONB returns the same values.
+- **Physical extraction is forbidden at V0.** Physically moving a field *out* of the JSONB document into a standalone column (removing it from `frontmatter`) is not permitted at V0: it would break the R2.7 round-trip and move the source of truth off the content row. *(Anchor: R2.7 + D-SoT. Trip-wire to reconsider: a field whose write-amplification or storage cost under JSONB is measured — via query/write instrumentation — to exceed budget AND whose promotion to a generated column does not recover it; reconsideration is a maintainer call producing an amendment, not an autonomous extraction.)*
+- **Promotion fires on measured evidence, not anticipation.** A field is a promotion candidate when instrumentation shows it appears in a `WHERE`/`ORDER BY` predicate above a measured frequency **and** the JSONB expression-index plan is empirically insufficient (planner mis-estimate driving latency over the query budget). The maintainer decides, driven by the instrument; a plugin cannot self-promote, and an agent does not promote speculatively. *(Anchor: P-InstrumentBefore — the query-instrumentation surface is the input.)*
+- **The specific numeric thresholds are deferred, with a named trip-wire.** *Decision content:* the promotion criteria are (predicate-frequency threshold, expression-index-selectivity-insufficiency, latency-over-budget); what defers is only their numeric calibration. *Deferral anchor:* P-Defer / DF1 + IB1 — the thresholds are sized from the evidence the instrument surfaces, not guessed now. *Trip-wire:* the query-instrumentation surface (the [observability baseline](../architecture/overview.md#observability) query-latency + predicate-frequency signals) reporting a field over the frequency-and-latency bound; that report is the mechanical firing event that puts a specific field's promotion in front of the maintainer. Until the instrument exists, the item is **parked** on the observability-baseline delivery, not silently pending.
+
+### Consequences
+
+**Good:**
+
+- One index / RLS / retention / projection / promotion policy per shape serves every same-shape table; a policy change lands once (P-MinBlastRadius). New content types inherit their shape's policy at classification time — no per-table policy restatement.
+- Consistent with the accepted corpus: P-0001's per-type tables and P-0003's per-type-table manifest declarations are unchanged; no manifest-schema cascade.
+- Plugin sandbox isolation stays crisp (per-plugin-namespaced tables; plugin sees only its own; host-mediated DDL and `workspace_id` — [P-0003](P-0003-plugin-manifest.md), [P-0006](P-0006-v0-tenant-enforcement.md)).
+- The source-of-truth principle makes the "stale secondary source trusted over primary" failure (the schema-context-excavation use case, 2026-06-08) a structural impossibility: derived surfaces are rebuildable and never written as authoritative.
+- Column promotion is a bounded, additive, evidence-driven operation that preserves R2.7 and the source of truth — no table rebuild, no round-trip break.
+
+**Bad / Trade-offs:**
+
+- Per-shape RLS is ~10 policies at V0 (one per table) rather than the ~4 a shared-polymorphic-table model (T2) would give. Accepted: the policy surface is small and auditable at V0 scale, and per-table policies keep RLS attribution aligned with plugin ownership. (The RLS **role model and per-(role, table) policy shape** are owned by [P-0009-rls-admin-token](P-0009-rls-admin-token.md) — binary admin/read-observer roles, ~20 policies at V0.1 = 2 roles × ~10 tables, application-layer at V0; P-0017 does not re-decide it. "One policy per table" here is the per-shape *uniformity* claim: every table of a given cluster shape carries the same workspace-isolation policy shape, so the role model applies uniformly within a shape.)
+- GIN-on-frontmatter selectivity at large scale is a real T2 advantage this model forgoes; the promotion ladder (expression + generated columns) plus per-table indexes recover most of it at V0 dogfood scale, and the T2 collapse remains available at V0.1+ behind a scale trip-wire (see Alternatives).
+- The four-shape taxonomy is a judgment surface: a content type whose shape is ambiguous needs a maintainer classification call. Bounded by the closed shape set and recorded against the type.
+
+## Pros and Cons of the Options
+
+### T1 — Per-type tables classified into cluster shapes (chosen)
+
+- Pro: consistent with accepted P-0001 (per-type tables) and P-0003 (per-type-table manifest), so no cross-ADR contradiction and no manifest cascade.
+- Pro: preserves per-plugin table ownership and sandbox isolation.
+- Pro: the cluster is a pure policy carrier — one policy per shape, N tables inherit (P-MinBlastRadius).
+- Con: ~10 RLS policies at V0, not ~4; larger GIN footprint at extreme scale than a shared table.
+
+### T2 — One shared polymorphic table per cluster (Round-2 literal mechanization)
+
+- Pro: ~4 physical tables and ~4 RLS policies; GIN-on-frontmatter selectivity stays shape-coherent (the Round-2 selectivity argument); a non-breaking collapse to a single polymorphic table is available at scale.
+- Con: **contradicts accepted P-0001 (per-type tables) and P-0003 (per-type-table manifest declarations)** — adopting it forces a supersede + a cascade amendment into the built manifest schema.
+- Con: multiple plugins' rows share one physical table, blurring per-plugin table ownership and RLS attribution against the [P-0003](P-0003-plugin-manifest.md) sandbox model (plugin sees only its own tables).
+- Con: its selectivity-at-scale win is not load-bearing at V0 dogfood scale (<1k rows/type); the promotion ladder recovers most of it. **Preserved as a V0.1+ option** behind a scale trip-wire: if measured GIN size / planner accuracy on per-type tables degrades past budget at production scale, the shape-coherent shared table (or Postgres declarative partitioning by `type`) is the promotion path — a storage-layer refactor that leaves the plugin contract and this ADR's taxonomy/principles intact.
+
+### T3 — Per-type tables, no cluster taxonomy (P-0001 as-is)
+
+- Pro: smallest change; no new organizing concept.
+- Con: index / RLS / retention / projection / promotion policy is restated per table and drifts; a policy change ripples across every table by hand. The taxonomy exists precisely to give that policy a single attachment point (P-MinBlastRadius).
+
+## More Information
+
+**Reconciliations flagged for maintainer confirmation at the review gate:**
+
+1. **Refine vs supersede P-0001.** This ADR reads P-0001's "per-artifact-type tables over polymorphic single-table" as *preserved*, and adds the cluster taxonomy as a layer P-0001 left open — a refinement, not a supersession. The alternative reading (the Round-2 verdict intends the literal shared-polymorphic-table collapse, T2) would instead *supersede* P-0001 and cascade an amendment into accepted [P-0003](P-0003-plugin-manifest.md). The evidence (P-0003's accepted per-type-table manifest declarations; P-MinBlastRadius) points to refine; confirm the reading.
+2. **`associative` cluster ↔ P-0016 boundary.** P-0017 places the `associative` shape and its policy slot; [P-0016-edge-schema](P-0016-edge-schema.md) owns the edge table, vocabulary, and traversal. Confirm there is no overlap to resolve at merge (P-0014/P-0015/P-0016 are on an unmerged sibling branch).
+3. **Inbox demotion.** The `inbox` cluster of the Round-2 predecessor is dropped in favor of inbox-items-as-state-bearing + inbox-as-derived-view. Confirm this fold-in of the overview-walk delta.
+
+**Relationships:**
+
+- Refines: [P-0001-storage-layout](P-0001-storage-layout.md) — C1 layout + per-type tables stand; this ADR adds the cluster taxonomy, source-of-truth principle, and promotion policy P-0001 left open.
+- Refines: [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md) — plugin cohesion is per-artifact-family tables classified by shape; cross-plugin references are soft refs.
+- Sits under: [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) — the taxonomy and principles are expressed against the engine-agnostic `Storage` trait (D5; `libs/mnemra-host/storage.rs`); Postgres mechanics are the V0 implementation illustration.
+- Composes with: [P-0003-plugin-manifest](P-0003-plugin-manifest.md) (per-type-table declarations; host-mediated DDL); [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md) (`workspace_id` from `WorkspaceCtx`); [P-0016-edge-schema](P-0016-edge-schema.md) (the `associative` cluster's edge table — accepted pending merge); [P-0018-core-entity-manifest](P-0018-core-entity-manifest.md) (the hard-FK-target core entities).
+- Source verdict: the Round-2 storage review (2026-05-04) — the data-shape organizing axis (locked, pressure-tested at that review). Forward-design companion: the [architecture overview](../architecture/overview.md) storage-layer section — the four cluster shapes and the per-plugin-namespaced-table framing folded in here. (These provenance docs are workspace-private working artifacts; their verdicts are stated inline above so this ADR reads self-contained.)
+- Validated against use cases (workspace-private working artifacts): the `get_context_for` use case, 2026-06-05 (associative/edge cluster + soft refs across families); the schema-context-excavation use case, 2026-06-08 (core-entity FK targets + source-of-truth over stale secondary sources); the inbox-triage use case, 2026-05-04 (inbox-as-state-bearing-content + inbox-as-derived-view). No use case surfaced a shape the model cannot serve.
+- Deferred with trip-wire: column-promotion numeric thresholds (parked on the observability-baseline query-instrumentation surface; fires when a field crosses the measured predicate-frequency-and-latency bound). T2 shared-table collapse (parked on a production-scale GIN/planner-degradation trip-wire).
+
+<!-- ===== docs/src/adrs/P-0018-core-entity-manifest.md ===== -->
+
+---
+title: "P-0018: Core Opinionated Entity Manifest"
+summary: "Locks the universal cross-plugin reference set mnemra-core defines and every plugin may reference: projects, actors (single table, actor_type ∈ {human, agent, system}), tags, and attachments as the four hard-FK-target core entities, plus audit-log/events as a core-owned emit-target surface (distinct in kind from the FK-target entities; its storage shape is owned by the observability baseline and the event-bus ADR, not re-decided here). Locks the negative space: workflow primitives (tasks, dispatches, skill-runs, specs, comments) are NOT core — they are plugin-introduced."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-02"
+decision-makers: ["the maintainer"]
+consulted: ["the architect", "the researcher", "the orchestrator"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0018: Core Opinionated Entity Manifest
+
+**Project:** mnemra-core
+
+## Status
+
+`accepted`
+
+Authored at the foundational-ADR-cluster stage alongside [P-0017-storage-cluster-model](P-0017-storage-cluster-model.md), formalizing the core-entity short list locked during the system-overview walk. Accepted at the maintainer's review gate (2026-07-03), which reviewed this rendering at ADR precision and confirmed the two reconciliations flagged in "Decision Drivers" and "More Information" (the unified `actors` entity vs the [P-0002](P-0002-core-plugin-partition.md) builtin split; the audit-log/events surface vs the P-0010 D8 / E1 observability re-altitude).
+
+**Substrate-independent.** This ADR locks *which entities are core* and *how they are referenced* (the reference model), not their storage mechanics. The core entities are laid out per [P-0017](P-0017-storage-cluster-model.md) / [P-0001](P-0001-storage-layout.md) under the engine-agnostic `Storage` trait ([P-0010](P-0010-storage-substrate-engine.md) D5); the audit/events surface's storage shape is owned elsewhere (see D-SURFACE).
+
+## Context and Problem Statement
+
+Every plugin in mnemra-core needs to reference a small set of universal concepts: *which project scopes this artifact*, *who authored or is assigned to it*, *how it is tagged*, *what files hang off it*, and *what happened to it*. If each plugin defined its own project, its own actor model, its own tags, the system would fragment: cross-plugin queries ("everything in project X", "everything assigned to agent Y") would be impossible without reconciling N private definitions, and there would be no stable foreign-key target for the references that hold the workspace together.
+
+mnemra-core resolves this by **defining a short, opinionated set of core entities itself** — entities that live above the plugin boundary, that every plugin may reference, and that are the only hard foreign-key targets in the system. The set must be *short* (Simplicity — each core entity is a commitment every adopter inherits and every alternative orchestrator must accept) and *opinionated* (it encodes mnemra's stance on what is genuinely universal versus what is a workflow choice a plugin makes).
+
+Three questions this ADR closes, each of which every capability plugin gates on:
+
+1. **Membership.** Which entities are core, and which are deliberately *not*? The negative space is as load-bearing as the positive: making the wrong thing core forces every adopter to inherit a model that should have been a plugin's private choice.
+2. **The reference kind.** Core membership is not uniform. Some core concepts are *entities plugins point at* (a task references a project); one is a *surface plugins emit to* (a plugin records an audit event). Conflating them hides a real distinction and drags an undecided storage question into this ADR.
+3. **The actor model.** Authorship and assignment currently ride as free strings (`assigned_to: "Puck"`). A single typed `actors` entity with a closed `actor_type` replaces that — and must reconcile with the separate user/agent bootstrap builtins already partitioned in [P-0002](P-0002-core-plugin-partition.md).
+
+This ADR does **not** define the plugin/builtin bootstrap partition ([P-0002](P-0002-core-plugin-partition.md)), the storage layout or cluster taxonomy ([P-0017](P-0017-storage-cluster-model.md) / [P-0001](P-0001-storage-layout.md)), the edge schema for the associative cluster ([P-0016](P-0016-edge-schema.md), accepted pending merge), the observability/audit storage shape (the [observability baseline](../architecture/overview.md#observability) per P-0010 D8 escalation E1), or the event-bus durability/delivery semantics (a forthcoming event-bus ADR). It names the entities and the reference model; those ADRs own the mechanics.
+
+## Decision Drivers
+
+- **Universal cross-plugin references need a stable, shared target (Maintainability, Decomposition).** Project scoping, authorship, taxonomy, and payload are cross-cutting in every plugin; a per-plugin definition of each fragments cross-plugin queries and removes any hard FK target. Defining them once, core-side, is what lets a plugin FK to a project it does not own.
+- **Keep the set short and opinionated (Simplicity).** Each core entity is a permanent commitment every adopter and every alternative orchestrator inherits. The bar for core membership is *genuinely universal reference target*, not *frequently used*.
+- **The negative space is load-bearing (Migration cost / portability, Honesty).** Workflow primitives (tasks, dispatches, skill-runs, specs, comments) are the shape a *particular* orchestrator imposes. Making tasks core would force every alternative orchestrator built on mnemra to inherit our task model — the wrong shape (the system-overview walk's explicit finding: "Tasks-as-core would force every alternative orchestrator to inherit our task model"). They are plugin-introduced.
+- **The reference kind is a real distinction (Honesty, P-LockContract).** Projects/actors/tags/attachments are *entities plugins FK to*; audit-log/events is a *surface plugins emit to*. Locking them as one undifferentiated "core set" would (a) obscure the distinction and (b) pull an undecided storage question — where audit/events physically live — into an ADR whose scope is the reference model. They are locked as core, but as two kinds.
+- **The audit/events storage shape is owned elsewhere (P-0010 D8 / E1).** The 2026-06-09 escalation-E1 disposition re-altituded observability *out* of the project-ADR layer ([P-0004](P-0004-observability-shape.md) `deprecated`, no successor ADR; the [observability baseline](../architecture/overview.md#observability) owns the audit surface); the event bus's durable-events table and delivery semantics are a forthcoming event-bus ADR. P-0018 must stay substrate-independent and **not** re-decide either — it locks the *reference/emit semantics*, not the store. *(Reconciliation flagged for confirmation.)*
+- **Closed enums over free strings (P-ShiftLeft D2 — validator before field).** `actor_type` is a closed set `{human, agent, system}`; an actor reference is typed, not a free string. A closed enum has a mechanical validator; a free string does not — the same discipline the accepted retrieval corpus already applies ([P-0016](P-0016-edge-schema.md) `edge_class`/`origin`; [P-0015](P-0015-provenance-envelope-source-roles.md) trust axis). The `system` member is already exercised by [P-0016](P-0016-edge-schema.md) (system-actor attribution on host-written edges). *(Reconciliation: a single `actors` entity vs the separate `P-builtin-users` + `P-builtin-agents` bootstrap components in [P-0002](P-0002-core-plugin-partition.md); flagged for confirmation.)*
+
+## Considered Options
+
+1. **E1 — Minimal opinionated core set: projects, actors, tags, attachments (FK targets) + audit-log/events (emit surface); everything else plugin-introduced (chosen).**
+2. **E2 — Broad core set: include workflow primitives (tasks, dispatches, skill-runs) as core entities.** Every orchestrator inherits mnemra's workflow model.
+3. **E3 — No core entities: everything plugin-owned; all references are soft refs.** No hard FK targets; each plugin re-derives scoping, authorship, and taxonomy.
+
+## Decision Outcome
+
+**E1 — the minimal opinionated core set.** Three decisions lock.
+
+### D-ENT — The core entity set (four FK-target entities)
+
+mnemra-core defines these four entities. They are host-owned (above the plugin boundary — their existence is a prerequisite for plugin scoping and authorship, consistent with the [P-0002](P-0002-core-plugin-partition.md) builtin tier), and they are the **only hard foreign-key targets** in the system. Every plugin may FK to them; all *other* cross-plugin references are soft refs ([P-0017](P-0017-storage-cluster-model.md) D-SoT). *(Anchors: Maintainability + Decomposition — a shared stable reference target; Simplicity — the set is short; [P-0017](P-0017-storage-cluster-model.md) D-SoT — hard FKs are reserved for core entities.)*
+
+| Core entity | Why it is core | Reference role |
+|---|---|---|
+| **projects** | Universal scoping; the partition key for almost every artifact. The highest-impact core entity — it sets every plugin's data partition. | Hard FK target (`project_id`) |
+| **actors** | Universal authorship and assignment target. A single table with a closed `actor_type` (D-ACTOR) replaces free-string `assigned_to`. | Hard FK target (`actor_id`, e.g. `created_by`, `assigned_to`) |
+| **tags** | Cross-cutting taxonomy; mnemra-core enforces tag uniqueness per workspace so a tag means one thing across plugins. | Hard FK target (via a tag-association row in the `associative` cluster) |
+| **attachments** | Universal payload/file reference; deduplicated. Plugins reference an attachment; mnemra owns blob handling (the blob substrate is not decided here — it is owned by the storage/ingest layer). | Hard FK target (`attachment_id`) |
+
+Binding rules:
+
+- **These four are the only hard-FK targets.** A database foreign key is permitted only to a core entity. Any other cross-plugin reference is a soft ref (opaque ID, no FK — [P-0017](P-0017-storage-cluster-model.md) D-SoT). *Binary-observable:* a schema audit finds a hard foreign key only where the referenced table is one of the four core entities; every cross-plugin reference to a non-core entity is a soft ref.
+- **The set is closed at four (plus the D-SURFACE emit surface).** Adding a core entity is an amendment to this ADR, held to the "genuinely universal reference target" bar. *(Anchor: Simplicity — the short list is the commitment.)*
+- **Core entities are workspace-scoped like every other row.** They carry `workspace_id` and are reached under `WorkspaceCtx` ([P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md)); "core" means universally-referenceable, not workspace-global.
+
+### D-ACTOR — Actors: one table, closed `actor_type`
+
+Authorship and assignment reference a **single `actors` entity**, discriminated by a closed enum **`actor_type` ∈ `{human, agent, system}`**. This replaces free-string author/assignee fields (`assigned_to: "Puck"` → an `actor_id` FK). *(Anchors: P-ShiftLeft D2 — validator-before-field: a closed enum has a mechanical validator, a free string does not; the in-corpus closed-enum precedent already set by [P-0016](P-0016-edge-schema.md) (`edge_class`, `origin`) and [P-0015](P-0015-provenance-envelope-source-roles.md) (trust axis, displacement-event kinds).)*
+
+**`actor_type` is the actor-*identity* axis — distinct from, and composing with, the two adjacent "source-role" axes in the accepted retrieval corpus.** It answers *who acted* (a person, an AI team member, or the host itself). It is **not** [P-0015](P-0015-provenance-envelope-source-roles.md)'s trust/source-role axis (`authoritative` / `background` / `outdated`), which grades *how trusted a source artifact is*, and it is **not** [P-0016](P-0016-edge-schema.md)'s edge-`origin` axis (`declared` / `extracted` / `system`), which records *how an edge came to exist*. The three compose on the `system` case and must stay aligned: a **`system` actor** (D-ACTOR identity) is the principal a host-initiated write runs under, which is exactly [P-0015](P-0015-provenance-envelope-source-roles.md)'s **system principal** at the decision port (a subsystem principal, not a workspace role) and produces [P-0016](P-0016-edge-schema.md)'s **`origin = system`** edges under system attribution in `created_by`. Naming the three facets keeps the shared `system` token from silently drifting across ADRs.
+
+Binding rules:
+
+- **`actor_type` is a closed set of exactly three members.** `human` (a person), `agent` (an AI team member / automated actor), `system` (host/system-initiated action — migration handler, host-side extractor, scheduled job). A value outside the set is rejected at write. *Binary-observable:* a write with `actor_type = "human"` succeeds; a write with `actor_type = "robot"` is rejected; `system` resolves for a host-initiated write with no human or agent principal.
+- **One entity, one FK target.** Authorship (`created_by`), assignment (`assigned_to`), and any other actor reference all FK to the single `actors` table, not to per-type tables. *(Reconciliation with [P-0002](P-0002-core-plugin-partition.md): the `P-builtin-users` and `P-builtin-agents` bootstrap builtins remain the identity-management components that establish human and agent identity respectively; the `actors` table is the unified reference **entity** those components populate. Two lenses — bootstrap component vs FK-target entity — not a contradiction. Flagged for maintainer confirmation, since it refines how P-0002's two identity builtins surface as one reference target.)*
+
+### D-SURFACE — Audit-log / events: a core-owned emit-target surface (not an FK-target entity)
+
+Audit-log/events is **core** — a universal, mnemra-core-owned surface every plugin may record to — but it is core in a **different kind** from the four FK-target entities: plugins *emit to* it (via a host-fn), they do not *FK to* it. This distinction is deliberate and load-bearing. *(Anchors: Honesty — name the reference kind precisely; the [architecture overview](../architecture/overview.md) core-entity framing, which lists audit-log/events among the core cross-plugin surfaces; [P-0002](P-0002-core-plugin-partition.md) — audit is host-fn-mediated, plugins call `log.emit`/`event.emit`, they do not own the substrate.)*
+
+Binding rules:
+
+- **Plugins emit; they do not reference by FK.** A plugin records an audit event or emits a domain event through a host-fn (`log.emit` / `event.emit` / equivalent per [P-0003](P-0003-plugin-manifest.md)); the host writes it. Audit rows reference an `artifact_id` and `actor` without enforcing a database FK back to the artifact — audit must **outlive** the artifacts it describes (soft-delete + audit-of-deletion semantics; the Round-2 verdict placed audit as append-only, artifact-outliving). *Binary-observable:* deleting an artifact does not cascade-delete its audit rows; the audit trail survives.
+- **P-0018 does not decide where audit/events physically live.** The audit surface's storage shape is owned by the [observability baseline](../architecture/overview.md#observability) (the 2026-06-09 escalation-E1 disposition re-altituded observability out of the ADR layer — [P-0004](P-0004-observability-shape.md) `deprecated`, no successor; time-series stores use plain timestamped tables per [P-0010](P-0010-storage-substrate-engine.md) D8, TimescaleDB demoted). The durable-events table and delivery/ordering semantics for the *event bus* are owned by a forthcoming event-bus ADR. P-0018 locks only that audit-log/events is a **core-owned emit-target surface with artifact-outliving, append-only reference semantics** — not its substrate. *(Reconciliation flagged: this keeps P-0018 substrate-independent and avoids re-deciding the observability re-altitude.)*
+
+### D-BOUNDARY — The negative space: workflow primitives are not core
+
+**Workflow primitives are plugin-introduced, not core:** tasks, dispatches, skill-runs, specs, comments, and their kin. They are the shape a *particular* orchestrator (Puck's workflow) imposes, not a universal reference target. *(Anchors: Migration cost / portability — a core task model would force every alternative orchestrator built on mnemra to inherit it; the system-overview walk's explicit finding; [P-0002](P-0002-core-plugin-partition.md) — tasks/dispatches/skill-runs are the `tasks` plugin's content types, not builtins.)*
+
+Binding rules:
+
+- **A workflow primitive is a plugin content type.** Tasks and dispatches live in the `tasks` plugin ([P-0002](P-0002-core-plugin-partition.md)); they FK to core entities (a task FKs to its `project` and its `actor`) but are not themselves core. *Binary-observable:* a task row carries a hard FK to `projects` and to `actors`, and no plugin outside its owner carries a hard FK to `tasks` — a reference to a task from another plugin is a soft ref ([P-0017](P-0017-storage-cluster-model.md) D-SoT).
+- **The core/plugin line is drawn at universality, not frequency.** That tasks are the most-used artifact in the current workspace does not make them core; universality of *reference target* is the bar, and an alternative orchestrator would not share our task model.
+
+### Consequences
+
+**Good:**
+
+- Cross-plugin queries over the universal axes (by project, by actor, by tag) resolve against one shared definition, not N private ones.
+- The four hard-FK targets are the only place referential integrity is DB-enforced; everything else is a soft ref, keeping the plugin sandbox boundary crisp ([P-0017](P-0017-storage-cluster-model.md) D-SoT, [P-0003](P-0003-plugin-manifest.md)).
+- A typed `actors` model with a closed `actor_type` replaces drift-prone free strings and gives authorship/assignment a validator; the `system` member cleanly attributes host-initiated writes (already exercised by [P-0016](P-0016-edge-schema.md)).
+- The FK-target-vs-emit-surface distinction keeps P-0018 substrate-independent: it locks audit/events reference semantics without re-deciding the observability re-altitude or the event-bus store.
+- The negative space keeps mnemra portable: an alternative orchestrator adopts mnemra-core without inheriting Puck's workflow model.
+
+**Bad / Trade-offs:**
+
+- Four core entities are four permanent commitments; a mistaken inclusion is expensive to reverse (every adopter inherits it). Mitigated by the short-list bar and by keeping workflow primitives out.
+- The unified `actors` table refines how [P-0002](P-0002-core-plugin-partition.md)'s separate user/agent builtins surface; the reconciliation must be confirmed at the review gate rather than assumed.
+- Deferring the audit/events *store* to other owners means P-0018 alone does not make audit runnable — it locks the reference contract; the observability baseline and event-bus ADR complete it.
+
+## Pros and Cons of the Options
+
+### E1 — Minimal opinionated core set (chosen)
+
+- Pro: short, portable, and opinionated; the only hard-FK targets are genuinely universal.
+- Pro: the FK-target-vs-emit-surface split keeps the ADR substrate-independent and avoids re-deciding observability storage.
+- Con: four permanent commitments; a wrong inclusion is costly. Bounded by the universality bar.
+
+### E2 — Broad core set (workflow primitives as core)
+
+- Pro: tasks/dispatches are heavily used; making them core would give them DB-enforced integrity everywhere.
+- Con: forces every alternative orchestrator to inherit mnemra's task/dispatch model — the wrong shape (portability/Migration-cost failure; the overview-walk finding). Rejected.
+
+### E3 — No core entities (all references soft)
+
+- Pro: maximal plugin autonomy; nothing is imposed core-side.
+- Con: no hard FK targets anywhere; every plugin re-derives project scoping, authorship, and taxonomy, and cross-plugin queries over those axes require reconciling N private definitions. Loses the universal-reference-target value the core set exists to provide. Rejected.
+
+## More Information
+
+**Reconciliations flagged for maintainer confirmation at the review gate:**
+
+1. **Unified `actors` vs the [P-0002](P-0002-core-plugin-partition.md) builtin split.** P-0018 locks one `actors` entity with `actor_type ∈ {human, agent, system}`; P-0002 partitions `P-builtin-users` and `P-builtin-agents` as separate bootstrap builtins. Read here as two lenses (identity-management component vs unified FK-target entity), not a contradiction — the builtins populate the one entity. Confirm the reading.
+2. **Audit-log/events as an emit surface, not an FK-target entity, with its store owned elsewhere.** P-0018 locks the reference/emit semantics (append-only, artifact-outliving, host-fn-mediated) and explicitly defers the storage shape to the [observability baseline](../architecture/overview.md#observability) (per P-0010 D8 / escalation-E1, 2026-06-09) and the forthcoming event-bus ADR. Confirm this keeps P-0018 substrate-independent as intended.
+
+**Relationships:**
+
+- Refines: [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md) — P-0002 partitions the bootstrap components (builtins vs plugins); P-0018 enumerates the core FK-target entity set and the emit surface, overlapping on projects/actors and adding tags/attachments as core entities.
+- Composes with: [P-0017-storage-cluster-model](P-0017-storage-cluster-model.md) D-SoT (hard FKs reserved for core entities; everything else soft ref); [P-0001-storage-layout](P-0001-storage-layout.md) (core entities use the C1 layout); [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) (laid out under the `Storage` trait); [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md) (`workspace_id` on core-entity rows); [P-0003-plugin-manifest](P-0003-plugin-manifest.md) (the `event.emit`/`log.emit` host-fns plugins use for the emit surface); [P-0016-edge-schema](P-0016-edge-schema.md) (exercises `actor_type = system`; tag associations and edges live in the `associative` cluster — accepted pending merge); [P-0015-provenance-envelope-source-roles](P-0015-provenance-envelope-source-roles.md) (the trust/source-role and system-principal axes D-ACTOR aligns `actor_type` against — accepted pending merge).
+- Storage of the audit/events surface: the [observability baseline](../architecture/overview.md#observability) ([P-0004-observability-shape](P-0004-observability-shape.md) `deprecated`, re-altituded per P-0010 D8 escalation-E1) and a forthcoming event-bus ADR — not decided here.
+- Source: the system-overview walk's core-entity short list (the [architecture overview](../architecture/overview.md) core-entities section, a workspace-private forward-design companion; its verdict — projects / actors / tags / attachments / audit-log-events, with workflow primitives explicitly non-core — is stated inline above so this ADR reads self-contained).
+- Validated against use cases (workspace-private working artifacts): the schema-context-excavation use case, 2026-06-08 (projects as an FK target; the actor-model drift a single `actors` entity closes); the `get_context_for` use case, 2026-06-05 (soft refs across artifact families, with hard FKs only to core entities). No use case required a workflow primitive to be core.
+
+<!-- ===== docs/src/adrs/P-0019-plugin-contract.md ===== -->
+
+---
+title: "P-0019: Plugin Contract — Component Model + WIT ABI, Toolchain, and Lifecycle"
+summary: "The foundational plugin-contract decision the substrate ADRs already assumed but none recorded: Path B (WebAssembly Component Model + WIT), locked end of session 4 (2026-05-04) and proven by the V0.01 spike (commit c9018e3). Locks the cross-cutting contract no single sibling owns — the WIT ABI shape (sync WIT both directions; Component Model Layer 1 only: async host feature ON, component-model-async / WIT-async-types OFF; per-concern interface granularity; @since/@unstable/@deprecated stability gates; native WIT structure with opaque JSON-as-string document payloads; host-derived workspace-ctx never a bare write-path parameter), the Wasmtime version floor (>=44.0.x, rationale), the guest toolchain (wasm32-wasip2 target directly via wit-bindgen, NOT cargo-component), the explicit closing of the Extism-migration door, and the composite plugin lifecycle sequence. Records four deferrals with named tripwires: WIT-async-types, cosign-on-wkg third-party distribution verification, the V0.1+ language-support matrix, and the Path-B retreat trigger. This is a capstone that CITES its siblings for the detail each owns (manifest schema -> P-0003; resource limits + kill-and-replace -> P-0007; runtime framework + rmcp SDK + exact Wasmtime pin -> P-0012; typed export/invocation ABI -> P-0013); it does not supersede or override any of them."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-02"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator", "the researcher", "the security reviewer"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0019: Plugin Contract — Component Model + WIT ABI, Toolchain, and Lifecycle
+
+**Project:** mnemra-core
+
+## Status
+
+`accepted`
+
+This ADR records the **foundational plugin-contract decision** for the V0 substrate: the plugin model is **WebAssembly Component Model + WIT** (Path B), locked by the maintainer at the end of session 4 (**2026-05-04**) and validated by the V0.01 existence-test spike (commit `c9018e3`, on `main`, 2026-05-07). It is recorded `accepted`-on-landing in the same spirit as [P-0011-logging-facade](P-0011-logging-facade.md) and [P-0012-plugin-runtime-and-mcp-sdk](P-0012-plugin-runtime-and-mcp-sdk.md): the decision precedes and is already reflected in the tree; this ADR ratifies it, it does not re-open it.
+
+**Why this ADR exists, and why late.** The Path-B decision was a brief Hard-constraint carry-forward. The Frame ([`docs/src/intent/mnemra-core-frame.md`](../intent/mnemra-core-frame.md), §"Correction 2" and §"Plugin runtime") *narrated* it — "Plugins are WebAssembly Component Model modules loaded in-process by Wasmtime, communicating with the host via WIT-defined host functions" — but, unlike the manifest schema and the resource limits, it was never given its own `{{P-XXX}}` open ADR slot. The substrate ADRs authored since (P-0003, P-0007, P-0012, P-0013) each **presuppose** Path B and lock a *piece* of the plugin contract, but the foundational plugin-model decision and the cross-cutting ABI-shape / toolchain / lifecycle / language-reach commitments never got a home. This ADR is that home.
+
+**Capstone that cites — not a parent that overrides.** The sibling ADRs were made independently and earlier, anchored to workspace principles and the Frame, before this ADR existed. This ADR does **not** impose a hierarchy on them: it records the foundational decision they all assumed, and **cites** each as the authority for the detail it owns — the manifest schema and host-fn import allowlist ([P-0003-plugin-manifest](P-0003-plugin-manifest.md)); the per-instance resource limits and kill-and-replace ([P-0007-plugin-resource-limits](P-0007-plugin-resource-limits.md)); the runtime framework, the MCP SDK, and the exact Wasmtime pin ([P-0012-plugin-runtime-and-mcp-sdk](P-0012-plugin-runtime-and-mcp-sdk.md)); the typed export/invocation ABI ([P-0013-plugin-invocation-model](P-0013-plugin-invocation-model.md)); the V0 signing chain ([P-0005-v0-signing-chain](P-0005-v0-signing-chain.md)). `supersedes`, `superseded_by`, and `overrides` all stay `null`. See the **Reconciliation with prior ADRs** section for the explicit division of authority.
+
+**A note on numbering.** This ADR carries the highest number in the plugin-contract cluster (P-0019) yet records the *earliest* and most foundational decision (2026-05-04). ADR numbers reflect recording order, not decision-date order — the same accepted-on-landing pattern P-0012/P-0013 already use. A reader who wants the plugin contract should start here and follow the citations down into the sibling ADRs for detail.
+
+## Context and Problem Statement
+
+Mnemra-core hosts plugins **in-process** via Wasmtime. Two plugin-model families were on the table (the plugin-runtime survey framing):
+
+- **Path A — stdio-MCP-wrappers / reusable substrate (Extism).** Model plugins as external processes wrapped over stdio MCP, or host them via the **Extism** framework (itself Wasmtime-backed), inheriting Extism's multi-language PDK ecosystem and a working host-fn substrate to lift from (as `hyper-mcp` does).
+- **Path B — WebAssembly Component Model + WIT.** Host plugins as Component Model components loaded in-process by Wasmtime, communicating with the host via **WIT-defined** host functions, with typed values crossing the boundary natively.
+
+The maintainer locked **Path B** (2026-05-04). The Frame records the plugin model as a Hard constraint: *"WebAssembly Component Model modules hosted in-process via Wasmtime, with IO-free plugin core logic; all plugin IO MUST be mediated by host-provided functions; plugins are leaves with no sideways linkage; cross-plugin calls are host-mediated"* ([Frame](../intent/mnemra-core-frame.md), §Correction 1). The gating condition for locking the ADR — that the exact shape mnemra wants (long-running stateful in-process CM plugins) actually instantiates on the current toolchain — was **satisfied by the spike**: commit `c9018e3` scaffolds a Cargo workspace with a host (`cmd/mnemra`) and a plugin (`plugins/mnemra-echo/`), compiles the plugin to a Component Model component (`wasm-tools component wit` verified), and passes all 7 acceptance criteria (instantiate-once, `run("hello") -> counter:1`, `run("world") -> counter:2`). The gate is met; this ADR records the evidence.
+
+**What is already decided elsewhere, and what remains.** Since 2026-05-04 the substrate ADRs filled most of the plugin contract's *interior*:
+
+- The **manifest schema** and the typed **host-fn import** ABI (the `content.emit` surface a plugin *calls*) — [P-0003](P-0003-plugin-manifest.md).
+- The **per-instance resource limits** (fuel + epoch + memory ceiling) and the **kill-and-replace** invariant — [P-0007](P-0007-plugin-resource-limits.md).
+- The **runtime framework** (raw Wasmtime, not Extism), the **MCP SDK** (`rmcp`), and the **exact Wasmtime pin** (`=45.0.2`) — [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md).
+- The typed **export/invocation** ABI (the fixed `content` interface a plugin *exports*) — [P-0013](P-0013-plugin-invocation-model.md).
+
+What *no* ADR records is the foundational decision and the cross-cutting contract: **Path B itself**; the **WIT ABI shape invariants** that hold across the whole boundary; the **Component Model async-layer** decision; the **Wasmtime version floor** rationale; the **guest toolchain** choice; the explicit **closing of the Extism-migration door**; the composite **plugin lifecycle sequence**; and the **language-reach** commitments (the V0.1+ language matrix and the Path-B retreat trigger). This ADR locks those, and cites the siblings for everything they already own.
+
+**Bounded input.** The decision draws on the researcher's Component-Model follow-up survey (2026-05-04) — a bounded investigation of WIT patterns, async layering, multi-language tooling, distribution/signing, and production precedents. The survey's concrete "ADR-8 implications" are the direct substrate for the locks below. Where the survey proposed an *illustrative* WIT shape, the implemented shape (`wit/host.wit`, `wit/echo.wit`) and the locked spec requirements are authoritative; the survey is input, not the departure.
+
+## Decision Drivers
+
+- **`P-StackDiscipline`.** Wasmtime, the Component Model, WIT, and `wit-bindgen` are the project's native runtime and toolchain — an in-stack primitive, not an added ecosystem. The async host bridge, the resource knobs, and the typed ABI are all how the runtime the project already targets expresses its contracts. The retreat trigger (below) is where this driver is tested: if the in-stack path cannot cover a hard multi-language requirement, the driver's "unless no in-stack path exists" clause fires.
+- **`P-LockContract`.** The plugin contract is what every plugin author writes against and what the host guarantees; locking its shape (WIT interfaces, sync-both-directions, stability gates) while letting the implementation vary (host-fn bodies, pool machinery, the exact runtime version) is the direct application. The contract is the product surface third-party authors will consume — the `P-PerRepoFirst` "published-product" carve-out applies: the contract is shared-from-definition because it *is* the thing shipped.
+- **`P-Defer`.** The unstable pieces (WIT-async-types, third-party distribution signing, the wider language matrix) are deferred behind **named tripwires**, not silently omitted. Each deferral below states what it would decide, the canon that supports deferring now, and the mechanical condition that fires it.
+- **`P-PreserveDecisionSpace`.** Path A is recorded as the option Path B was chosen against, with the retreat trigger keeping it a live fallback rather than an erased alternative. The maintainer's stated values (strict typing; aversion to non-deterministic string dispatch) are recorded, not paraphrased away.
+- **`P-SecurityLayered`.** The sandbox is a trust boundary: IO-free plugin core, host-mediated IO, signature-verified fail-closed load, a per-instance host-fn allowlist, and DoS-containment limits are the layered controls the ABI shape and lifecycle must preserve. The verification-before-execution ordering in the lifecycle is a structural (not advisory) control.
+- **Frame Hard constraints and quality-attribute scenarios.** The Frame commits to plugin-sandbox outcomes — *"an infinite-loop plugin is killed and replaced from the pool; no single-process-wide DoS via plugin"* (the DoS-containment QA scenario) and *"a plugin calling an `@unstable` host function emits a deprecation warning"* / *"an ABI-change PR causes all `core: true` plugins to recompile and pass tests"* (the pre-1.0 ABI-evolution QA scenario). The ABI shape and the lifecycle are locked to satisfy these.
+
+## Considered Options
+
+The primary decision is the plugin-model family; four sub-decisions are the cross-cutting contract shape within Path B. Each is recorded with the alternative it was chosen against (`P-PreserveDecisionSpace`); the rejected alternatives are historical, not live options.
+
+**Primary — plugin model family:**
+
+1. **Path B — Component Model + WIT (chosen).** In-process CM components, typed WIT host-fn boundary, native typed values, `wkg`/OCI as the eventual distribution path.
+2. **Path A — stdio-MCP-wrappers / Extism substrate (rejected).** External-process stdio wrappers, or Extism-on-Wasmtime, inheriting a ~10-language PDK and a lift-from-`hyper-mcp` substrate reference.
+
+**Sub-decision — transition posture (given Path B):**
+
+3. **CM directly at V0 (chosen).** Build on `wasmtime::component` from primitives; no Extism transitional substrate.
+4. **Extism-first, migrate to CM later (rejected).** Ship Extism core modules at V0, re-platform to CM at V0.2+.
+
+**Sub-decision — Component Model async layer:**
+
+5. **Layer 1 only: executor-side async host, sync WIT (chosen).** Host runs an async executor and registers `async` host-fn bodies via the Wasmtime `async` feature; all WIT functions (imports and exports) are **sync**; the guest never sees async.
+6. **Layer 2: WIT-level async types (rejected for V0).** Declare `future<T>` / `stream<T>` / `error-context` in WIT under the `component-model-async` feature.
+
+**Sub-decision — guest toolchain:**
+
+7. **`wasm32-wasip2` target directly, via `wit-bindgen` (chosen).** Upstream Rust Tier-2 target; `cargo build --target wasm32-wasip2`.
+8. **`cargo-component` (rejected).** The older component-authoring wrapper.
+
+**Sub-decision — Extism migration door:**
+
+9. **Close it explicitly (chosen).** No hybrid host, no preserved Extism-compatible ABI path; the door is stated shut.
+10. **Leave a hybrid/transitional door open (rejected).** A dual host-fn ABI (Extism-style for core modules, WIT for components) maintained in parallel.
+
+## Decision Outcome
+
+Chosen: **Path B (Component Model + WIT), built directly on CM, with a sync-WIT / Layer-1-async ABI shape, authored via `wasm32-wasip2`, and the Extism door closed.** Six locked decisions and four deferrals follow. Each lock carries its canon anchor at the decision-and-rationale line; acceptance criteria are binary-observable; each deferral carries decision-content + anchor + firing tripwire.
+
+### D1 — Path B: Component Model + WIT, built directly on CM
+
+**Decision:** The plugin model is WebAssembly Component Model components loaded in-process by Wasmtime, communicating with the host via WIT-defined host functions; typed values cross the boundary natively; no Extism transitional substrate is used at V0. *Anchors: Frame Hard constraint (plugin model); `P-StackDiscipline` (CM+WIT is the in-stack primitive); `P-LockContract` (the WIT boundary is the locked contract); the workspace typed-binary-encoding standard, which names CM as the "exceeds-compliance" boundary (no encoding step at all on the host↔plugin boundary).* The transitional Extism-first posture is rejected because it would require maintaining two host-fn ABIs (Extism-allocator/JSON and WIT-typed) and would force an ecosystem-wide plugin re-platform at V0.2+; mnemra has zero legacy plugins, so there is nothing a hybrid would preserve (survey §6).
+
+**Acceptance criteria:**
+- [ ] A `core: true` plugin compiles to a Component Model **component** (not a bare core module), verifiable via `wasm-tools component wit <plugin>.wasm` (the spike's verification, commit `c9018e3`).
+- [ ] The plugin guest crate declares no `std::fs`, no `std::process`, and no stdin/stdout; every IO category it uses is a host-fn import declared in its manifest ([P-0003](P-0003-plugin-manifest.md)).
+- [ ] No `extism` dependency appears in `libs/mnemra-host/Cargo.toml` (verifiable by grep; confirmed absent, [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) Decision A).
+
+### D2 — WIT ABI shape invariants
+
+**Decision:** The host↔guest WIT boundary holds the following shape invariants across every interface, current and future. *Anchors: `P-LockContract` (the ABI shape is the locked contract); `P-AgentPrimarySource` (a statically-typed, tool-checkable contract is the agent-primary form the maintainer values); the Frame ABI-evolution QA scenario (`@since`/`@unstable`/`@deprecated` as the discipline mechanism); `P-SecurityLayered` (host-derived context and the manifest allowlist as structural controls).* The concrete signatures live in `wit/host.wit` (imports) and `wit/echo.wit` (the `content` export world) and are pinned by the locked spec (import ABI `R-0012-*`; export/invocation ABI `R-0019-*`); [P-0003](P-0003-plugin-manifest.md) owns the import-side detail and [P-0013](P-0013-plugin-invocation-model.md) owns the export-side detail. This ADR locks the **invariants that hold across the whole boundary**, not the per-function signatures (which its siblings and the WIT files own — restating them here would duplicate a single-source fact and drift against it).
+
+The invariants:
+
+1. **Sync WIT in both directions.** Every WIT function — host-fn imports and content exports alike — is a synchronous `func(...)`. There is no WIT-level `async`, no `future`/`stream` return, on the V0 surface. Verifiable: no function in `wit/host.wit` or `wit/echo.wit` carries an async marker.
+2. **Component Model Layer 1 only** (see D3): async is an *executor-side host* mechanism, invisible in the WIT contract. The guest writes sync functions; the host bridges IO-bearing host-fn bodies on its async executor.
+3. **Native WIT structure; opaque document payloads as `json = string`.** The ABI *structure* — function signatures, the host-derived `workspace-ctx` record, ids, type discriminators, paging records — crosses as native WIT types with no marshalling envelope. Opaque artifact document content (frontmatter, body) crosses as `type json = string` (a UTF-8 string alias), deliberately **not** `list<u8>` (spec `R-0012-f`). So the boundary is marshalling-free for its typed structure and string-payloaded for opaque documents; it is not "no serialization anywhere."
+4. **Per-concern interface granularity.** Host functions are partitioned into concept-focused interfaces (`artifact`, `metrics`, `log`, `event`, `projection`, `sampling`, `secrets`, plus shared `types`), composed into the plugin `world` as imports — not one mega-interface. A plugin that does not need an interface does not import it.
+5. **`workspace-ctx` is host-derived and never a bare write-path parameter.** Every host-fn carries `ctx: workspace-ctx` (a host-constructed record) as its first parameter; `workspace-id` never appears as a standalone plugin-supplied parameter on any write path (spec `R-0006-a` / `R-0012-d`; [P-0006](P-0006-v0-tenant-enforcement.md)). Export-side content methods take **no** ctx — the host threads workspace context across the export boundary itself.
+6. **Stability gates are the ABI-evolution discipline.** Every WIT item carries a stability annotation: `@since(version = x.y.z)` for stable surface, `@unstable(feature = ...)` for surface that may change (e.g., `sampling-request` is `@unstable(feature = sampling-v0)`), `@deprecated(version = ...)` before removal. This is a first-class WIT/toolchain mechanism, not hand-rolled schema policing, and it is how the pre-1.0 ABI-evolution QA scenario is satisfied.
+
+**Acceptance criteria:**
+- [ ] Every function in `wit/host.wit` and `wit/echo.wit` is sync (no async marker present).
+- [ ] `type json = string` is declared (not `list<u8>`); a `list<u8>` document payload fails the contract (spec `R-0012-f`).
+- [ ] Every host-fn import takes `ctx: workspace-ctx` as its first parameter; no host-fn takes a standalone `workspace-id` parameter.
+- [ ] Every WIT interface item carries a stability annotation (`@since` / `@unstable` / `@deprecated`).
+- [ ] Host-fn interfaces are per-concern (≥ 2 named interfaces, not a single interface containing all functions).
+
+### D3 — Wasmtime version floor `>= 44.0.x`, and the Component Model async layer
+
+**Decision:** The plugin substrate requires **Wasmtime `>= 44.0.x`** as its ABI-compatibility floor, running with **executor-side async ON** (the Wasmtime `async` crate feature — "Layer 1") and **WIT-level async types OFF** (the `component-model-async` crate feature stays disabled — "Layer 2 deferred", see DEF-1). *Anchors: `P-StackDiscipline` (the async host bridge is Wasmtime-native, no added ecosystem); `P-Defer` (the unstable WIT-async-types track is deferred behind a tripwire); the survey async-layering finding (Layer 1 GA since 2026, Layer 2 feature-gated and a moving target).*
+
+The floor rationale — why `>= 44`: it is the point at which the three properties the contract needs are jointly stable — Component Model support with semver-aware import resolution, executor-side async via `Linker::instantiate_async` / `func_wrap_async` behind the `async` feature, and the `wasm32-wasip2` guest target (D4). Below 44 the async-host story is not jointly stable with CM at the versions the survey verified.
+
+The floor is the **contract-level** commitment; the **exact operational pin** is owned by [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) / [P-0007](P-0007-plugin-resource-limits.md), currently `wasmtime = "=45.0.2"` in `libs/mnemra-host/Cargo.toml`, which **satisfies** this floor. This ADR does not restate or compete with that pin (single-source: the exact version lives in P-0012's domain; this ADR states the floor and defers to P-0012 for the operational value).
+
+**On the `async` feature and the current tree — a forward contract, not a present-tense claim.** This decision locks that the async host feature *will be enabled* when the async host-fn invocation path lands. The current `libs/mnemra-host/Cargo.toml` declares `features = ["cranelift", "component-model"]` and **not yet** `async`, because the component-host invocation path (async host-fn bodies, `instantiate_async`) is not yet built — the host-fn bodies are `todo!()` stubs and the pool still instantiates core modules, per [P-0013](P-0013-plugin-invocation-model.md)'s "Bucket A" analysis. The `async` feature is added together with that path; this ADR does not assert it is enabled today. (This is a reconciliation obligation against P-0012's recorded feature list — see Reconciliation.)
+
+**Acceptance criteria:**
+- [ ] The operational Wasmtime pin (P-0012's `=45.0.2`) is `>= 44.0.0`.
+- [ ] The `component-model-async` crate feature is NOT enabled at V0 (verifiable in `libs/mnemra-host/Cargo.toml`).
+- [ ] When the async host-fn path lands, the `async` crate feature is enabled and host-fn import bodies register as `async` (via `func_wrap_async` or bindgen-generated async imports); no host-fn body blocks the executor thread synchronously on IO.
+
+### D4 — Guest toolchain: `wasm32-wasip2` directly, not `cargo-component`
+
+**Decision:** Rust plugin guests target the upstream **`wasm32-wasip2`** target directly (`cargo build --target wasm32-wasip2`, bindings via `wit-bindgen`), **not** `cargo-component`. *Anchors: `P-StackDiscipline` (the upstream Rust target is the in-stack, first-class path); the survey toolchain finding (`cargo-component` is documented "experimental, not currently stable", last release ~8 months stale, and is being superseded by the upstream `wasm32-wasip2` target).* The workspace `rust-toolchain.toml` declares `targets = ["wasm32-wasip2"]` and `wit-bindgen = "0.57"` is pinned at the workspace root; the spike guest (`plugins/mnemra-echo/`) builds this way.
+
+**Acceptance criteria:**
+- [ ] `rust-toolchain.toml` lists `wasm32-wasip2` as a target.
+- [ ] The plugin build uses `cargo build --target wasm32-wasip2`; no `cargo-component` invocation appears in the build recipes (`justfile`).
+- [ ] Guest bindings are generated by `wit-bindgen` (pinned `0.57`), not by `cargo-component`'s bindings path.
+
+### D5 — The Extism-migration door is closed
+
+**Decision:** There is **no** hybrid host and **no** preserved Extism-compatible migration path. mnemra does not run a dual host-fn ABI (Extism-allocator/JSON for core modules alongside WIT-typed for components), and does not keep an Extism-shaped fallback "in reserve." *Anchors: `P-StackDiscipline` (one substrate, not two ABIs maintained forever); [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) Decision A (raw Wasmtime chosen over Extism at the runtime layer); the survey §6 finding (a Wasmtime Engine *can* load both core modules and CM components, so a hybrid is mechanically possible, but for mnemra it means two host-fn ABIs in parallel forever with zero legacy to justify it).* [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) closed the door at the *runtime-framework* layer (Extism the framework is not a dependency); this ADR closes it at the *ABI-shape* layer: the WIT ABI is not an Extism-PDK-compatible ABI, and no code path preserves one.
+
+This close is **conditional on the retreat trigger (DEF-4) not firing.** If a hard multi-language requirement forces a Path-B reconsideration, re-opening a hybrid Extism-PDK path alongside CM is exactly what that revisit would weigh — so the door is closed for V0 but its re-opening condition is named, not erased (`P-PreserveDecisionSpace`).
+
+**Acceptance criteria:**
+- [ ] No `extism` dependency in any workspace `Cargo.toml`.
+- [ ] The host exposes exactly one host-fn ABI (the WIT-typed one); there is no second Extism-style registration path.
+
+### D6 — Plugin lifecycle sequence
+
+**Decision:** A `core: true` plugin traverses a fixed lifecycle whose **cross-piece ordering invariants** are locked here; the per-transition mechanics are owned by the sibling ADRs cited at each step. *Anchors: `P-SecurityLayered` (verification precedes execution as a structural control); `P-LockContract` (the lifecycle sequence is part of the plugin contract); the Frame DoS-containment QA scenario (trap → kill → replace).* The ordering invariant is the load-bearing lock: **no later state is reachable without its predecessor**, and verification gates are fail-closed.
+
+The sequence (state → the gate that must pass to advance → the owning ADR for the mechanics):
+
+1. **Discovered** — the component `.wasm` and its signed manifest are located (single `core: true` plugin at V0).
+2. **Signature-verified** → the manifest signature chains to the mnemra root key; **synchronous, fail-closed** — no instance exists until `verify()` returns `Ok`; `core` status is honored only by signature provenance. *Owner: [P-0005](P-0005-v0-signing-chain.md) (+ its 2026-05-24 amendment).*
+3. **Content-hash-verified** → the component bytes match the manifest's signed `[component].hash` (BLAKE3), recomputed on every load, fail-closed on mismatch or absence. *Owner: [P-0003](P-0003-plugin-manifest.md) §Amendment 2026-06-30.*
+4. **Manifest-parsed + allowlist-compiled** → the manifest's declared host-fn surface is compiled into a per-instance allowlist; calls outside it fail at the WIT boundary. *Owner: [P-0003](P-0003-plugin-manifest.md).*
+5. **Instantiated into the pool** → the component is instantiated (Component Model, not core module) with its per-instance resource limits attached (fuel, epoch deadline, memory ceiling) into a 3–5-instance host-managed pool. *Owner: [P-0007](P-0007-plugin-resource-limits.md).*
+6. **Ready** — the instance is pooled and awaiting invocation; state persists across invocations on the same instance (long-running stateful in-process model).
+7. **Invoking** → per authenticated MCP verb, the host runs `DF-auth-check` and the manifest per-verb capability check **before dispatch**, then invokes the **exact typed `content` export** for that verb (static verb→export resolution; no string dispatch), under a per-invocation fuel/epoch budget. *Owners: [P-0013](P-0013-plugin-invocation-model.md) (export invocation), [P-0007](P-0007-plugin-resource-limits.md) (per-invocation budget), the MCP front (spec `R-0010-c/d`).*
+8. **Trapped → killed → replaced** → on a resource-limit trap (fuel/epoch/memory) the store traps, the host logs a structured attribution event, poisons the pool slot, and creates a fresh instance; the trap is **never** propagated as a host-process panic. *Owner: [P-0007](P-0007-plugin-resource-limits.md).*
+9. **Shutdown** — pool instances are dropped at host shutdown.
+
+**Acceptance criteria:**
+- [ ] Signature verification (state 2) and content-hash verification (state 3) both complete `Ok` before any instance is created (state 5); a failure at 2 or 3 yields a load rejection, not a loaded-but-unverified instance.
+- [ ] A manifest-declared verb with no matching typed export is non-dispatchable and returns a structured error (not a panic, not a string-dispatch fallback) — [P-0013](P-0013-plugin-invocation-model.md).
+- [ ] A resource-limit trap (state 8) results in a replaced pool slot and an error for the current invocation, with the host process surviving (no panic) — [P-0007](P-0007-plugin-resource-limits.md).
+
+### Deferrals
+
+Each deferral states what it would decide, the canon that supports deferring now, and the **named tripwire** that fires it.
+
+#### DEF-1 — WIT-level async types (Layer 2 / `component-model-async`)
+
+**Deferred:** WIT-level async return types (`future<T>`, `stream<T>`, `error-context`) and the concurrent-task scheduling primitives, which would let a host-fn return a stream (e.g., a streaming `read`/query verb) instead of a materialized result. *Deferral anchor: `P-Defer` — the `component-model-async` crate feature is feature-gated and a moving target in Wasmtime 44/45; adopting it now is opting into an unstable ABI surface.* **Tripwire:** a required host-fn or content verb whose contract genuinely needs a streaming/async-typed return **and** the runtime has stabilized `component-model-async` (both conditions). The WIT corpus is designed so such a verb can be added later under a new `@since` version without reshaping the sync surface; a preference for a cleaner async story is not a firing condition.
+
+#### DEF-2 — Third-party plugin distribution + signature verification (cosign-on-`wkg`)
+
+**Deferred:** The distribution-and-verification story for **third-party** (non-`core`) plugins — publishing components to an OCI/`wkg` registry and verifying a per-artifact signature (cosign/sigstore-style, a `application/vnd.mnemra.plugin.v1` artifact type) before instantiation. *Deferral anchor: `P-Defer` — V0 ships only `core: true` plugins embedded in the binary; there is nothing to distribute, so the distribution-verification mechanism has no V0 forcing function.* This is distinct from and does **not** weaken the V0 signing chain: [P-0005](P-0005-v0-signing-chain.md) already locks synchronous fail-closed ed25519 verification of `core: true` plugins at load. The survey §4 finding is that `wkg` (the BA-canonical CM distribution path) does **not** bake in cosign the way `hyper-mcp` does — so this is real work mnemra builds at V0.1+, not a substrate freebie. **Tripwire:** the first third-party (non-`core`) plugin distribution surface opening — i.e., V0.1+ third-party plugin install. The recommended shape when it fires (a sigstore-compatible verifier over `wkg`'s OCI fetch, applied before instantiation) is recorded as the survey's recommendation, not locked here.
+
+#### DEF-3 — V0.1+ language-support matrix
+
+**Deferred:** The supported plugin-authoring language matrix beyond Rust. V0 is **Rust-only** (Rust-first via WIT, per the Frame V0/V1 boundary). The V0.1+ matrix, when third-party authoring opens, is tiered: **Tier 1** — Rust, JS/TS (via `jco`); **Tier 2** — Python (`componentize-py`, build-time-imports caveat), TinyGo (standard Go has documented WIT/GC issues — TinyGo only), C# (Spin-parity gaps); **Tier 3** — C/C++, MoonBit. Languages outside the matrix have no supported on-ramp. *Deferral anchor: `P-Defer` — the matrix is a V0.1+ product-positioning commitment with no V0 forcing function (V0 has no third-party authors); publishing it before authoring opens would lock a maturity claim about tooling that is still moving.* **Tripwire:** V0.1+ third-party plugin authoring opening; the matrix is published in the plugin-author docs at that point, tiered by the then-current tooling maturity. This is an honest narrowing of "plugins in any language" — a planned consequence of Path B, not a stumble.
+
+#### DEF-4 — Path-B retreat trigger
+
+**Deferred (as a reversal condition, not a decision):** Whether to reconsider Path B in favor of a hybrid that reintroduces an Extism-PDK authoring path alongside CM. *Anchor: `P-PreserveDecisionSpace` (Path A stays a documented, reachable fallback) + `P-StackDiscipline`'s "unless no in-stack path exists" clause (the retreat is where that clause would fire).* The Bytecode-Alliance CM language list omits four languages Extism's PDK supports with no CM authoring path in 2026: **F#, Haskell, AssemblyScript, Zig** (Haskell is the genuinely load-bearing loss; the other three are small/long-tail per survey §3). mnemra's actual Tier-1 audience (Rust, JS/TS, Python, Go) is well-covered on CM, so the gap is tolerable for V0. **Tripwire:** a Tier-2 enterprise customer surfaces F#/Haskell/AssemblyScript/Zig plugin authoring as a **hard requirement**. If that fires, this ADR is revisited and a hybrid Extism-PDK-alongside-CM path is weighed against the cost of a dual host-fn ABI (D5). Absent a hard requirement, Path B stands and the Extism door (D5) stays closed; a preference for broader language reach is not a firing condition.
+
+### Consequences
+
+**Good:**
+
+- The foundational plugin-model decision finally has an ADR home; a reader starting here can navigate the whole plugin contract via citations, and a future reversal (Path B → Path A) has a concrete record to reverse against rather than only Frame narrative.
+- The ABI shape invariants (D2) give the maintainer's stated values — strict typing, no non-deterministic string dispatch, tool-checkable contracts — a single durable statement, complementing P-0013's export-side typing lock.
+- The async-layer decision (D3) commits to the GA, stable executor-side path and quarantines the moving `component-model-async` target behind a tripwire, so the V0 substrate does not track an unstable ABI feature.
+- The Extism door (D5) is shut at both the runtime-framework layer (P-0012) and the ABI-shape layer (here), preventing a dual-ABI-forever drift, while the retreat trigger keeps the reversal honest.
+- The lifecycle sequence (D6) locks the security-relevant ordering (verify → hash → allowlist → instantiate → invoke; trap → kill → replace) as a cross-piece invariant, so a future refactor cannot reorder verification after instantiation without visibly violating this ADR.
+- The four deferrals give the "plugins in any language" and "signed third-party distribution" stories named V0.1+ landing conditions instead of implicit expectations.
+
+**Bad / Trade-offs:**
+
+- **No production substrate exemplar.** Path B is build-on-Wasmtime-from-primitives; no production user runs mnemra's exact shape (long-running stateful in-process CM plugins) on CM in 2026 (survey §5). The runtime is mature; the *plugin-runtime wiring* (pool, lifecycle, host-fn registration) is mnemra's to write, with documentation + WIT spec as reference rather than working code to lift. Accepted as pioneering budget spent on the substrate, consistent with the project's clean-design-over-schedule weighting.
+- **Language reach narrows** from ~10 (Extism PDK) to ~8 (BA-CM-blessed), losing F#/Haskell/AssemblyScript/Zig authoring paths (DEF-4). Mitigated by the Tier-1 audience coverage and the retreat trigger; unmitigated for a Haskell-shop plugin author until (if) the trigger fires.
+- **Async ceiling.** Sync-WIT / Layer-1 async means the same one-in-flight-call-per-instance concurrency ceiling as Path A, solved by the instance pool; the cleaner WIT-async story is deferred (DEF-1).
+- **This ADR carries no field-level ABI or manifest detail of its own** — it is deliberately a cross-cutting-invariants + citations document. A reader who wants a specific host-fn signature or manifest field must follow the citation to `wit/host.wit` / [P-0003](P-0003-plugin-manifest.md) / [P-0013](P-0013-plugin-invocation-model.md). This is the intended division of authority (avoids duplicating single-source facts), but it means P-0019 is not self-sufficient for signature-level questions.
+
+## Pros and Cons of the Options
+
+### Path B — Component Model + WIT (chosen)
+
+- Pro: No marshalling on the typed ABI structure — native WIT values cross the boundary; the cleanest possible answer to the workspace typed-binary-encoding standard for the in-process boundary.
+- Pro: WIT stability gates (`@since`/`@unstable`/`@deprecated`) are toolchain-enforced ABI-evolution discipline; Path A would police the same discipline in hand-rolled JSON-schema code.
+- Pro: Typed `resource`/record contracts and static verb→export resolution give tool-checkable reason-about-ability the maintainer values; single substrate evolution path (no dual ABI).
+- Con: No production exemplar at mnemra's shape; pioneering wiring cost (survey §5). Language reach narrows vs Extism's PDK.
+
+### Path A — stdio-MCP-wrappers / Extism substrate (rejected)
+
+- Pro: Reusable substrate (lift from `hyper-mcp`); ~10-language PDK inherited "for free"; V0 ships sooner.
+- Con: Extism-first-then-CM is a re-platform, not a migration — every plugin's host-fn imports change shape at V0.2+; a dual ABI is the alternative, maintained forever. Marshalling (JSON/allocator) at the boundary; weaker typing than native WIT. Starts in violation of the workspace typed-binary-encoding standard for the host↔plugin boundary. The reusable-substrate benefit is largest exactly at V0 — once CM is wired directly, the migration cost is work already paid.
+
+### Layer-1-only async, sync WIT (chosen) vs Layer-2 WIT async (rejected for V0)
+
+- Pro (Layer 1): `Linker::instantiate_async` / `func_wrap_async` are GA behind the stable `async` feature; the host bridges IO-bearing host-fns on its executor while the guest writes plain sync functions; the same pattern Spin/wasmCloud run in production.
+- Con (Layer 2): `future`/`stream`/`error-context` are gated behind `component-model-async`, feature-gated and not committed stable in 2026 — building host-fns returning `stream<T>` now tracks a moving target. Deferred with a tripwire (DEF-1).
+
+### `wasm32-wasip2` directly (chosen) vs `cargo-component` (rejected)
+
+- Pro (`wasm32-wasip2`): upstream Rust Tier-2 target, first-class, `cargo build` with no extra wrapper; the direction the ecosystem is consolidating toward.
+- Con (`cargo-component`): documented "experimental, not currently stable"; ~8-month-stale release cadence; explicitly being superseded by the upstream target (survey §6). Warranted only for richer non-WASI WIT scenarios V0 does not have.
+
+## Reconciliation with prior ADRs
+
+This ADR is a **capstone that cites**. It records the foundational Path-B decision the sibling ADRs already assumed, and defers to each for the detail it owns. It does **not** supersede or override any of them; `supersedes`/`superseded_by`/`overrides` stay `null`. The division of authority:
+
+| Concern | Authority | This ADR's role |
+|---|---|---|
+| Plugin model = CM + WIT (Path B) | **P-0019 (here)** + Frame Hard constraint | Records the foundational decision; no prior ADR owned it |
+| Manifest schema + host-fn **import** allowlist + component content-hash | [P-0003](P-0003-plugin-manifest.md) | Cites for field-level detail; D2/D6 reference, do not restate |
+| Per-instance resource limits + kill-and-replace | [P-0007](P-0007-plugin-resource-limits.md) | Cites for limit values and trap mechanics (D6 states only the ordering) |
+| Runtime framework (raw Wasmtime) + MCP SDK (`rmcp`) + **exact** Wasmtime pin | [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) | Cites for the `=45.0.2` pin (D3 states only the `>= 44` floor); D5 extends P-0012's Extism close to the ABI-shape layer |
+| Typed **export/invocation** ABI | [P-0013](P-0013-plugin-invocation-model.md) | Cites for the fixed `content` interface + static verb→export resolution (D2/D6 reference) |
+| V0 signing chain (ed25519, fail-closed load) | [P-0005](P-0005-v0-signing-chain.md) | Cites in the lifecycle (D6 state 2); DEF-2 explicitly does not weaken it |
+| Host-derived `WorkspaceCtx` | [P-0006](P-0006-v0-tenant-enforcement.md) | Cites for the write-path exclusion invariant (D2.5) |
+
+**Two reconciliation obligations recorded (not silently resolved):**
+
+1. **The `async` crate feature vs P-0012's recorded feature list.** D3 locks "async feature ON at V0" as a **forward contract** that enables when the async host-fn path lands; P-0012's References record the *current* `libs/mnemra-host/Cargo.toml` as `features = ["cranelift", "component-model"]` (no `async`), reflecting the pre-async-bridge scaffold. These are consistent — the tree has not yet reached the async host path (host-fn bodies are `todo!()`, per P-0013's Bucket A) — and this ADR does **not** claim the feature is currently enabled. Whether P-0012's feature list should gain a companion note that `async` is added with the async path is a single-source-reconciliation question for the maintainer (this ADR does not edit P-0012).
+2. **The illustrative survey WIT shape vs the implemented shape.** The survey proposed an illustrative WIT surface (`list<u8>` bodies, `resource` handles, `result<T,E>` returns). The implemented and locked shape diverged (`type json = string` not `list<u8>`; `workspace-ctx` as a record not a resource, for contract-test resolvability; `option` returns). D2 locks the shape *invariants* and defers to `wit/host.wit` / `wit/echo.wit` + P-0003/P-0013 for the exact signatures; the survey is bounded input, and the implemented WIT is authoritative where they differ.
+
+## More Information
+
+- **Frame relationship.** This ADR does **not** resolve a `{{P-XXX}}` open ADR slot — the Path-B plugin model was a brief Hard-constraint carry-forward, narrated in the Frame ([`docs/src/intent/mnemra-core-frame.md`](../intent/mnemra-core-frame.md), §Correction 1/2 and §"Plugin runtime") but never given its own slot (unlike the manifest schema `{{P-PluginManifest}}` → P-0003 and the resource limits `{{P-PluginPoolMemory}}` → P-0007). It records that narrated Hard constraint plus the cross-cutting ABI-shape/toolchain/lifecycle/language commitments the researcher's survey named as "ADR-8 implications."
+- **The gating spike.** Commit `c9018e3` ("scaffold V0.01 + CM existence-test spike", on `main`, 2026-05-07): Cargo workspace with host (`cmd/mnemra`) + plugin (`plugins/mnemra-echo/`), WIT contract, Wasmtime 44 + `wasm32-wasip2`, all 7 acceptance criteria passing. The evidence that Path B instantiates at mnemra's shape.
+- **Quality-attribute scenarios anchored.** DoS-containment ("infinite-loop plugin killed and replaced from the pool; no single-process-wide DoS") → D6 states 7–8, owned by [P-0007](P-0007-plugin-resource-limits.md). ABI-evolution ("a plugin calling an `@unstable` host function emits a deprecation warning"; "an ABI-change PR causes all `core: true` plugins to recompile and pass tests") → D2.6 stability gates + D4 `wasm32-wasip2` recompile surface.
+- **Threat references** (from the companion [overview](../architecture/overview.md)): `P-plugin-instance`/E (allowlist mitigation, D2/D6-4), `P-plugin-runtime`/D,E,R (kill-and-replace + fail-closed verify, D6), `P-host-fns`/T (workspace-ctx exclusion, D2.5), `DS-mnemra-root-key`/I (signing, D6-2). The ABI shape and lifecycle preserve these structural mitigations.
+- **Concrete artifacts (repo-relative, load-bearing):** `wit/host.wit` (host-fn imports + `content` export interface), `wit/echo.wit` (the plugin `world`), `libs/mnemra-host/Cargo.toml` (Wasmtime pin + features), `rust-toolchain.toml` (`wasm32-wasip2` target), `Cargo.toml` (`wit-bindgen = "0.57"`), `plugins/mnemra-echo/` (the spike fixture), `docs/specs/2026-05-24-mnemra-core-v0-substrate.md` (import ABI `R-0012-*`, MCP front `R-0010-*`, tenant ctx `R-0006-*`; export/invocation ABI `R-0019-*`, paging `R-0020`).
+- **Bounded input:** the researcher's Component-Model follow-up survey (2026-05-04) — WIT patterns, the two-layer async story, the multi-language matrix, distribution/signing on CM, and production precedents; the direct substrate for D1–D6 and the deferrals.
+- **Canon anchors:** `P-StackDiscipline` (CM+WIT + async bridge + `wasm32-wasip2` are in-stack; the retreat clause), `P-LockContract` (the WIT boundary is the product contract), `P-Defer` (four tripwired deferrals), `P-PreserveDecisionSpace` (Path A recorded as the chosen-against option; the maintainer's typing values verbatim), `P-SecurityLayered` (verify-before-execute ordering; host-derived ctx; allowlist), `P-AgentPrimarySource` (tool-checkable typed contract).
+- **Follow-ups:**
+  - When the async host-fn invocation path lands (P-0013 Bucket A), enable the Wasmtime `async` feature and register host-fn bodies async (D3 AC); confirm whether P-0012's feature-list record wants a companion note (Reconciliation obligation 1 — maintainer's call).
+  - At V0.1+ third-party plugin authoring: publish the DEF-3 language matrix in the plugin-author docs, tiered by then-current tooling maturity, and build the DEF-2 distribution-signature verifier over `wkg`/OCI.
+- **Related precedent:** [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) and [P-0013](P-0013-plugin-invocation-model.md) established the accepted-on-landing / forward-contract framing this ADR follows for a foundational decision recorded after its dependent detail.
 
 <!-- ===== docs/src/adrs/placeholder-resolution.md ===== -->
 
