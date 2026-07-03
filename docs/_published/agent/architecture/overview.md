@@ -74,7 +74,7 @@ stage, not under re-derivation.
 | Migration scope: the prior structured task-store tables (content / timeseries / log / state partitions) and a fixed subset of prior content-corpus subdirectories | V0 discovery (Migration scope) |
 | Workspace-level operational tooling (skill files, team profiles, internal memory store, inboxes, scratch, agent-harness state) is V0.1+ scope (the brief's idea-tier internal-workspace-absorption entry) | V0 discovery (Migration scope); brief idea-tier |
 | Architecture MUST NOT be schedule-pressured; marketing-tier dates are not architectural inputs | Brief Hard constraints |
-| The system MUST NOT host a language model; embeddings call out to an external model | Brief Hard constraints + Non-goals |
+| The system MUST NOT host a **generative** LLM; generative work (query rewrite, chunk-context, tag generation, synthesis) calls out to an external model at V0; local **non-generative** inference (embedding, reranking — encoder models behind the host-fn seam) is permitted host-side *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake; was: "MUST NOT host a language model; embeddings call out to an external model")* | Brief Hard constraints + Non-goals, as amended 2026-07-02 (RC-1) |
 
 ### Reframed 2026-06-08 — storage substrate re-opened on merits
 
@@ -485,14 +485,28 @@ TB-mnemra-host.P-health-handler -> TB-postgres.DS-pg-content: "DF-health-probe"
   material (whether it lives on the deployment node, in an HSM, is fetched at runtime, or
   is never on the node at all) is the open ADR slot `{{P-SigningKeyCustodyHardening}}`
   (Tier C; activated by the `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` multi-deployment trip-wire).
-- **External LLM is for embeddings only.** Per the brief's Hard constraints, mnemra-core
-  MUST NOT host a language model. The embeddings call out to an external provider via the
-  embedding-batch pathway (`DF-embed-call`): artifact content is routed through host
-  functions, batched, and sent to the configured provider's embedding endpoint; resulting
-  vectors are written into the projection substrate. The API key configuration surface is
-  folded into `0.1.0` (brief T-5 resolution). MCP sampling (`DF-sampling-up`) is the
-  separate path by which plugins ask the connected agent's MCP client to run an LLM
-  completion; the LLM provider that completion uses is external to mnemra-core.
+- **External LLM is for generative work only; embeddings and reranking are local
+  (MODIFIED 2026-07-02 per RC-1 — the retrieval-cluster intake's model-hosting
+  amendment; this bullet is the named lagging copy of the brief's ELT external-embedding
+  framing, reconciled here).** Per the amended Hard constraints, mnemra-core MUST NOT
+  host a *generative* LLM; local *non-generative* inference (BGE-M3 embedding,
+  BGE-reranker reranking — encoder models behind the host-fn seam) runs host-side and
+  never egresses. What calls out to the external provider are the four generative
+  placements of the retrieval cluster (index-time chunk-context and tag generation;
+  query-time HyDE rewrite and optional synthesis), each policy-gated at the model-egress
+  gate, individually disable-able, and bounded — the zero-egress configuration (all four
+  OFF) is a supported V0 configuration. The API key configuration surface remains folded
+  into `0.1.0` (brief T-5 resolution) and now serves the generative call-outs. The drawn
+  DFD below still shows the pre-RC-1 `DF-embed-call` flow and the `EE-llm-provider`
+  "(embeddings endpoint)" label; the retyped elements for the retrieval cluster — the
+  four `DF-egress-4.x` flows crossing `TB-external-llm`, the `EE-model-artifact-source`
+  entity, and the new retrieval processes/stores — are recorded in
+  [P-0014's typed-DFD extension](../adrs/P-0014-retrieval-architecture.md), and the
+  diagram + threat tables are re-drawn against it when that cluster's
+  pre-implementation security review updates this overview (the named follow-up; the
+  prose in this file is reconciled now). MCP sampling (`DF-sampling-up`) is the separate
+  path by which plugins ask the connected agent's MCP client to run an LLM completion;
+  the LLM provider that completion uses is external to mnemra-core.
 
 ## Threats by data-flow element
 
@@ -689,6 +703,20 @@ resolution. Empty at port-time — Frame work did not surface a brief-level tens
 
 ## Session log
 
+- **2026-07-02** — RC-1 reconciliation (rider on the retrieval-cluster Stage-3 docs
+  change; this overview's ELT external-embedding framing was the named lagging copy of
+  the brief's model-hosting amendment). Updated the hard-locked constraint-inventory
+  model-hosting row and the DFD-notes "External LLM" bullet to the RC-1 posture: MUST NOT
+  host a *generative* LLM; local non-generative inference (embedding, reranking) is
+  host-side and never egresses; the external provider serves the retrieval cluster's four
+  policy-gated, individually-disable-able generative placements; zero-egress is a
+  supported V0 configuration. The drawn DFD's `DF-embed-call` flow and `EE-llm-provider`
+  "(embeddings endpoint)" label are now pre-RC-1 renderings: the retyped retrieval-cluster
+  elements (four `DF-egress-4.x` flows, `EE-model-artifact-source`, new
+  processes/stores) are recorded in
+  [P-0014's typed-DFD extension](../adrs/P-0014-retrieval-architecture.md); the diagram
+  and per-element threat rows re-draw against it at that cluster's pre-implementation
+  security review (named follow-up with its firing event; prose reconciled now).
 - **2026-06-09** — Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
   out of the project-ADR layer**. The maintainer dispositioned escalation E1 (D8 vs the accepted
   observability ADR) by separating observability **generation** from **storage**, and ruled that
