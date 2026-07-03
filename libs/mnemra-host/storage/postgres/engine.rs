@@ -72,6 +72,7 @@ use std::sync::Arc;
 
 use postgresql_embedded::{PostgreSQL, SettingsBuilder, VersionReq};
 use postgresql_extensions::install as install_extension;
+use sqlx::Connection;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
@@ -354,6 +355,56 @@ pub const APP_ROLE: &str = "mnemra_app";
 pub const APP_DB: &str = "mnemra";
 
 // ---------------------------------------------------------------------------
+// Stale-connection guard (Task 2, R-0026 cross-runtime pool reuse)
+// ---------------------------------------------------------------------------
+
+/// `before_acquire` hook (paired with `.test_before_acquire(false)`) for
+/// `EmbeddedEngine::pool` and `EmbeddedEngine::superuser_pool`.
+///
+/// # Why this exists
+///
+/// `EmbeddedEngine` is a `'static` singleton shared across many
+/// `#[tokio::test]` functions once acquired through the shared-engine
+/// fixture (`tests/common/shared_engine.rs`) — each `#[tokio::test]` gets
+/// its OWN, short-lived Tokio runtime. A pooled connection established while
+/// one test's runtime was active has its socket registered with THAT
+/// runtime's I/O driver; once that runtime is dropped (at the end of the
+/// test that created it), the driver is gone and any I/O on the connection
+/// from a LATER test's (different) runtime hangs forever rather than
+/// erroring — sqlx's pool then reports `PoolTimedOut` only after the full
+/// `acquire_timeout` window, even though a fresh connection under the
+/// currently-live runtime would work immediately. Empirically confirmed:
+/// `postgres_engine.rs`'s `pgvector_extension_is_available_and_creates_successfully`
+/// (the second `#[tokio::test]` in the binary to touch `superuser_pool`)
+/// hung for the full 30s `acquire_timeout` before this fix.
+///
+/// `tokio::runtime::Handle::id()` cannot detect this: per `tokio::runtime::Id`'s
+/// own documented behavior, ids are reused across NON-overlapping runtimes,
+/// and these test runtimes never overlap — an identity comparison would
+/// false-positive as "same runtime."
+///
+/// sqlx's default `test_before_acquire` ping has the SAME hazard (unbounded
+/// I/O on a possibly-stale connection, consuming the same `acquire_timeout`
+/// budget) — this hook replaces it with a SHORT-timeout-bounded ping: a
+/// healthy connection under a live runtime answers near-instantly; a
+/// connection whose runtime is gone never answers, so the bound fires fast
+/// and sqlx discards + reconnects fresh under the CURRENTLY active (caller's)
+/// runtime instead of hanging.
+fn ping_within_timeout(
+    conn: &mut sqlx::postgres::PgConnection,
+    _meta: sqlx::pool::PoolConnectionMetadata,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool, sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        Ok(
+            tokio::time::timeout(Duration::from_millis(200), conn.ping())
+                .await
+                .map(|r| r.is_ok())
+                .unwrap_or(false),
+        )
+    })
+}
+
+// ---------------------------------------------------------------------------
 // EmbeddedEngine
 // ---------------------------------------------------------------------------
 
@@ -382,6 +433,31 @@ pub struct EmbeddedEngine {
     /// methods, not as a raw pool field, so data-path callers cannot accidentally
     /// use superuser credentials.
     pub(crate) superuser_pool: Arc<PgPool>,
+}
+
+// ---------------------------------------------------------------------------
+// Test-fixture provisioning (Task 2, R-0026/R-0027/R-0028)
+// ---------------------------------------------------------------------------
+//
+// The two items below exist so `libs/mnemra-host/tests/common/shared_engine.rs`
+// (a separate crate that consumes `mnemra-host` as an ordinary external
+// dependency, per `#[path]` inclusion into integration-test binaries) can
+// provision per-test databases and tear the shared engine down deterministically.
+// `pub(crate)` is unreachable across that crate boundary — R-0027's spec text
+// amendment (2026-07-02) widens both to `#[doc(hidden)] pub`, keeping them out
+// of the published rustdoc surface while remaining callable from test crates.
+
+/// A fresh, schema-initialized per-test database plus its bound
+/// application-role pool.
+///
+/// Returned by value — owned by the caller (the test), scope-dropped at test
+/// end (SO-1). The database itself is NOT dropped: it lives for the binary's
+/// lifetime and dies with the `.temporary(true)` engine (R-0027) — there is
+/// no per-test `DROP DATABASE`.
+#[doc(hidden)]
+pub struct TestDatabase {
+    pub name: String,
+    pub pool: PgPool,
 }
 
 impl EmbeddedEngine {
@@ -506,6 +582,10 @@ impl EmbeddedEngine {
         let superuser_url = s.url(APP_DB);
         let superuser_pool = PgPoolOptions::new()
             .acquire_timeout(Duration::from_secs(30))
+            // R-0026: this pool is reused across many #[tokio::test] runtimes
+            // via the shared-engine fixture — see ping_within_timeout's doc.
+            .test_before_acquire(false)
+            .before_acquire(ping_within_timeout)
             .connect(&superuser_url)
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
@@ -561,6 +641,10 @@ impl EmbeddedEngine {
             .acquire_timeout(Duration::from_secs(60))
             .idle_timeout(Duration::from_secs(600))
             .max_lifetime(Duration::from_secs(1800))
+            // R-0026: this pool is reused across many #[tokio::test] runtimes
+            // via the shared-engine fixture — see ping_within_timeout's doc.
+            .test_before_acquire(false)
+            .before_acquire(ping_within_timeout)
             .connect(&app_url)
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
@@ -614,5 +698,205 @@ impl EmbeddedEngine {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         crate::schema::init::create_least_privilege_roles(self.superuser_pool.as_ref(), APP_DB)
             .await
+    }
+
+    /// Provision one fresh, uniquely-named database on THIS running engine:
+    /// `CREATE DATABASE`, enable `vector`, run the same schema-init sequence
+    /// [`crate::schema::init::init`] runs for `APP_DB` (migrations, default
+    /// workspace, per-type fixture tables, least-privilege roles), grant the
+    /// existing `mnemra_app` role the SAME privilege shape already granted on
+    /// `APP_DB` (CONNECT + schema USAGE/CREATE — nothing wider, no new
+    /// privilege class), and return an app-role pool bound to it.
+    ///
+    /// The database name is generated INTERNALLY (UUID-derived) — never taken
+    /// as caller-supplied text — so two concurrent callers can never collide
+    /// and no external string reaches DDL (DDL identifiers cannot be
+    /// bind-parameterized, so this is the injection boundary in place of
+    /// parameterization).
+    ///
+    /// `#[doc(hidden)] pub` (not `pub(crate)`): this is called from the
+    /// `tests/common/shared_engine.rs` fixture, which compiles as a separate
+    /// crate — `pub(crate)` visibility does not cross that boundary.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any Postgres/connection error. No partial-provisioning
+    /// state is left callable — treat `Err` as "this test's database is
+    /// unusable," not as a retryable half-built state.
+    #[doc(hidden)]
+    pub async fn provision_test_database(
+        &self,
+    ) -> Result<TestDatabase, Box<dyn Error + Send + Sync>> {
+        let db_name = format!("mnemra_test_{}", uuid::Uuid::new_v4().simple());
+        let settings = self._server.settings();
+
+        // 1. CREATE DATABASE — reuses the same call start() already makes for
+        //    APP_DB.
+        self._server
+            .create_database(&db_name)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        // 2. Short-lived superuser connection scoped to the new database —
+        //    NOT stored anywhere; closed before this fn returns.
+        //    `settings.url()` bakes in the bootstrap superuser username/
+        //    password (Settings::new() defaults `username` to
+        //    BOOTSTRAP_SUPERUSER), matching how create_database() itself
+        //    connects.
+        let su_url = settings.url(&db_name);
+        let su_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(30))
+            .connect(&su_url)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        // 3. CREATE EXTENSION vector — per-database (R-0027 AC2). Mirrors
+        //    ensure_extension's DDL, which can't be reused directly because
+        //    it's hardwired to self.superuser_pool == APP_DB.
+        sqlx::query(sqlx::AssertSqlSafe(
+            "CREATE EXTENSION IF NOT EXISTS \"vector\"".to_string(),
+        ))
+        .execute(&su_pool)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        // 4. Grant mnemra_app the SAME shape already granted on APP_DB
+        //    (start(), above) — CONNECT + schema USAGE/CREATE, scoped to the
+        //    new db. Same privilege class, different target database — not a
+        //    widening.
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "GRANT CONNECT ON DATABASE {db_name} TO {APP_ROLE}"
+        )))
+        .execute(&su_pool)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}"
+        )))
+        .execute(&su_pool)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        // 5. App-role pool bound to the new database — same URL shape start()
+        //    builds for APP_DB, substituting db_name. app_password is
+        //    RECOMPUTED here (not stored as a new struct field) — same
+        //    deterministic derivation start() uses, so no duplicate secret
+        //    material lives on EmbeddedEngine.
+        let app_password = format!("{}_{}", settings.password, APP_ROLE);
+        let app_url = format!(
+            "postgresql://{APP_ROLE}:{app_password}@{}:{}/{db_name}",
+            settings.host, settings.port,
+        );
+        let pool = PgPoolOptions::new()
+            .max_connections(5) // per-test scale; start()'s shared app_pool uses 20
+            .min_connections(1)
+            .acquire_timeout(Duration::from_secs(30))
+            .connect(&app_url)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        // 6. Schema init on the new database — reuse the SAME pool/db-name-
+        //    parameterized helpers schema::init::init() itself calls, NOT the
+        //    EmbeddedEngine-shaped init() wrapper (hardwired to
+        //    self.pool/self.superuser_pool/APP_DB). Zero edits to
+        //    schema/init.rs: all four are already pub/pub(crate) and
+        //    pool-parameterized.
+        crate::schema::migrations::apply(&pool, crate::schema::init::V0_MIGRATIONS)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        sqlx::query(
+            "INSERT INTO workspaces (id, name) VALUES ($1, 'default') ON CONFLICT (name) DO NOTHING",
+        )
+        .bind(crate::schema::init::DEFAULT_WORKSPACE_ID)
+        .execute(&pool)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        for type_name in crate::schema::init::FIXTURE_CONTENT_TYPES {
+            crate::schema::artifact_table::create_artifact_table(&pool, type_name)
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+            crate::schema::history_trigger::create_history_machinery(&pool, type_name)
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        }
+        // create_least_privilege_roles already returns Box<dyn Error + Send +
+        // Sync> — no map_err needed, matches the existing
+        // EmbeddedEngine::create_least_privilege_roles delegation above.
+        crate::schema::init::create_least_privilege_roles(&su_pool, &db_name).await?;
+
+        su_pool.close().await;
+        Ok(TestDatabase {
+            name: db_name,
+            pool,
+        })
+    }
+
+    /// Explicit, deterministic shutdown of the underlying postmaster — never
+    /// relies on `Drop` of a `static` (R-0028: Rust statics never drop).
+    ///
+    /// Takes `&self` (shared reference), matching
+    /// `postgresql_embedded::PostgreSQL::stop(&self)` — so the fixture's
+    /// `atexit` callback can call this through the `OnceCell`'s `&'static`
+    /// handle with no ownership transfer, no interior mutability.
+    ///
+    /// `PostgreSQL::stop()` stops the postmaster but does NOT also perform
+    /// the `.temporary(true)` data-dir/password-file/socket-dir cleanup that
+    /// `PostgreSQL`'s own `Drop` impl does (vendored source:
+    /// postgresql-0.20.4/src/postgresql.rs:520-542) — since this engine lives
+    /// in a `'static` `OnceCell` and never drops, `Drop` never runs here
+    /// either. Unlike the accepted A-12 SIGKILL residual (a rare
+    /// interruption case), EVERY graceful exit of every fixture-consuming
+    /// binary would leak a full temp Postgres data directory without this —
+    /// so the cleanup half is replicated here, best-effort (mirrors Drop's
+    /// own `let _ = ...` swallow for the identical operation), with a
+    /// `tracing::warn!` on failure rather than a fully silent swallow.
+    ///
+    /// `#[doc(hidden)] pub`: called from the `tests/common/shared_engine.rs`
+    /// fixture, a separate crate — same visibility rationale as
+    /// `provision_test_database`.
+    #[doc(hidden)]
+    pub async fn shutdown(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self._server
+            .stop()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        let settings = self._server.settings();
+        if settings.temporary {
+            // `eprintln!`, not `tracing::warn!` (L1 hardening, #2049): this
+            // runs from the `libc::atexit` teardown path
+            // (`tests/common/shared_engine.rs`), which has no installed
+            // subscriber — `tracing::warn!` there is a silent no-op, so a
+            // cleanup failure was invisible. Same rationale as the
+            // `FIXTURE_BOOT`/`FIXTURE_TEARDOWN` markers already used on that
+            // path. Best-effort cleanup semantics and the `settings.temporary`
+            // gate are unchanged — only the logging call.
+            if let Err(e) = fs::remove_dir_all(&settings.data_dir) {
+                eprintln!(
+                    "FIXTURE_TEARDOWN shutdown: failed to remove temp data dir (non-fatal): \
+                     path={} error={e}",
+                    settings.data_dir.display()
+                );
+            }
+            if let Err(e) = fs::remove_file(&settings.password_file) {
+                eprintln!(
+                    "FIXTURE_TEARDOWN shutdown: failed to remove password file (non-fatal): \
+                     path={} error={e}",
+                    settings.password_file.display()
+                );
+            }
+            if let Some(ref socket_dir) = settings.socket_dir
+                && let Err(e) = fs::remove_dir_all(socket_dir)
+            {
+                eprintln!(
+                    "FIXTURE_TEARDOWN shutdown: failed to remove socket dir (non-fatal): \
+                     path={} error={e}",
+                    socket_dir.display()
+                );
+            }
+        }
+
+        Ok(())
     }
 }
