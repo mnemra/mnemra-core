@@ -4,3 +4,12 @@ spec_type = "code"
 ref = "docs/intent/reporting-engine.md"
 version = "eab0553635904e025f6e97ce3242a409d902f0e7"
 locked_at = 2026-07-03T17:20:37Z
+
+[audit_chain.frame]
+ref = "docs/intent/reporting-engine-frame.md"
+version = "871441da32d9cbbb799ac7ea96c3b0806b40f196"
+internal_conformance = "pass"
+locked_at = 2026-07-03T19:54:20Z
+
+[audit_chain.frame.generated_against]
+intent_version = "eab0553635904e025f6e97ce3242a409d902f0e7"
