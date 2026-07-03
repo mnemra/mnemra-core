@@ -1,0 +1,6 @@
+spec_type = "code"
+
+[audit_chain.intent]
+ref = "docs/intent/reporting-engine.md"
+version = "eab0553635904e025f6e97ce3242a409d902f0e7"
+locked_at = 2026-07-03T17:20:37Z
