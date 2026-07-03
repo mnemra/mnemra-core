@@ -426,6 +426,20 @@ deliberately did not promise.
   Provenance: architecture-overview ELT subsystem (ADR-16) + product-intake refine 2026-05-20
   (OD-A resolved: distinct from `0.14.0`, deferred to V0.1).
 
+- **`1.3.0`+ (candidate) — Extensible reporting engine.** One report surface backed by a
+  registry: canonical built-in reports (which ride their V0 capability-family increments
+  as workspace-fidelity content) plus declarative, runtime-added, **read-only** user
+  reports invoked via MCP (admin-CLI convenience secondary). Read-only execution is the
+  identity invariant (defense-in-depth, re-derived for the Postgres substrate); because
+  report queries are user-authored, the guard graduates from operator-mistake to
+  adversary — workspace isolation, the role matrix, and the provenance/policy-envelope
+  predicates must hold on a caller-written query, which is the Frame threat model's
+  headline boundary. Deliberately sequenced after `1.1.0`: the policy-envelope
+  enforcement machinery this surface must honor lands with the retrieval feature.
+  *Order: value activates once the measurement families hold data and the envelope
+  machinery exists.* Tier: `proposed`. Provenance: reporting-engine intake (locked
+  2026-07-03).
+
 Future V0.1 increments (`1.3.0`+) land here as the "very-next-update" trigger fires for
 new capabilities.
 
