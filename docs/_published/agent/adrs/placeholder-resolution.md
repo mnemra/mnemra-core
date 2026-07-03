@@ -1,14 +1,14 @@
 ---
-title: "Placeholder Resolution — Tier-A ADR Slots"
-summary: "Maps each Tier-A Frame ADR placeholder to its resolution — an ADR file, a re-altituded non-ADR baseline, or PAUSED status. Updated by WS-E-2 Stage 3."
+title: "Placeholder Resolution — Frame ADR Slots"
+summary: "Maps each Frame ADR placeholder to its resolution — an ADR file, a re-altituded non-ADR baseline, or PAUSED status — and carries the P-number reservation ledger. WS-E-2 Tier-A slots plus per-feature-cluster Frame slots (retrieval cluster added 2026-07-02)."
 primary-audience: agent
 ---
 
-# Placeholder Resolution — Tier-A ADR Slots
+# Placeholder Resolution — Frame ADR Slots
 
-This document maps each Tier-A ADR placeholder from the Frame to its current resolution state. Maintained by the implementing developer at Spec stage; back-references are updated in the Frame and overview as each slot resolves.
+This document maps each ADR placeholder from a locked Frame to its current resolution state, and carries the P-number reservation ledger. Maintained by the implementing developer at Spec stage; back-references are updated in the Frame and overview as each slot resolves. Slots are grouped by originating Frame.
 
-**Source:** [Frame: Mnemra Core](../intent/mnemra-core-frame.md), Tier A table.
+**Sources:** [Frame: Mnemra Core](../intent/mnemra-core-frame.md), Tier A table; [Frame: retrieval cluster](../../intent/retrieval-cluster-frame.md), §8 Open ADR slots.
 
 ## Resolution Table
 
@@ -24,6 +24,18 @@ This document maps each Tier-A ADR placeholder from the Frame to its current res
 | `{{P-AdminTokenShape}}` | **RESOLVED** | [P-0008-admin-token-shape.md](P-0008-admin-token-shape.md) | — |
 | `{{P-RLSAdminToken}}` | **RESOLVED** | [P-0009-rls-admin-token.md](P-0009-rls-admin-token.md) | — |
 | *(no original placeholder — substrate was a hard-lock, not a slot)* | **FOLD-ADDED** | [P-0010-storage-substrate-engine.md](P-0010-storage-substrate-engine.md) | — |
+
+## Retrieval-cluster Frame slots (Stage 3, 2026-07-02)
+
+Slots named at [Frame: retrieval cluster](../../intent/retrieval-cluster-frame.md) §8 (locked 2026-07-02), resolved by the cluster's Stage-3 authoring in reservation order (next free numbers after P-0013):
+
+| Placeholder | Status | File | Blocking reason (if PAUSED) |
+|---|---|---|---|
+| `{{P-0014}}` (retrieval architecture) | **RESOLVED** | [P-0014-retrieval-architecture.md](P-0014-retrieval-architecture.md) | — |
+| `{{P-0015}}` (provenance envelope + source-roles contract) | **RESOLVED** | [P-0015-provenance-envelope-source-roles.md](P-0015-provenance-envelope-source-roles.md) | — |
+| `{{P-0016}}` (edge schema) | **RESOLVED** | [P-0016-edge-schema.md](P-0016-edge-schema.md) | — |
+
+The three ADRs are authored `proposed` and move to `accepted` at the retrieval-cluster spec-exit gate (they are part of the Stage-3 package the gate reviews, with [the cluster spec](../../specs/2026-07-02-retrieval-cluster.md)). The `{{P-00XX}}` placeholder references inside the locked `docs/intent/` artifacts are historical record and are left as written.
 
 ## Summary
 
@@ -49,3 +61,9 @@ Numbers are reserved in Frame Tier-A order for paused slots; authored slots fill
 | P-0008 | `{{P-AdminTokenShape}}` | authored |
 | P-0009 | `{{P-RLSAdminToken}}` | authored |
 | P-0010 | *(fold-added; no original placeholder)* | authored |
+| P-0011 | *(no placeholder — logging-facade dependency/topology decision)* | authored |
+| P-0012 | *(no placeholder — plugin runtime + MCP SDK record)* | authored |
+| P-0013 | *(no placeholder — plugin invocation model, forward decision)* | authored |
+| P-0014 | `{{P-0014}}` (retrieval-cluster Frame §8) | authored |
+| P-0015 | `{{P-0015}}` (retrieval-cluster Frame §8) | authored |
+| P-0016 | `{{P-0016}}` (retrieval-cluster Frame §8) | authored |

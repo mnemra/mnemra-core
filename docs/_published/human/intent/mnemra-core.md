@@ -6,578 +6,236 @@ primary-audience: agent
 
 # Product Brief: Mnemra Core
 
-**Date:** 2026-05-20 · **Status:** locked (intake-exit gate confirmed) · **Altitude:** product
+**Date:** 2026-05-20 · **Status:** locked ([intake](../glossary.md#intake)-exit gate confirmed) · **Altitude:** product
 
-> Format note: this is a living document. Its structure is a forward-contract with the
-> structured-delta tooling that will own how it changes over time (add idea, promote tier,
-> retire feature, adjust scope, applied as labeled `ADDED / MODIFIED / REMOVED` deltas). Don't
-> restructure it ad hoc. Layer 1 (product-level intent) is stable and changes rarely; Layer 2
-> (the feature register) grows continuously. A new thought defaults to a Layer-2 register entry
-> at the `idea` tier (a captured direction with no pipeline artifact yet). It escalates to a
-> Layer-1 revision only if it shifts the product's fundamental job-to-be-done or scope.
+> Format note: this is a living document. Its structure is a forward contract with the structured-delta tooling that will own its evolution, adding ideas, promoting tiers, retiring features, and adjusting scope, each applied as a labeled `ADDED / MODIFIED / REMOVED` delta. Don't restructure it ad hoc. Layer 1 (product-level intent) is stable and changes rarely. Layer 2 (the feature register) grows continuously. A new thought defaults to a Layer-2 register entry at the [`idea`](../glossary.md#idea) tier; it escalates to a Layer-1 revision only if it shifts the product's fundamental job-to-be-done or scope.
 
-> Register-model note: the feature register uses a five-tier lifecycle
-> (`idea` is a captured direction, `proposed` has a locked intake, `designed` has a locked frame
-> and spec, `committed` adds a release-bound plan, and `live` is built and verified in current
-> code). Each tier is validated by a **pipeline artifact**, not by prose judgement: the test for
-> a tier is whether that artifact exists. This brief is the forcing instance for a pending
-> amendment to the canonical register model. The prior model had four tiers and put `committed`
-> before `designed`. The amendment is tracked separately, and it's the reason the structure here
-> runs ahead of its canonical adoption.
+> Register-model note: the feature register uses a five-tier lifecycle (`idea` → [`proposed`](../glossary.md#proposed) → [`designed`](../glossary.md#designed) → [`committed`](../glossary.md#committed) → [`live`](../glossary.md#live)) whose tiers are validated by **pipeline artifacts**, not prose judgment. This brief is the forcing instance for a pending amendment to the canonical register model. The prior model had four tiers and ordered `committed` before `designed`. The amendment is tracked separately, and it's the reason the structure here leads its own canonical adoption.
 
-> Scope boundary: this brief is **mnemra-core's product intent and capability roadmap**.
-> Sibling components in the mnemra umbrella (a dispatch CLI, a spec-delta/merge tool, a
-> markdown review/annotation tool) live in their own repositories with their own forthcoming
-> briefs and their own independent versions. They're referenced as external components, not
-> absorbed into this brief's register.
+> Scope boundary: this brief is **mnemra-core's product intent and capability roadmap**. Sibling components in the mnemra umbrella (a dispatch CLI, a spec-delta/merge tool, a markdown review/annotation tool) live in their own repositories with their own forthcoming briefs and their own independent versions. They're referenced as external components, not absorbed into this brief's register.
 >
-> **Mnemra-as-a-whole does not carry a unified version.** Components version independently.
-> A release-manifest concept may pin specific component versions for a coordinated public
-> release; that's distinct from a version.
+> **Mnemra as a whole doesn't carry a unified version.** Components version independently. A release-manifest concept may pin specific component versions for a coordinated public release, but that's distinct from a version.
 >
-> Commercial validation thresholds, pricing, and go-to-market strategy are maintained as a
-> separate internal commercial record and are deliberately **not** inlined here. Where a
-> roadmap entry has a commercial dimension, only its product shape is recorded; its
-> commercial gating is referenced, not described.
+> Commercial validation thresholds, pricing, and go-to-market strategy are maintained as a separate internal commercial record and are deliberately **not** inlined here. Where a roadmap entry has a commercial dimension, only its product shape is recorded; its commercial gating is referenced, not described.
 >
-> Brief-home: this artifact lives in the mnemra-core repository at
-> `docs/src/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component
-> it scopes, following per-repo-first (build per-repo first, extract a shared abstraction only
-> once reuse is observed). The general multi-repo product-brief-home convention question
-> remains in APPARATUS-1's scope for future multi-repo briefs in other components.
+> Brief-home: this artifact lives in the mnemra-core repository at `docs/src/intent/mnemra-core.md` (relocated 2026-05-20). The brief travels with the component it scopes, following [per-repo-first](../glossary.md#p-perrepofirst) (shared abstractions emerge from proven reuse, not from anticipation). The general multi-repo product-brief-home convention question remains in APPARATUS-1's scope for future multi-repo briefs in other components.
 
 ## Product-level intent  (layer 1 — stable)
 
 ### JTBD
 
-Engineering teams that run coding agents (Claude Code, Cursor, Copilot) need their agents,
-and the humans working alongside them, to have **persistent, structured, queryable
-context** of the team's codebase, decisions, tickets, docs, and prior agent sessions,
-available every session without re-explanation. The point is that context stops being a
-per-session tax that drifts and doesn't scale.
+Engineering teams that run coding agents (Claude Code, Cursor, Copilot) need their agents, and the humans working alongside them, to have **persistent, structured, queryable context** of the team's codebase, decisions, tickets, docs, and prior agent sessions. That context needs to be available every session without re-explanation, so it stops being a per-session tax that drifts and doesn't scale.
 
-Stated as the need rather than the solution: an agent preparing to act on a task sits inside a
-graph. That graph holds the parent spec, related decisions, sibling tasks, prior reviews, and
-recent adjacent commits. Today the orchestrating agent has to hand-load it per session, which
-drifts and doesn't scale. Mnemra's job is to make that context a durable, agent-addressable
-substrate.
+Stated as the need, not the solution: an agent preparing to act on a task sits inside a graph (parent spec, related decisions, sibling tasks, prior reviews, recent adjacent commits), and today that graph must be hand-loaded per session by the orchestrating agent. That drifts, and it doesn't scale. Mnemra's job is to make that context a durable, agent-addressable substrate.
 
 ### Non-goals
 
 Each is a concrete not-this:
 
-- Not a retrieval-augmented-generation (RAG) chatbot, and not "a second brain for small
-  businesses."
+- Not a retrieval-augmented-generation (RAG) chatbot, and not "a second brain for small businesses."
 - Not a Notion replacement, knowledge wiki, or general-purpose vector-database wrapper.
 - Not a horizontal "AI for every department" tool; not sales/marketing/HR enablement.
 - Not an attempt to match an enterprise knowledge-search incumbent's breadth.
-- Does not run a language model. Embeddings and summaries call out to an external model;
-  the system never hosts one.
+- **Doesn't host a generative language model.** All generative work (query rewrite, chunk-context, tag generation, synthesis) calls out to an external model at V0. Local non-generative inference (embedding, reranking, using small encoder models behind the host-fn seam) is permitted host-side. *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake, locked 2026-07-02; was: "Does not run a language model. Embeddings and summaries call out to an external model; the system never hosts one.")*
 - Not RAG-as-a-service.
-- The open-source core does not pursue multi-tenant isolation as a product goal. Tenancy is
-  a structural column-shape at V0 with policy enforcement deferred. The boundary between
-  OSS-core single-tenant and a future managed multi-tenant offering is commercial, so it's
-  out of scope for this brief.
-- **Not a general autonomous-agent framework.** The product *could* generalize toward one
-  with work. The single-use-case focus (a context layer for coding agents) is a deliberate
-  quality choice. The generalization is declined, not absent, recorded so the rejected
-  option is preserved.
+- The open-source core doesn't pursue multi-tenant isolation as a product goal. Tenancy is a structural column-shape at V0, with policy enforcement deferred. The boundary between OSS-core single-tenant and a future managed multi-tenant offering is commercial, out of scope for this brief.
+- **Not a general autonomous-agent framework.** The product *could* generalize toward one with work. Single-use-case focus (a context layer for coding agents) is a deliberate quality choice. The generalization is declined, not absent: it's recorded so the rejected option stays visible, per [P-PreserveDecisionSpace](../glossary.md#p-preservedecisionspace) (every rejected alternative stays on record, not just the chosen path).
 
 ### Success criteria
 
-Each is an observable outcome a downstream check could verify. **V0 and V0.1 are
-marketing-tier labels** denoting product-promise milestones, distinct from SemVer release
-identifiers:
+Each is an observable outcome a downstream check could verify. **V0 and V0.1 are marketing-tier labels** denoting product-promise milestones, distinct from SemVer release identifiers:
 
 | Marketing tier | SemVer corollary | What it delivers |
 |---|---|---|
 | V0 | `1.0.0` (dogfood-cutover / MVP) | the maintainer's workspace surface, replicated on mnemra-core without regression |
-| V0.1 | `1.1.0`+ (first post-MVP minor sequence) | the core product promise activates: net-new value-add beyond workspace fidelity |
+| V0.1 | `1.1.0`+ (first post-MVP minor sequence) | the core product promise activates, delivering net-new value beyond workspace fidelity |
 
-- **V0 (internal-dogfood gate; SemVer `1.0.0`):** the maintainer's own agent-orchestration
-  workspace runs on mnemra-core with no functional regression versus its prior
-  command-line-and-filesystem tooling, AND the agent-facing surface contract and storage
-  substrate contract that later versions depend on are locked. Verifiable: a scripted
-  representative-day fixture completes end-to-end against mnemra-core with zero fallback to
-  the prior tooling.
-- **Core product promise (activates V0.1; SemVer `1.1.0`):** a Model-Context-Protocol (MCP)
-  client coding agent can retrieve persistent, typed, cross-session context for a given
-  artifact in one call, rather than reconstructing it by hand each session.
-- **Self-hostable:** a team can run the full core on its own infrastructure with data never
-  leaving that boundary.
-- Commercial validation thresholds exist but live in the separate internal commercial
-  record; they aren't product success criteria and aren't inlined here.
+- **V0 (internal-dogfood gate; SemVer `1.0.0`):** the maintainer's own agent-orchestration workspace runs on mnemra-core with no functional regression versus its prior command-line-and-filesystem tooling, AND the agent-facing surface contract and storage substrate contract that later versions depend on are locked ([P-LockContract](../glossary.md#p-lockcontract): lock the contract, and let the implementation vary). Verifiable: a scripted representative-day fixture completes end-to-end against mnemra-core with zero fallback to the prior tooling.
+- **Core product promise (activates V0.1; SemVer `1.1.0`):** a Model-Context-Protocol (MCP) client coding agent can retrieve persistent, typed, cross-session context for a given artifact in one call, rather than reconstructing it by hand each session.
+- **Self-hostable:** a team can run the full core on its own infrastructure with data never leaving that boundary.
+- Commercial validation thresholds exist but live in the separate internal commercial record; they're not product success criteria and aren't inlined here.
 
 ### Hard constraints
 
 Locked technical and integration boundaries (RFC-2119 keywords where observable):
 
-- The agent-facing surface SHALL be **MCP-native** (MCP specification 2025-06-18).
-  Transport is stdio at V0; streamable-HTTP is a later-version activation.
-- **An MCP server is a V0 deliverable.** This is an intent-clarity point: the MCP-native
-  constraint is satisfied by a running MCP server in V0 scope, not merely a future protocol
-  posture.
-- The substrate SHALL be a **single-process Postgres** instance with the `pgvector`
-  extension present. TimescaleDB is demoted off the V0 stack (P-0010 D8, a project-scoped
-  architecture decision). It's absent by decision, not oversight. At V0 only content and
-  state are persisted in-app Postgres shapes; the former timeseries and log shapes are
-  observability emission surfaces, not in-app storage (telemetry is emitted, not stored, per
-  the architecture-overview observability baseline), so the time-series engine has no V0
-  store to back. TimescaleDB is held behind a named latency/storage trip-wire for a later
-  version.
-- Plugins SHALL be **WebAssembly Component Model modules** hosted in-process via Wasmtime;
-  plugin core logic MUST be IO-free; all plugin IO MUST be mediated by host-provided
-  functions. Plugins are leaves: no direct sideways linkage, and cross-plugin calls are
-  host-mediated.
-- Deployment posture SHALL be **self-hosted-first, single-binary**. The system MUST NOT
-  host a language model; it calls out to an external one.
-- **"Single-binary" constrains the server, not the deployment packaging.** It means one
-  process (not a microservice mesh). An immutable image or appliance is a valid packaging
-  shape for that single binary and does not violate this constraint.
-- **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0. It's
-  NOT NULL, indexed, explicitly passed, and forward-compatible without migration. This is
-  what makes deferring tenant-hierarchy and policy enforcement safe: the scoping key ships
-  now, and hierarchy and enforcement build on top later without a substrate migration.
-- Tooling SHALL default to Rust; non-Rust paths are adopted only where no viable in-stack
-  path exists (the landing site is an accepted exception).
-- License: **Apache-2.0 with a future-relicense clause** (locked 2026-05-20). The
-  mnemra-core repository's current LICENSE/README (MIT) is corrected in a separate
-  follow-up task; this brief's Hard constraints lock the direction.
-- Architecture MUST NOT be schedule-pressured. Dates appearing in marketing or landing
-  material aren't architectural inputs and don't weight tradeoff analysis.
+- The agent-facing surface SHALL be **MCP-native** (MCP specification 2025-06-18). Transport is stdio at V0; streamable-HTTP is a later-version activation.
+- **An MCP server is a V0 deliverable.** To be clear about intent: the MCP-native constraint is satisfied by a running MCP server in V0 scope, not merely a future protocol posture.
+- The substrate SHALL be a **single-process Postgres** instance with the `pgvector` extension present. TimescaleDB is demoted off the V0 stack, per [P-0010](../glossary.md#p--adr) D8 (a project-scoped [ADR](../glossary.md#adr) decision point). It's absent by decision, not oversight: at V0 only content and state are persisted in the app's Postgres shapes. The former timeseries and log shapes are observability emission surfaces, not in-app storage (telemetry is emitted, not stored, per the architecture-overview observability baseline), so the time-series engine has no V0 store to back. TimescaleDB waits behind a named latency/storage [trip-wire](../glossary.md#p-defer) for a later version (adopted only once evidence forces the choice, not ahead of need).
+- Plugins SHALL be **WebAssembly Component Model modules** hosted in-process via Wasmtime; plugin core logic MUST be IO-free; all plugin IO MUST be mediated by host-provided functions. Plugins are leaves: no direct sideways linkage. Cross-plugin calls are host-mediated.
+- Deployment posture SHALL be **self-hosted-first, single-binary**. The system MUST NOT host a generative LLM: all generative work calls out to an external model at V0. Local non-generative inference (embedding, reranking) is permitted host-side. *(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake, locked 2026-07-02; was: "The system MUST NOT host a language model; it calls out to an external one.")*
+- **"Single-binary" constrains the server, not the deployment packaging.** It means one process, not a microservice mesh. An immutable image or appliance is a valid packaging shape for that single binary and doesn't violate this constraint.
+- **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0: NOT NULL, indexed, explicitly passed, forward-compatible without migration. This is what makes deferring tenant-hierarchy and policy enforcement safe. The scoping key ships now; hierarchy and enforcement build on top later without a substrate migration.
+- Tooling SHALL default to Rust; non-Rust paths are adopted only where no viable in-stack path exists (the landing site is an accepted exception).
+- License: **Apache-2.0 with a future-relicense clause** (locked 2026-05-20). The mnemra-core repository's current LICENSE/README (MIT) is corrected in a separate follow-up task; this brief's Hard constraints lock the direction.
+- Architecture MUST NOT be schedule-pressured. Dates appearing in marketing or landing material are not architectural inputs and do not weight tradeoff analysis.
+- **Accessibility is a standing product requirement.** It binds every human-facing UI and documentation surface the product ships, current and future: the docs site, any dashboard or console, human-readable CLI output. Each such surface's design gate reviews it. Machine-facing MCP/agent surfaces are outside this requirement's scope; derivative human views inherit it. *(ADDED 2026-07-02, retrieval-cluster frame pre-gate walk item 13, locked 2026-07-02: routed here as a product-level standing requirement rather than folded into an MCP-verb feature cluster.)*
 
 ### Evidence
 
-This brief exists because product intent that lived only in conversation was not an
-agent-addressable source. Across multiple research-lifecycle reviews, research and
-discovery work silently anchored scope to *mnemra-core-as-exists-live*, the only
-available ground truth, because no durable product-intent/roadmap artifact existed. The
-gap recurred at least three separate times before being remediated. This document is that
-remediation: the agent-addressable product-intent source against which future research,
-discovery, and architecture evaluate scope, so "the intended product" is a readable
-artifact rather than an inferred or imagined one.
+This brief exists because product intent that lived only in conversation wasn't an agent-addressable source. Across multiple research-lifecycle reviews, research and discovery work silently anchored scope to *mnemra-core-as-exists-live* (the only available ground truth at the time), because no durable product-intent or roadmap artifact existed. The gap recurred at least three separate times before it got remediated. This document is that remediation: the agent-addressable product-intent source against which future research, discovery, and architecture work evaluate scope, so "the intended product" is a readable artifact rather than an inferred or imagined one.
 
-Corroborating anchors: a locked V0 architecture discovery and a locked V0
-architecture-constraints record (both high-stakes, reviewed to a zero-new-finding stopping
-rule); a structural architecture overview (eight named subsystems); and an internal
-commercial hypothesis (a set of testable claims, maintained separately).
+Corroborating anchors: a locked V0 architecture discovery and a locked V0 architecture-constraints record, both high-stakes and reviewed to a zero-new-finding stopping rule; a structural architecture overview covering eight named subsystems; and an internal commercial hypothesis (a set of testable claims, maintained separately).
 
 ### Consumer
 
-The primary consumer is **agents**: MCP-client coding agents and orchestration tooling that
-load this as the agent-addressable product-intent source during research, discovery, and
-architecture work. That's consistent with the project's agent-primary source-artifact stance.
-The secondary consumer is the maintainer and future contributors evaluating scope.
-Human-readable rendered views, if needed, are derivative and generated on demand; this
-source is never the rendered view.
+Primary consumer is **agents**: MCP-client coding agents and orchestration tooling that load this as the agent-addressable product-intent source during research, discovery, and architecture work. That's consistent with the project's agent-primary source-artifact stance. Secondary consumer is the maintainer and future contributors evaluating scope. Human-readable rendered views, if needed, are derivative and generated on demand; this source is never the rendered view.
 
 ### Risk profile
 
-This artifact is documentation; it touches no trust boundary itself. The *product* it
-describes carries trust boundaries (multi-tenancy, authentication, plugin sandbox,
-telemetry non-leak). Those are owned by the mnemra-core component architecture record
-(the threat-modeling trigger is already met there) and are referenced by the register, not
-re-assessed here. Required risk assessment for any *implementing* work is deferred to the
-component-level frame where the mechanism is known.
+This artifact is documentation; it touches no trust boundary itself. The *product* it describes carries trust boundaries (multi-tenancy, authentication, plugin sandbox, telemetry non-leak). Those are owned by the mnemra-core component architecture record (its threat-modeling trigger is already met there) and are referenced by the register, not re-assessed here. Required risk assessment for any *implementing* work is deferred to the component-level [frame](../glossary.md#frame) (the Stage 2 constraint-synthesis step in the work-shaping pipeline) where the mechanism is known.
 
 ## Feature register  (layer 2 — grows; each entry has a lifecycle tier)
 
-Each entry carries exactly one tier. Tiers are validated by **pipeline artifacts**. The
-validator for each tier is "does this artifact exist?", which makes the register
-mechanically checkable and self-consistent with the intake → frame → spec pipeline that
-produces it. (Intake is Stage 1, where structured intent is captured and reviewed; Frame is
-Stage 2, where agents walk the constraint graph and produce a frame document; Spec is
-Stage 3, where agents produce the testable spec that verification consumes.)
+Each entry carries exactly one tier. Tiers are validated by **pipeline artifacts**: the validator for each tier is "does this artifact exist?" This makes the register mechanically checkable, and it stays self-consistent with the intent → frame → spec pipeline that produces it. That's shorthand for the three-stage work-shaping pipeline: [Intake](../glossary.md#intake) produces validated intent, [Frame](../glossary.md#frame) produces the frame document, and [Spec](../glossary.md#spec) produces the locked spec:
 
 | Tier | Mechanical validator | Durability |
 |---|---|---|
 | `idea` | a captured thought; optionally a provenance pointer to a locked decision | n/a |
-| `proposed` | a **locked intake**: the feature has been through intent capture | permanent |
-| `designed` | a **locked frame + locked spec**: the permanent "what to build" is complete | permanent (kept) |
-| `committed` | `designed` **plus a plan** (the task list to action the build); release-bound | plan is ephemeral (not kept) |
+| `proposed` | a **locked intake** (the feature has been through intent capture) | permanent |
+| `designed` | a **locked frame + locked spec** (the permanent "what to build" is complete) | permanent (kept) |
+| `committed` | `designed` **plus a plan** (the task list to action the build), release-bound | plan is ephemeral (not kept) |
 | `live` | built and verified in current code/canon | n/a |
 
-The `designed`|`committed` boundary is the **permanent/ephemeral artifact line**. Every
-permanent design artifact done is `designed`; add the disposable actioning plan and it's
-`committed`. The plan's ephemerality is *why* it marks commitment: a throwaway task list is
-only generated once the work is being actioned against a release. `designed` precedes
-`committed` because release-fit can't be judged until the design (culminating in the spec)
-is complete. The work generates the commitment, not the reverse.
+The `designed`|`committed` boundary is the **permanent/ephemeral artifact line**: every permanent design artifact done equals `designed`; add the disposable actioning plan and it becomes `committed`. The plan's ephemerality is *why* it marks commitment. A throwaway task list only gets generated once the work is being actioned against a release. `designed` precedes `committed` because release-fit can't be judged until the design (culminating in the spec) is complete: the work generates the commitment, not the reverse.
 
-**Structural fence (unchanged):** no tier is a build authorization, not even `committed`.
-A tier is a readiness/commitment signal; the only build trigger is an explicit
-feature-altitude pass on the entry. The tiers track how far a feature's pipeline has
-progressed; they don't widen the build trigger.
+**Structural fence (unchanged):** no tier is a build authorization, not even `committed`. A tier is a readiness or commitment signal. The only build trigger is an explicit feature-altitude pass on the entry. The tiers track how far a feature's pipeline has progressed; they don't widen the build trigger.
 
-> Provenance pointers reference decisions by name and lock-date. For a multi-repo project
-> much of the locked provenance lives in a maintainer-internal architecture record a public
-> repository artifact can't cite by path; pointers name the decision and lock-date rather
-> than an internal path (see Open Decision PRV-1).
+> Provenance pointers reference decisions by name and lock-date. For a multi-repo project, much of the locked provenance lives in a maintainer-internal architecture record that a public repository artifact can't cite by path, so pointers name the decision and lock date rather than an internal path (see Open Decision PRV-1).
 
 ### Idea
 
-Captured directions: unvalidated, or decision-locked but not yet through their own
-pipeline. A provenance pointer (where one exists) records that a decision was taken; it
-does **not** promote the tier. Only a dedicated intake does that. **This tier is the
-scope-anchor surface: research and discovery read `idea`-and-up so intended direction is
-never silently dropped to what-exists-live.**
+Captured directions: unvalidated, or decision-locked but not yet through their own pipeline. A provenance pointer, where one exists, records that a decision was taken. It does **not** promote the tier; only a dedicated intake does. **This tier is the scope-anchor surface: research and discovery read `idea`-and-up so intended direction never silently drops to what-exists-live.**
 
-- **Search + indexing activation** (full-text + vector) [D1] — provenance: V0 discovery, Deferred section (locked 2026-05-02).
-- **First-class graph edges + traversal** [D2] — provenance: as D1.
-- **`get_context_for(artifact_id)` — the agent-context bundle composer** [D3] — **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Proposed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
-- **Bidirectional issue↔code via commit-ref convention** [D4] — provenance: as D1.
-- **New first-class artifact types beyond the migrated set** [D5] — provenance: as D1.
-- **Row-level-security policy enforcement** [D6] — provenance: as D1.
-- **External-authorization-server integration** [D7] — provenance: as D1.
-- **Internal-workspace absorption** (orchestration skills/roles/memory/inboxes migrate or become projections) [D8] — provenance: as D1.
-- **Multi-orchestrator-per-project topology** [D9] — provenance: as D1.
-- **Third-party plugin install** [D11], gated on a documented ABI evolution policy — provenance: as D1.
-- **Host-fn ABI 1.0 stabilization** [D12] — provenance: as D1.
-- **Cross-artifact authoritativeness + provenance/use-policy substrate fields** (G2/G3) — provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15); reclassified to a substrate concern there, with no dedicated pipeline run of its own.
-- **Knowledge-object substrate shape** (frontmatter-shape not new artifact-type; OCC version field; extensible typed audit events) — provenance: as G2/G3.
-- **Knowledge-object family schemas + judge-extender + review-queue + memory-inspector + memory-write-back discipline** (F1/F3/F4/F5/F7) — provenance: as G2/G3 (forward-context, no consumer yet).
-- **Multi-language plugin authoring** (Rust-first now; JS/TS, Python, TinyGo; later C#) — provenance: architecture overview V0/V1 boundary.
-- **microVM appliance posture for self-host** — conditional; trip-wire is streamable-HTTP becoming the active transport (a named-capability condition, not release-gated); substrate shortlist recorded in the hosting research. Provenance: microVM hosting research (2026-05-18).
-- **Per-tenant microVM isolation (managed tier)** — conditional on a multi-tenant managed audience existing; Firecracker is the substrate; pairs with row-level security, not instead of it. Provenance: as above (Lens B).
-- **Tenant hierarchy** (org/+ layers above the workspace=tenant boundary) for full multi-tenancy — deferred; safe to defer because the tenant scoping key is structural from V0 (see Tenancy invariant). Provenance: knowledge-object-survey scope sketch (`visibility: …|workspace|org`).
-- **A dispatch CLI (external component, separate brief forthcoming).** A sibling component in the mnemra umbrella with its own repository, its own brief, and its own independent version. It's operationally required before mnemra-core V0 build begins: mechanical tasks heavily consume the premium model tier, and this CLI routes and optimizes them. Built *using* the completed intake → frame → spec pipeline; later runs as a mnemra plugin (a workspace-era CLI and a mnemra-era WASM plugin sharing an IO-free core). Provenance: maintainer sequencing decision 2026-05-18. Referenced here as a build-time dependency, not absorbed into this brief's register.
-- **A spec-delta/merge tool (external component, separate brief forthcoming).** A sibling component with its own repository, brief, and version. Operationally required before mnemra-core V0 build begins: it's the structured-delta consumer this brief's format forward-contracts with, needed for living-document updates. Built *using* the completed intake → frame → spec pipeline; later runs as a mnemra plugin. Provenance: as above. Referenced as a build-time dependency, not absorbed.
-- **A markdown review/annotation tool, hosted under the mnemra umbrella when published** — a sibling product; tentative. Provenance: maintainer note 2026-05-18.
-- **Context-intelligence plugin** — project-aware code understanding for reviewers (decisions + language-server composite, sidecar). Conditional on such a plugin surface existing. Provenance: an external algorithms-research review.
-- **Byte-level provenance-tracing reference** — a provenance-deficit (not correctness) hallucination check; reimplementation-reference for a future verification plugin; keys on the G2/G3 provenance direction; reimplement-not-port. Provenance: an external algorithms-research review (reimplementation-feasibility follow-up pending).
-- **Managed/Cloud tier and Enterprise tier** — product expansion beyond OSS core; commercial gating in a separate internal record, not here.
-- **Connectors/ingestion beyond the dev-adjacent wedge** — opinionated, demand-driven; which and when unvalidated.
-- **External context/memory vocabulary adoption** — shape convergence evidenced; label lock deferred until a second consumer joins.
-- **Dashboard interface** — a maintainer-side console product surface (a review/annotation tool may host here).
-- **End-user CLI/TUI** distinct from the admin control CLI; **plugin registry/marketplace + signing/distribution as a product surface**; **hosted web console**; **onboarding/docs-as-product**; **agent-framework-specific integrations** beyond generic MCP — all valid under the product umbrella, unvalidated.
-- **A newsfeed capability** (working name) — pure thought, no provenance.
-- **A permissions model** — pure thought; explicitly needs research into the approach (see Open Decision OD-B).
+- **Search + indexing activation** (full-text + vector) [D1]: **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; this pointer stays in place so the D1 reference remains resolvable. Provenance: V0 discovery, Deferred section (locked 2026-05-02).
+- **First-class graph edges + traversal** [D2]: **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the D2 reference stays resolvable. Provenance: as D1.
+- **`get_context_for(artifact_id)`, the agent-context bundle composer** [D3]: **promoted to `proposed` @ V0.1 / `1.1.0`** (2026-05-20). See Designed §V0.1 for the live entry; this pointer is retained so the D3 reference stays resolvable.
+- **Bidirectional issue↔code via commit-ref convention** [D4]. Provenance: as D1.
+- **New first-class artifact types beyond the migrated set** [D5]. Provenance: as D1.
+- **Row-level-security policy enforcement** [D6]. Provenance: as D1.
+- **External-authorization-server integration** [D7]. Provenance: as D1.
+- **Internal-workspace absorption** (orchestration skills, roles, memory, and inboxes migrate or become projections) [D8]. Provenance: as D1.
+- **Multi-orchestrator-per-project topology** [D9]. Provenance: as D1.
+- **Third-party plugin install** [D11], gated on a documented ABI evolution policy. Provenance: as D1.
+- **Host-fn ABI 1.0 stabilization** [D12]. Provenance: as D1.
+- **Cross-artifact authoritativeness plus provenance/use-policy substrate fields** (G2/G3): **promoted to `proposed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the G2/G3 reference stays resolvable. Provenance: knowledge-object survey dogfooding-lens amendment (2026-05-15), reclassified there to a substrate concern; the retrieval cluster is the pipeline run it rides.
+- **Knowledge-object substrate shape** (a frontmatter shape, not a new artifact type; an OCC version field; extensible typed audit events). Provenance: as G2/G3.
+- **Knowledge-object family schemas, judge-extender, review-queue, memory-inspector, and memory-write-back discipline** (F1/F3/F4/F5/F7). Provenance: as G2/G3 (forward-context, no consumer yet).
+- **Multi-language plugin authoring** (Rust-first now; JS/TS, Python, TinyGo; C# later). Provenance: architecture overview V0/V1 boundary.
+- **microVM appliance posture for self-host**: conditional, with a trip-wire of streamable-HTTP becoming the active transport (a named-capability condition, not release-gated). A substrate shortlist is recorded in the hosting research. Provenance: microVM hosting research (2026-05-18).
+- **Per-tenant microVM isolation (managed tier)**: conditional on a multi-tenant managed audience existing. Firecracker is the substrate. It pairs with row-level security, not instead of it. Provenance: as above (Lens B).
+- **Tenant hierarchy** (org and further layers above the workspace-as-tenant boundary) for full multi-tenancy: deferred. It's safe to defer because the tenant scoping key is structural from V0 (see Tenancy invariant). Provenance: knowledge-object-survey scope sketch (`visibility: …|workspace|org`).
+- **A dispatch CLI (external component, separate brief forthcoming).** A sibling component in the mnemra umbrella with its own repository, its own brief, and its own independent version. Operationally required before mnemra-core V0 build begins (mechanical tasks heavily consume the premium model tier; this CLI routes and optimizes them). Built *using* the completed Intake → Frame → Spec pipeline; later it runs as a mnemra plugin (a workspace-era CLI and a mnemra-era WASM plugin sharing an IO-free core). Provenance: maintainer sequencing decision 2026-05-18. Referenced here as a build-time dependency, not absorbed into this brief's register.
+- **A spec-delta/merge tool (external component, separate brief forthcoming).** A sibling component with its own repository, brief, and version. Operationally required before mnemra-core V0 build begins: the structured-delta consumer this brief's format forward-contracts with, needed for living-document updates. Built *using* the completed Intake → Frame → Spec pipeline; later it runs as a mnemra plugin. Provenance: as above. Referenced as a build-time dependency, not absorbed.
+- **A markdown review/annotation tool, hosted under the mnemra umbrella when published.** A sibling product; tentative. Provenance: maintainer note 2026-05-18.
+- **Context-intelligence plugin**: project-aware code understanding for reviewers (a decisions-plus-language-server composite, run as a sidecar). Conditional on such a plugin surface existing. Provenance: an external algorithms-research review.
+- **Byte-level provenance-tracing reference**: a provenance-deficit (not correctness) hallucination check, and a reimplementation reference for a future verification plugin. It keys on the G2/G3 provenance direction and is meant to be reimplemented, not ported. Provenance: an external algorithms-research review (reimplementation-feasibility follow-up pending).
+- **Managed/Cloud tier and Enterprise tier**: product expansion beyond the OSS core. Commercial gating lives in a separate internal record, not here.
+- **Connectors and ingestion beyond the dev-adjacent wedge**: opinionated, demand-driven. Which ones, and when, is unvalidated.
+- **External context/memory vocabulary adoption**: shape convergence is evidenced, but label lock is deferred until a second consumer joins.
+- **Dashboard interface**: a maintainer-side console product surface (a review/annotation tool may host here).
+- **End-user CLI/TUI** distinct from the admin control CLI; **plugin registry/marketplace plus signing and distribution as a product surface**; **hosted web console**; **onboarding/docs-as-product**; **agent-framework-specific integrations** beyond generic MCP. All valid under the product umbrella, all unvalidated.
+- **A newsfeed capability** (working name): pure thought, no provenance.
+- **A permissions model**: pure thought. It explicitly needs research into the approach (see Open Decision OD-B).
+- **Per-user identity machinery**: owner-columns-as-identity, caller identity carried in the request context, and real owner-equals-caller checks. It activates per-user `visibility: owner-only` serving semantics (at V0, owner-only serves no one; that fail-closed enforcement is the V0 semantics) and is the first write/label-capability surface that fires the deferred write-side policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns from day one, so this lands as a feature rather than an excavation later. Provenance: retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
 
 ### Proposed
 
-Has a locked intake (through intent capture); not yet frame+spec complete; not release-bound.
+Has a locked intake (through intent capture). Not yet frame-plus-spec complete. Not release-bound.
 
-**V0 is delivered as a staged increment sequence, not a monolithic release**, and the
-register extends beyond V0 into the V0.1 (post-`1.0.0`) immediate roadmap. "V0" denotes
-the dogfood-replacement milestone, "V0.1" the very-next-update phase (see Success criteria
-for the marketing-tier vs SemVer mapping); each increment below is its own register entry
-carrying its own tier. The intake is by retrofit: a locked, high-stakes,
-reviewed-to-zero-findings V0 discovery (locked 2026-05-02) scopes the V0 contents; the V0.1
-entries lock at this brief's altitude per maintainer ruling 2026-05-20. The increment
-decomposition was captured in the 2026-05-18 product-intake refine and extended 2026-05-20.
-Every increment is therefore `proposed`. None is `designed` (no per-increment frame+spec
-exists) nor `committed` (no plan, no release-bound date); the honest empty
-`designed`/`committed` tiers below are preserved, not papered.
+**V0 is delivered as a staged increment sequence, not a monolithic release,** and the register extends beyond V0 into the V0.1 (post-`1.0.0`) immediate roadmap. "V0" denotes the dogfood-replacement milestone; "V0.1" is the very-next-update phase (see Success criteria for the marketing-tier vs SemVer mapping). Each increment below is its own register entry carrying its own tier. The intake here is by retrofit: a locked, high-stakes, reviewed-to-zero-findings V0 discovery (locked 2026-05-02) scopes the V0 contents, and the V0.1 entries lock at this brief's altitude per maintainer ruling 2026-05-20. The increment decomposition was captured in the 2026-05-18 product-intake refine and extended 2026-05-20. Every increment is therefore `proposed`. None is `designed` (no per-increment frame-plus-spec exists) and none is `committed` (no plan, no release-bound date). The honest empty `designed`/`committed` tiers below are preserved, not papered over.
 
-**Versioning scheme (resolves INCR-1) — Semantic Versioning 2.0.0, applied without abuse:**
-- Each increment delivers backward-compatible **functionality**, so each is a **minor**
-  bump within initial development: `0.1.0` (host core) → `0.2.0` → … (SemVer §7; §4 —
-  `0.y.z` is initial development, the API is not yet stable, which is exactly the V0 build
-  period).
+**Versioning scheme (resolves INCR-1): Semantic Versioning 2.0.0, applied without abuse.**
+- Each increment delivers backward-compatible **functionality**, so each is a **minor** bump within initial development: `0.1.0` (host core) → `0.2.0` → … (SemVer §7; §4: `0.y.z` is initial development, the API isn't yet stable, which is exactly the V0 build period).
 - Backward-compatible fixes within an increment are **patch** bumps (`0.N.1`, `0.N.2`; §6).
-- The commit identifier is **build metadata** appended with `+` (`0.2.0+a1b2c3d`), ignored
-  in precedence (§10, §11). It is **not** a `-` pre-release identifier; pre-release has
-  *lower* precedence than the release (§11.3, `1.0.0-alpha < 1.0.0`), which would
-  misrepresent a delivered increment. Trunk commits advance the `+sha`; the version number
-  bumps only when an increment's functionality is realized.
-- **`1.0.0` is the dogfood-cutover / MVP.** SemVer §5: `1.0.0` defines the public API,
-  precisely the V0 success criterion (the agent-facing surface and storage-substrate
-  contracts are locked and the maintainer's workspace runs fully on mnemra-core). The road
-  to `1.0.0` is the `0.y.z` increment sequence below.
+- The commit identifier is **build metadata** appended with `+` (`0.2.0+a1b2c3d`), ignored in precedence (§10, §11). It's **not** a `-` pre-release identifier: pre-release has *lower* precedence than the release (§11.3, `1.0.0-alpha < 1.0.0`), which would misrepresent a delivered increment. Trunk commits advance the `+sha`; the version number bumps only when an increment's functionality is realized.
+- **`1.0.0` is the dogfood-cutover / MVP.** SemVer §5: `1.0.0` defines the public API. That's precisely the V0 success criterion: the agent-facing surface and storage-substrate contracts are locked, and the maintainer's workspace runs fully on mnemra-core. The road to `1.0.0` is the `0.y.z` increment sequence below.
 
-The sequence is **builtin-substrate-first, then one capability family per increment**,
-ordered by dogfood value and dependency with the maintainer's stated priority (tasks first
-after substrate). A one-clause ordering rationale accompanies each entry so the sequence
-can be reordered cheaply at the intake-exit gate without restructuring entries.
+The sequence is **builtin-substrate-first, then one capability family per increment**, ordered by dogfood value and dependency, with the maintainer's stated priority being tasks first after substrate. A one-clause ordering rationale accompanies each entry so the sequence can be reordered cheaply at the intake-exit gate without restructuring entries.
 
-- **`0.1.0` — Builtin substrate + host core.** Single-process Postgres (pgvector); the
-  content and state storage-shape partitions persisted in-app, with the former timeseries
-  and log shapes emitted to the observability minimum rather than stored (P-0010 D8); the pre-1.0
-  host-fn ABI; an MCP server skeleton (stdio) onto which each capability increment adds its
-  verbs; the admin/destructive control CLI; an observability minimum; an **LLM-API-key
-  configuration surface** (mnemra-core calls out to an external model for embeddings per
-  the architecture-overview ELT subsystem; the key is configured per deployment, never
-  hard-coded, and never used to host a model); **and the builtin tenancy/identity core:
-  workspace (tenant boundary; solo collapses to `default`), users, agents (tied to
-  user–workspace pairs), authentication (a workspace claim in every token; per-deployment
-  OIDC via RFC 9728; a static dev-token first-run bootstrap), agent sessions, per-plugin
-  permissions, projects.** Projects and agents are *builtin*, not
-  plugins: plugins are scoped per project, so a project cannot itself be a plugin (a host
-  bootstrap chicken-and-egg). *Order: nothing runs without the spine, and every capability
-  family is scoped within workspace + project.* Tier: `proposed`. Provenance: V0 discovery
-  (locked 2026-05-02) + architecture-alignment record (2026-04-27, tenant/substrate
-  rounds); decomposition — 2026-05-18 product-intake refine.
-- **`0.2.0` — Task management.** Task CRUD, subtasks/parent-id, status lifecycle, project +
-  priority; migration of the prior structured task data. *Order: maintainer-stated first
-  priority after substrate; the operational spine the workspace dogfoods earliest; its
-  project/agent references are satisfied by the builtin substrate.* Tier: `proposed`.
-  Provenance: as `0.1.0`.
-- **`0.3.0` — Dispatch metrics & lifecycle.** Dispatch start/event/record/finalize;
-  per-dispatch tokens/duration/cost/tool-uses; the dispatch-event stream; the scope
-  envelope. *Order: maintainer-stated next priority; core to the orchestration workflow.*
-  Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.4.0` — Skill-run measurement.** Tracks runs of a *skill* (a named, reusable agent
-  capability, for example a specific dispatch shape, a structured review protocol, or an
-  elicitation loop). Each run is measured: start/end timestamps, per-run
-  consultations / review-rounds / flags tallies, knowledge-extraction capture, and a
-  structured *retro*. A retro is the formal "review-after" capture in a trust-then-review
-  workflow, where after a run the operator selectively reviews what the agent decided, flags
-  divergences, and records what was learned; the structure makes findings aggregable
-  across runs. Skill-run measurement operates at the substrate level and does not depend
-  on a separate decision to migrate workspace skill definitions into mnemra-core (D8):
-  the measurement substrate works whether skill definitions live in mnemra-core or remain
-  as external files. *Order: sibling of dispatch metrics — the same measurement family.*
-  Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.5.0` — Activity / audit log.** The append-only actor/action/target/summary stream.
-  *Order: low-complexity, high-leverage; underpins traceability across every later
-  capability.* Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.6.0` — Collaboration session friction tracking.** A *collaboration session* is the
-  operator-with-team conversation container (distinct from `0.1.0`'s per-MCP-connection
-  agent session, which is the technical auth/state primitive, MCP-protocol-defined). One
-  collaboration session may span many per-MCP-connection agent sessions as the orchestrator
-  dispatches to sibling agents. Friction events surface within a collaboration session
-  along two axes:
-  - **Event type (the friction *kind*):** `clarification` (operator needed to ask before
-    acting), `revision` (operator changed something after delivery), `course-correction`
-    (operator redirected the approach mid-task).
-  - **Dimension (the friction *axis*):** `scope`, `Acceptance Criteria (AC)`, `context`,
-    `routing`, `priority`.
-  Each event row records the (event-type × dimension) tuple plus context. Aggregated over
-  time the rows surface friction patterns per collaboration session and across sessions:
-  the measurement substrate for trust-then-review iteration. *Order: completes the
-  measurement/audit triad with dispatch + skill-run + activity.* Tier: `proposed`.
-  Provenance: as `0.1.0`.
-- **`0.7.0` — Repo registry.** Repos per project (path / visibility / default-branch /
-  remote). *Order: rides on builtin projects; pairs with the structural families.* Tier:
-  `proposed`. Provenance: as `0.1.0`.
-- **`0.8.0` — Relationships / edges.** Typed edges
-  (parent / blocks / depends-on / supersedes / dispatched-by). *Order: the cross-cutting
-  graph; valuable once tasks and projects exist to link.* Tier: `proposed`. Provenance: as
-  `0.1.0`.
-- **`0.9.0` — Tags / taggings.** Cross-cutting taxonomy. *Order: light; rides on the
-  entities above.* Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.10.0` — Dependency-approval state.** The approved-package register (the
-  green/yellow/red license-tiering state). *Order: self-contained governance state.* Tier:
-  `proposed`. Provenance: as `0.1.0`.
-- **`0.11.0` — Scope-violation log.** The append-only scope-denial stream. *Order:
-  self-contained, low-complexity.* Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.12.0` — Job-search pipeline.** Applications / listings / search-runs; stale
-  auto-reject. *Order: a distinct domain, lower coupling to the orchestration core.* Tier:
-  `proposed`. Provenance: as `0.1.0`.
-- **`0.13.0` — Contacts.** *Order: smallest and most isolated of the capability families.*
-  Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.14.0` — Content-corpus migration.** The prior markdown content corpus (the
-  maintained knowledge subdirectories) is stored as files with frontmatter metadata, with
-  limited indexing (no full-text/vector, since that is `idea` D1). *Order: placed after the
-  structured-capability families per the maintainer's tasks/metrics-first priority; flagged
-  as a reorder candidate at the intake-exit gate, since for a context-layer product the
-  corpus is arguably core-value-early.* Tier: `proposed`. Provenance: V0 discovery §Migration
-  scope (locked 2026-05-02); decomposition — 2026-05-18 refine.
-- **`1.0.0` — Dogfood cutover (public API defined).** The maintainer's workspace runs fully
-  on mnemra-core with zero fallback to the prior tooling and the agent-facing +
-  storage-substrate contracts are locked. SemVer §5: this is where the public API is
-  defined, the V0/MVP milestone. *Order: last in V0 by definition; it is the milestone
-  gate.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.1.0`: builtin substrate plus host core.** Single-process Postgres (pgvector); the content and state storage-shape partitions persisted in-app, with the former timeseries and log shapes emitted to the observability minimum rather than stored (P-0010 D8); the pre-1.0 host-fn ABI; an MCP server skeleton (stdio) onto which each capability increment adds its verbs; the admin/destructive control CLI; an observability minimum ([P-InstrumentBefore](../glossary.md#p-instrumentbefore): every production surface ships instrumented before launch); an **LLM-API-key configuration surface** (mnemra-core calls out to an external model for *generative* work; embeddings and reranking run host-side on local non-generative encoder models per RC-1; the key is configured per deployment, never hard-coded, and never used to host a model) *(MODIFIED 2026-07-02 per RC-1; was: "calls out to an external model for embeddings per the architecture-overview ELT subsystem")*; and **the builtin tenancy/identity core**: workspace (the tenant boundary; solo collapses to `default`), users, agents (tied to user-workspace pairs), authentication (a workspace claim in every token; per-deployment OIDC via RFC 9728; a static dev-token first-run bootstrap), agent sessions, per-plugin permissions, and projects. Projects and agents are *builtin*, not plugins: plugins are scoped per project, so a project can't itself be a plugin (a host bootstrap chicken-and-egg). *Order: nothing runs without the spine, and every capability family is scoped within workspace and project.* Tier: `proposed`. Provenance: V0 discovery (locked 2026-05-02) plus architecture-alignment record (2026-04-27, tenant/substrate rounds); decomposition from the 2026-05-18 product-intake refine.
+- **`0.2.0`: task management.** Task CRUD, subtasks/parent-id, status lifecycle, project plus priority; migration of the prior structured task data. *Order: the maintainer's stated first priority after substrate. It's the operational spine the workspace dogfoods earliest, and its project/agent references are satisfied by the builtin substrate.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.3.0`: dispatch metrics and lifecycle.** Dispatch start/event/record/finalize; per-dispatch tokens/duration/cost/tool-uses; the dispatch-event stream; the scope envelope. *Order: the maintainer's stated next priority, core to the orchestration workflow.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.4.0`: skill-run measurement.** Tracks runs of a *skill* (a named, reusable agent capability, for example a specific dispatch shape, a structured review protocol, or an elicitation loop). Each run is measured: start and end timestamps, per-run consultation/review-round/flag tallies, knowledge-extraction capture, and a structured *retro*. The retro is the formal "review-after" capture in a [trust-then-review workflow](../glossary.md#p-trustthenretro) (direction is set up front, the agent executes within it, and review concentrates selectively on outcomes and patterns): after a run, the operator reviews what the agent decided, flags divergences, and records what was learned, and the structure makes findings aggregable across runs. Skill-run measurement operates at the substrate level and doesn't depend on a separate decision to migrate workspace skill definitions into mnemra-core (D8): the measurement substrate works whether skill definitions live in mnemra-core or remain as external files. *Order: a sibling of dispatch metrics, the same measurement family.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.5.0`: activity/audit log.** The append-only actor/action/target/summary stream. *Order: low complexity, high impact. It underpins traceability across every later capability.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.6.0`: collaboration session friction tracking.** A *collaboration session* is the operator-with-team conversation container, distinct from `0.1.0`'s per-MCP-connection agent session (that's the technical auth/state primitive, MCP-protocol-defined). One collaboration session may span many per-MCP-connection agent sessions as the orchestrator dispatches to sibling agents. Friction events surface within a collaboration session along two axes:
+  - **Event type (the friction *kind*):** `clarification` (the operator needed to ask before acting), `revision` (the operator changed something after delivery), `course-correction` (the operator redirected the approach mid-task).
+  - **Dimension (the friction *axis*):** `scope`, `Acceptance Criteria (AC)`, `context`, `routing`, `priority`.
+
+  Each event row records the event-type-by-dimension pair plus context. Aggregated over time, the rows surface friction patterns per collaboration session and across sessions: the measurement substrate for trust-then-review iteration. *Order: completes the measurement/audit triad with dispatch, skill-run, and activity.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.7.0`: repo registry.** Repos per project (path, visibility, default branch, remote). *Order: rides on builtin projects and pairs with the structural families.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.8.0`: relationships/edges.** Typed edges (parent, blocks, depends-on, supersedes, dispatched-by). *Order: the cross-cutting graph, valuable once tasks and projects exist to link.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.9.0`: tags/taggings.** Cross-cutting taxonomy. *Order: light, and rides on the entities above.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.10.0`: dependency-approval state.** The approved-package register (the green/yellow/red license-tiering state). *Order: self-contained governance state.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.11.0`: scope-violation log.** The append-only scope-denial stream. *Order: self-contained and low complexity.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.12.0`: job-search pipeline.** Applications, listings, search-runs, stale auto-reject. *Order: a distinct domain with lower coupling to the orchestration core.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.13.0`: contacts.** *Order: the smallest and most isolated of the capability families.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.14.0`: content-corpus migration.** The prior markdown content corpus (the maintained knowledge subdirectories) moves to stored files with frontmatter metadata, with limited indexing (no full-text/vector; that's `idea` D1). *Order: placed after the structured-capability families, per the maintainer's tasks/metrics-first priority. Flagged as a reorder candidate at the intake-exit gate: for a context-layer product, the corpus is core value delivered early.* Tier: `proposed`. Provenance: V0 discovery §Migration scope (locked 2026-05-02); decomposition from the 2026-05-18 refine.
+- **`1.0.0`: dogfood cutover (public API defined).** The maintainer's workspace runs fully on mnemra-core with zero fallback to the prior tooling, and the agent-facing plus storage-substrate contracts are locked. SemVer §5: this is where the public API is defined, the V0/MVP milestone. *Order: last in V0 by definition; it's the milestone gate.* Tier: `proposed`. Provenance: as `0.1.0`.
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
-The very-next-update phase after MVP cutover: net-new value beyond V0 workspace-fidelity.
-Each V0.1 entry is `proposed` at this product altitude (this brief's intake locks the
-phase placement); each entry's own feature-altitude intake will lock its frame+spec
-before build. Maintainer ruling 2026-05-20: V0 = workspace-replacement (no regression);
-V0.1 = the core product promise activates plus operational follow-ups V0 deliberately did
-not promise.
+The very-next-update phase after MVP cutover, delivering net-new value beyond V0 workspace fidelity. Each V0.1 entry starts `proposed` at this product altitude (this brief's intake locks the phase placement). Each entry's own feature-altitude intake locks its frame-plus-spec before build, promoting it to `designed` (see Designed §V0.1 for the entries that have made that jump: the retrieval cluster's four). Maintainer ruling 2026-05-20: V0 means workspace-replacement with no regression; V0.1 means the core product promise activates, plus operational follow-ups V0 deliberately didn't promise.
 
-- **`1.1.0` — `get_context_for(artifact_id)` retrieval verb (core product promise).** A
-  one-call MCP retrieval of persistent, typed, cross-session context for a given artifact,
-  rather than reconstructing it by hand each session. The headline V0.1 capability, the
-  first net-new value-add over V0's workspace-fidelity baseline. *Order: V0.1's headline
-  promise; first net-new value over V0.* Tier: `proposed`. Provenance: V0 discovery (D3 —
-  locked 2026-05-02) + product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`).
-- **`1.2.0` — Ongoing ingest pipeline.** Watchers, scheduled polls, or webhooks that
-  auto-detect and ingest new content arriving in the brain corpus after V0's one-shot batch
-  migration (`0.14.0`). Distinct from `0.14.0`: `0.14.0` is a one-shot move-existing-corpus;
-  `1.2.0` is a continuous-arrival pipeline. *Order: operational follow-up to V0.1's
-  headline; V0 covers batch only, V0.1 adds continuous ingest.* Tier: `proposed`.
-  Provenance: architecture-overview ELT subsystem (ADR-16) + product-intake refine 2026-05-20
-  (OD-A resolved: distinct from `0.14.0`, deferred to V0.1).
+- **`1.1.0`: `get_context_for(artifact_id)` retrieval verb (core product promise).** **Promoted to `designed` @ V0.1 / `1.1.0`** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the `1.1.0` reference stays resolvable. Provenance: retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
+- **Search + indexing activation [D1] (retrieval cluster).** **Promoted to `designed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the D1 reference stays resolvable. Provenance: retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
+- **First-class graph edges plus traversal [D2] (retrieval cluster).** **Promoted to `designed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the D2 reference stays resolvable. Provenance: retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
+- **Cross-artifact authoritativeness plus provenance/use-policy substrate fields [G2/G3] (retrieval cluster).** **Promoted to `designed` @ V0.1, retrieval cluster** (2026-07-02). See Designed §V0.1 for the live entry; pointer retained so the G2/G3 reference stays resolvable. Provenance: retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02).
+- **`1.2.0`: ongoing ingest pipeline.** Watchers, scheduled polls, or webhooks that auto-detect and ingest new content arriving in the brain corpus after V0's one-shot batch migration (`0.14.0`). It's distinct from `0.14.0`: `0.14.0` is a one-shot move of the existing corpus, while `1.2.0` is a continuous-arrival pipeline. *Order: an operational follow-up to V0.1's headline. V0 covers batch only; V0.1 adds continuous ingest.* Tier: `proposed`. Provenance: architecture-overview ELT subsystem ([ADR](../glossary.md#adr)-16) plus product-intake refine 2026-05-20 (OD-A resolved: distinct from `0.14.0`, deferred to V0.1).
 
-Future V0.1 increments (`1.3.0`+) land here as the "very-next-update" trigger fires for
-new capabilities.
+Future V0.1 increments (`1.3.0`+) land here as the "very-next-update" trigger fires for new capabilities.
 
-**Build prerequisites (sequence, unchanged):** the V0 increment sequence's build is gated
-on three external predecessors. First, the intake → frame → spec pipeline must be complete
-(it is being exercised and amended now). Then the spec-delta/merge tool and the dispatch CLI
-must be operational. Both prerequisite tools are **external components** with their own
-forthcoming briefs and their own independent versions (see Idea section pointers); this brief
-references them as build-time dependencies and does not absorb them into its register.
-`0.1.0` work begins only after those exist; the prerequisites gate the V0 sequence's
-*start*, not its contents.
+**Build prerequisites (sequence, unchanged):** the V0 increment sequence's build is gated on three external predecessors: the Intake → Frame → Spec pipeline being complete (it's being exercised and amended right now), then the spec-delta/merge tool and the dispatch CLI being operational. Both prerequisite tools are **external components** with their own forthcoming briefs and their own independent versions (see Idea section pointers). This brief references them as build-time dependencies; it doesn't absorb them into its register. `0.1.0` work begins only after those exist. The prerequisites gate the V0 sequence's *start*, not its contents.
 
 ### Designed
 
-A locked frame + locked spec exists. **Empty.** No mnemra feature has a locked spec: the
-spec stage has not been run for any feature, and V0's constraints/frame artifact is still
-draft. Stated explicitly: the register does not infer design completion that does not
-exist.
+A locked frame plus a locked spec exists. The retrieval cluster is this tier's first tenant: its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four constituent entries below from `proposed`. Stated explicitly: the register doesn't infer design completion beyond what a locked spec actually covers.
+
+#### V0.1 (post-`1.0.0` immediate roadmap)
+
+- **`1.1.0`: `get_context_for(artifact_id)` retrieval verb (core product promise).** A one-call MCP retrieval of persistent, typed, cross-session context for a given artifact, rather than reconstructing it by hand each session. This is the headline V0.1 capability, the first net-new value over V0's workspace-fidelity baseline. *Order: V0.1's headline promise, the first net-new value over V0.* Tier: `designed`. Provenance: V0 discovery (D3, locked 2026-05-02) plus product-intake refine 2026-05-20 (scheduled at V0.1 / `1.1.0`) plus retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02). **Promoted 2026-07-02 (MODIFIED):** covered by the retrieval-cluster feature-altitude intake (locked 2026-07-02) as one clustered feature with D1, D2, and G2/G3 below, all through one Intake/Frame/Spec pipeline. The frame locked 2026-07-02 and the spec locked 2026-07-02, satisfying the `designed` validator (a locked frame **plus** a locked spec).
+- **Search plus indexing activation [D1] (retrieval cluster).** A batch indexing pipeline over the corpus the substrate already holds (per-shape chunking, authored-tree summary nodes, local embeddings, full-text search), plus the agent-facing `search` verb: hybrid FTS-and-dense retrieval fused by Reciprocal Rank Fusion with local rerank, budget-shaped. Part of the retrieval cluster (one clustered feature with `1.1.0`, D2, G2/G3). *Order: rides with `1.1.0`, since the headline verb needs the index.* Tier: `designed`. Provenance: V0 discovery D1 (locked 2026-05-02); retrieval-cluster intake (locked 2026-07-02), which performed the `idea → proposed` promotion; retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02), which performed the `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **First-class graph edges plus traversal [D2] (retrieval cluster).** Typed, traversable edges extracted from the authored-but-latent sources (frontmatter relation lists, free-text citations) with provenance discrimination. **The `0.8.0` edge-table substrate is what this traversal activates:** one superset vocabulary, one traversal path (recursive CTEs, per the storage-substrate decision). Part of the retrieval cluster. *Order: as D1.* Tier: `designed`. Provenance: V0 discovery D2 (locked 2026-05-02); retrieval-cluster intake (locked 2026-07-02), which performed the `idea → proposed` promotion; retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02), which performed the `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **Cross-artifact authoritativeness plus provenance/use-policy substrate fields [G2/G3] (retrieval cluster).** The substrate fields the retrieval envelope reads and serves: trust provenance (authoritative/outdated/background), the policy permissions record (dont-use, model-egress, visibility, tenant-share), freshness handles plus decay classes, and decision axes. Part of the retrieval cluster. *Order: as D1, the envelope's substrate.* Tier: `designed`. Provenance: knowledge-object survey (2026-05-15); retrieval-cluster intake (locked 2026-07-02), which performed the `idea → proposed` promotion; retrieval-cluster spec (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02), which performed the `proposed → designed` promotion. *(ADDED 2026-07-02.)*
 
 ### Committed
 
-`designed` plus a plan, release-bound. **Empty.** Nothing is design-complete, and no
-release has a committed date, consistent with the product's stated posture that a phase
-commits a date only when work is far enough along. Stated explicitly: the register does
-not over-claim commitment. An empty `committed` tier early in a project is the register
-working, not a gap.
+`designed` plus a plan, release-bound. **Empty.** The retrieval cluster is now `designed`, but no feature has yet moved `designed → committed`: no committed-tier plan exists, and no release has a committed date. That's consistent with the product's stated posture that a phase commits a date only when work is far enough along. Stated explicitly: the register doesn't over-claim commitment. An empty `committed` tier early in a project is the register working, not a gap.
 
 ### Live
 
 Built and verified in current code/canon.
 
-- **mnemra-core pre-`0.1.0` substrate spike** — a host instantiates a WebAssembly Component
-  Model plugin over a typed contract, with host-fn round-trips and host-side state
-  persisting across invocations on the `wasm32-wasip2` toolchain. Verifiable: the
-  mnemra-core repository (host crate, first plugin crate, contract package; spike commit on
-  `main`).
-- **Landing site** — `mnemra.dev`, Astro on Cloudflare Pages; deployed.
-- **GitHub organization** — `github.com/mnemra`, README published.
-- **Email waitlist + social presence.**
-- **Developer-docs scaffolding** — mdBook site with an ADR section and template. (An ADR is
-  an Architecture Decision Record, captured here in MADR format: one structured `.md` file
-  per decision.)
+- **mnemra-core pre-`0.1.0` substrate spike**: a host instantiates a WebAssembly Component Model plugin over a typed contract, with host-fn round-trips and host-side state persisting across invocations on the `wasm32-wasip2` toolchain. Verifiable: the mnemra-core repository (host crate, first plugin crate, contract package; spike commit on `main`).
+- **Landing site**: `mnemra.dev`, Astro on Cloudflare Pages, deployed.
+- **GitHub organization**: `github.com/mnemra`, README published.
+- **Email waitlist and social presence.**
+- **Developer-docs scaffolding**: an mdBook site with an [ADR](../glossary.md#adr) section and template.
 
 ## Open Decisions (resolve at the intake-exit gate)
 
-Surfaced for the decomposer; not resolved in this draft. Source conflicts, unknowns, and
-unsettled scope are named, not papered.
+Surfaced for the decomposer; not resolved in this draft. Source conflicts, unknowns, and unsettled scope are named, not papered over.
 
-- **APPARATUS-1 — confirmed (tracked separately as a register-model amendment task).** The
-  canonical product-brief register model (previously four-tier, `committed` before
-  `designed`) is mis-ordered and missing `proposed` for release-commitment semantics. The
-  amendment: five tiers `idea → proposed → designed → committed → live`, each validated by
-  a pipeline artifact, with the permanent/ephemeral boundary at `designed`|`committed`;
-  plus the spec-is-permanent / plan-is-ephemeral distinction promoted to general workspace
-  canon; plus the multi-repo product-brief-home gap (DEFER-1). Do this now while the
-  structured-delta consumer does not yet exist (zero forward-contract migration; deferring
-  means a contract break later). Tracked as a separate amendment task/ADR, not a mid-run edit.
-- **INCR-1 — resolved.** V0 decomposed into a builtin-substrate-first,
-  one-capability-per-increment staged sequence; versioning is Semantic Versioning 2.0.0
-  applied without abuse. Each feature increment is a **minor** bump within `0.y.z` initial
-  development (`0.1.0` host core → `0.14.0`), backward-compatible fixes are patch, the commit
-  is pinned as `+build` metadata (not a lower-precedence `-pre-release`), and **`1.0.0`** is
-  the dogfood-cutover/MVP where the public API is defined (SemVer §5). Applied this round; see
-  the Proposed section. The per-entry ordering rationale supports cheap reordering at this
-  gate. The `{projects, agents}`-as-core-plugins question is resolved upstream (builtin
-  substrate; per-project plugin chicken-and-egg). The stale architecture-alignment-record
-  framing is flagged in the maintainer-internal intake record for a separate downstream
-  amendment, not corrected here. The apparatus-relevant residue (the *canonical* register
-  model expressing staged/incremental delivery) folds into APPARATUS-1; it's no longer an open
-  question for this brief.
-- **LIC-1 — resolved.** Apache-2.0 + future-relicense clause locked 2026-05-20. The
-  mnemra-core repository's current LICENSE/README (MIT) is corrected in a separate
-  follow-up task. Stronger contributor IP grant; the future-relicense clause preserves the
-  future commercial-managed-tier option.
-- **BIPT-1 — resolved.** Split: the committed provenance direction (G2/G3) is an
-  `idea`-with-provenance entry; the byte-level provenance-tracing technique is an
-  `idea` reimplementation-reference entry. No longer an open tiering question.
-- **PRV-1 — resolved.** Decision-name + lock-date confirmed as the provenance-pointer
-  convention (locked 2026-05-20). The pattern is already in use throughout the brief; a
-  public-repo artifact can cite internal-record decisions by name and date without exposing
-  internal paths.
-- **DEFER-1 — resolved (relocated).** Brief moved from the landing-site repository to
-  the mnemra-core repository at `docs/src/intent/mnemra-core.md` (2026-05-20). The brief
-  lives with the component it scopes (per-repo-first). APPARATUS-1's broader multi-repo
-  product-brief-home convention question still applies for future multi-repo briefs in
-  other components.
-- **AMEND-1 — confirmed routed to retrospective.** Both drift items in the mnemra-core
-  project context file, (a) "bare mnemra = mnemra-core" shorthand wrong at product
-  altitude, and (b) landing-site framework migration listed as "not started" though shipped,
-  batch into a retrospective doc for corrective action (locked 2026-05-20).
-- **T-5 — resolved (split).** (a) **Categorization-via-LLM-API:** `idea` tier. V0 is
-  workspace-replacement (no auto-categorization today); a net-new value-add candidate for
-  V0.1+ when the use-case shape solidifies. (b) **LLM-API-key configuration surface:** V0,
-  folded into the `0.1.0` substrate description (mnemra-core calls the LLM for embeddings at
-  V0 per the architecture-overview ELT subsystem; the config surface is required from
-  substrate onward). Locked 2026-05-20.
-- **OD-A — resolved.** Content-import / ongoing ingest pipeline is distinct from
-  `0.14.0`'s one-shot batch migration. Deferred to V0.1 (placed at `1.2.0`, see Proposed
-  §V0.1) per maintainer ruling 2026-05-20. V0 covers batch migration only.
-- **OD-B — resolved.** Permissions model: a separate scoped research dispatch is queued
-  for after intake-exit (non-blocking on this gate). The capability stays `idea` until
-  research informs its shape; the result feeds the future permissions-model intake. Locked
-  2026-05-20.
-- **T-7 — resolved.** "Team" == workspace/tenant (aligned; one self-hosted instance per
-  tenant). "Team" is an informal user-grouping inside a workspace, not a distinct layer.
-  The deferred hierarchy is **1-layer** (org above the workspace=tenant boundary, when
-  multi-tenancy lands). Locked 2026-05-20.
-- **µVM-OQ1..4 — confirmed parked.** libkrun copyleft-tier acceptance; the GPL
-  process-boundary stance for an appliance; the appliance trip-wire wording; managed-tier
-  Postgres shape (per-tenant VM ≠ per-tenant Postgres). All deferred-until-trip-wire
-  (streamable-HTTP becomes the active MCP transport), non-blocking. Locked 2026-05-20.
-- *Most earlier per-item tier-ambiguities dissolved under the v4 model:* items without
-  their own pipeline run are uniformly `idea`-with-provenance, so no per-item tiering
-  ruling is needed. The model removing those decisions is a model-quality signal.
+- **APPARATUS-1, confirmed (tracked separately as a register-model amendment task).** The canonical product-brief register model (previously four-tier, with `committed` before `designed`) is mis-ordered and missing `proposed` for release-commitment semantics. The amendment: five tiers, `idea → proposed → designed → committed → live`, each validated by a pipeline artifact, with the permanent/ephemeral boundary at `designed`/`committed`. It also promotes the spec-is-permanent, plan-is-ephemeral distinction to general workspace canon, and covers the multi-repo product-brief-home gap (DEFER-1). Do it now, while the structured-delta consumer doesn't yet exist: zero forward-contract migration, whereas deferring means a contract break later. Tracked as a separate amendment task/ADR, not a mid-run edit.
+- **INCR-1, resolved.** V0 decomposed into a builtin-substrate-first, one-capability-per-increment staged sequence. Versioning is Semantic Versioning 2.0.0 applied without abuse: each feature increment is a **minor** bump within `0.y.z` initial development (`0.1.0` host core → `0.14.0`), backward-compatible fixes are patch bumps, the commit is pinned as `+build` metadata (not a lower-precedence `-pre-release`), and **`1.0.0`** is the dogfood-cutover/MVP where the public API is defined (SemVer §5). Applied this round; see the Proposed section, where the per-entry ordering rationale supports cheap reordering at this gate. The `{projects, agents}`-as-core-plugins question is resolved upstream (builtin substrate; the per-project plugin chicken-and-egg problem). The stale architecture-alignment-record framing is flagged in the maintainer-internal intake record for a separate downstream amendment, not corrected here. The apparatus-relevant residue (the *canonical* register model expressing staged/incremental delivery) folds into APPARATUS-1; it's no longer an open question for this brief.
+- **LIC-1, resolved.** Apache-2.0 plus a future-relicense clause, locked 2026-05-20. The mnemra-core repository's current LICENSE/README (MIT) is corrected in a separate follow-up task. This gives a stronger contributor IP grant, and the future-relicense clause preserves the future commercial-managed-tier option.
+- **BIPT-1, resolved.** Split in two: the committed provenance direction (G2/G3) is an `idea`-with-provenance entry, and the byte-level provenance-tracing technique is an `idea` reimplementation-reference entry. No longer an open tiering question.
+- **PRV-1, resolved.** Decision name plus lock date confirmed as the provenance-pointer convention (locked 2026-05-20). The pattern is already in use throughout the brief: a public-repo artifact can cite internal-record decisions by name and date without exposing internal paths.
+- **DEFER-1, resolved (relocated).** The brief moved from the landing-site repository to the mnemra-core repository, at `docs/src/intent/mnemra-core.md` (2026-05-20). The brief lives with the component it scopes, following per-repo-first. APPARATUS-1's broader multi-repo product-brief-home convention question still applies for future multi-repo briefs in other components.
+- **AMEND-1, confirmed routed to retrospective.** Both drift items in the mnemra-core project context file batch into a retrospective doc for corrective action (locked 2026-05-20): (a) the "bare mnemra = mnemra-core" shorthand is wrong at product altitude, and (b) the landing-site framework migration was listed as "not started" though it had already shipped.
+- **T-5, resolved (split).** (a) **Categorization-via-LLM-API:** `idea` tier. V0 is workspace-replacement (no auto-categorization today); a net-new value candidate for V0.1+ once the use-case shape solidifies. (b) **LLM-API-key configuration surface:** V0, folded into the `0.1.0` substrate description (mnemra-core calls the LLM for embeddings at V0 per the architecture-overview ELT subsystem; the config surface is required from substrate onward). Locked 2026-05-20.
+- **OD-A, resolved.** The content-import/ongoing ingest pipeline is distinct from `0.14.0`'s one-shot batch migration. Deferred to V0.1, placed at `1.2.0` (see Proposed §V0.1), per maintainer ruling 2026-05-20. V0 covers batch migration only.
+- **OD-B, resolved.** Permissions model: a separate scoped research dispatch is queued for after intake-exit (non-blocking on this gate). The capability stays `idea` until research informs its shape; the result feeds the future permissions-model intake. Locked 2026-05-20.
+- **T-7, resolved.** "Team" equals workspace/tenant (aligned: one self-hosted instance per tenant). "Team" is an informal user-grouping inside a workspace, not a distinct layer. The deferred hierarchy is **one layer** (org above the workspace-as-tenant boundary, once multi-tenancy lands). Locked 2026-05-20.
+- **µVM-OQ1..4, confirmed parked.** libkrun copyleft-tier acceptance; the GPL process-boundary stance for an appliance; the appliance trip-wire wording; managed-tier Postgres shape (per-tenant VM does not equal per-tenant Postgres). All deferred until the trip-wire fires (streamable-HTTP becoming the active MCP transport), non-blocking. Locked 2026-05-20.
+- *Most earlier per-item tier ambiguities dissolved under the v4 model:* items without their own pipeline run are uniformly `idea`-with-provenance, so no per-item tiering ruling is needed. The model removing those decisions is itself a model-quality signal.
 
 ## Changelog
 
-- **2026-05-20** — Intake-exit gate confirmed (Stage 1 lock). All open decisions resolved:
-  LIC-1 (Apache-2.0 + future-relicense locked; mnemra-core repo LICENSE/README correction
-  is a follow-up task); T-5 split (categorization-via-LLM-API → `idea`; LLM-API-key config
-  surface → V0 substrate, folded into `0.1.0`); T-7 (team == workspace/tenant; 1-layer
-  deferred hierarchy); OD-B (permissions-model research queued for separate dispatch,
-  non-blocking); PRV-1 (decision-name + lock-date provenance form confirmed); AMEND-1
-  (project-context-file drift routed to retrospective); DEFER-1 (brief-home trip-wire
-  wording confirmed); µVM-OQ1..4 (all confirmed parked until streamable-HTTP active);
-  APPARATUS-1 (confirmed tracked separately, no mid-brief absorption); alignment-doc
-  framing flag confirmed as a separate downstream amendment candidate. Brief relocated
-  from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/src/intent/mnemra-core.md`:
-  the brief travels with the component it scopes (per-repo-first); DEFER-1 resolves to
-  relocation rather than parking. Hard constraints
-  updated for the license lock; `0.1.0` substrate updated for the LLM-API-key config
-  surface. Two suppressed-r2 tweaks applied (provenance line "scheduled at" instead of
-  "committed to"; changelog vocabulary tightened). Intake-exit gate (Stage 1d, human
-  touchpoint 1) is closed; brief enters lock state. Stage 2 (Frame) is the next pipeline
-  stage when re-engaged.
-- **2026-05-20** — Intake review pass reconciled (external review-mode pass, six findings,
-  all resolved). Brief retitled "Mnemra Core" — focus correction: this brief is mnemra-core's
-  product intent and roadmap; sibling components (dispatch CLI, spec-delta/merge tool,
-  markdown review/annotation tool) are external with their own forthcoming briefs and
-  their own independent versions. No-meta-version decision recorded for mnemra-as-a-whole.
-  F1 resolved: V0/V0.1 made explicit as marketing-tier labels with `1.0.0`/`1.1.0`+ SemVer
-  corollaries — D3 (`get_context_for`) promoted from `idea` to `proposed` @ `1.1.0`; new
-  Proposed §V0.1 (post-`1.0.0` immediate roadmap) added with `1.1.0` retrieval verb and
-  `1.2.0` ongoing-ingest entries. F2: retro defined at intent level (the "review-after"
-  capture in a trust-then-review workflow). F3a: `0.6.0` renamed to "Collaboration session
-  friction tracking" — disambiguates the operator-with-team layer from `0.1.0`'s
-  per-MCP-connection agent session (MCP-protocol-defined); intent-level definitions added
-  for the event-type 3-tuple and dimension 5-tuple. F3b: "AC" expanded to "Acceptance Criteria
-  (AC)" on first use. F4: `0.4.0` "skill" defined at intent level + clarified that
-  skill-run measurement does not depend on D8 migration. F5: pre-resolution `V0.01` label
-  retired (Live tier entry renamed to "pre-`0.1.0` substrate spike"). F6 / OD-A resolved:
-  ongoing-ingest pipeline distinct from `0.14.0`, placed at V0.1 / `1.2.0`.
-  dispatch CLI + spec-delta/merge tool Idea entries reframed: external components (operationally required
-  before mnemra-core V0 build, but live in their own repositories / briefs / versions),
-  not items in this brief's register. Build prerequisites paragraph updated accordingly.
-- **2026-05-18** — V0 remodeled from a single monolithic `proposed` entry into a
-  builtin-substrate-first, one-capability-per-increment staged sequence (`0.1.0` host core →
-  `0.14.0`, then `1.0.0` cutover), each increment its own `proposed` entry. Versioning
-  resolved to Semantic Versioning 2.0.0 applied without abuse (feature = minor within
-  `0.y.z`; fix = patch; commit = `+build` metadata, not `-pre-release`; `1.0.0` = public
-  API defined = the dogfood-cutover/MVP, SemVer §5). Substrate boundary corrected against
-  the architecture-alignment record: workspace/users/auth/session/perms/projects/agents are
-  builtin (projects/agents are not plugins, per the per-project plugin chicken-and-egg). Resolves
-  INCR-1. Empty `designed`/`committed` tiers preserved. Canonical-model residue folded into
-  APPARATUS-1; the stale alignment-record core-plugin framing flagged in the
-  maintainer-internal intake record for separate amendment.
-- **2026-05-18** — Re-tiered to the v4 five-tier model (`idea → proposed → designed →
-  committed → live`, pipeline-artifact validators, permanent/ephemeral boundary) across
-  six refine rounds with the decomposer. This brief is the forcing instance for the
-  canonical register-model amendment (APPARATUS-1). Honest state recorded: `committed` and
-  `designed` are empty (no locked spec for any feature; no committed release date), the
-  register declining to over-claim being the mirror of the under-capture gap it remediates.
-  Elicited in-head intent folded in (the prior-tooling capability families, MCP-server-as-
-  V0-deliverable, deliberate single-use-case focus, tenant-hierarchy deferral + invariant,
-  sibling-tool-as-plugin entries, microVM hosting posture). Scope: whole-product intent +
-  roadmap; commercial/GTM strategy held in a separate internal record by deliberate seam.
-- **2026-05-18** — Initial draft. Stage 1 (Intake) of a product-altitude structured
-  product-intent authoring pass. Home and scope set by the decomposer across the intake
-  conversation. (Superseded by the re-tier above; retained per decision-space preservation.)
+- **2026-07-02**: retrieval-cluster spec locked (`docs/specs/2026-07-02-retrieval-cluster.md`). Register: `proposed → designed` promotion for the four clustered entries. `1.1.0` (`get_context_for` retrieval verb), D1 (search plus indexing), D2 (graph edges plus traversal), and G2/G3 (authoritativeness plus provenance/use-policy substrate fields) moved from Proposed §V0.1 into a new Designed §V0.1 subsection, the tier's first tenant. Each keeps a pointer-stub in Proposed §V0.1, and the corresponding Idea-section pointers (D1, D2, D3, G2/G3) retarget from "See Proposed §V0.1" to "See Designed §V0.1."
+- **2026-07-02**: retrieval-cluster riders (labeled deltas, authored with the retrieval-cluster Stage-3 spec, riding that cluster's docs change). **RC-1 model-hosting amendment** (retrieval-cluster intake, locked 2026-07-02): every falsified canonical copy is reconciled in the same change, single-source discipline. MODIFIED the Non-goals model clause ("never hosts one" becomes MUST NOT host a *generative* LLM; local non-generative inference, embedding and reranking, permitted host-side). MODIFIED the Hard-constraints model-hosting clause to match. MODIFIED the `0.1.0` substrate entry's external-embedding framing (embeddings and reranking are now local and non-generative; the LLM-API-key surface serves the generative call-outs). The architecture-overview ELT external-embedding framing is the named lagging copy, reconciled in the same change. **Register:** `idea → proposed` promotions performed by the retrieval-cluster intake lock: D1 (search plus indexing), D2 (graph edges plus traversal, noting the `0.8.0` edge-table substrate as what its traversal activates), and G2/G3 (authoritativeness plus provenance/use-policy substrate fields) added as live Proposed §V0.1 entries with idea-tier pointers retained. `1.1.0` is re-confirmed as the cluster's headline entry (tier stays `proposed` until the spec locks). ADDED idea-tier entry: per-user identity machinery (frame pre-gate walk item 9). **Hard constraints:** ADDED accessibility as a standing product requirement binding on human-facing UI/docs surfaces (frame pre-gate walk item 13, routed here rather than folded into the MCP-verb cluster).
+- **2026-05-20**: intake-exit gate confirmed (Stage 1 lock). All open decisions resolved: LIC-1 (Apache-2.0 plus future-relicense locked; mnemra-core repo LICENSE/README correction is a follow-up task); T-5 split (categorization-via-LLM-API to `idea`; LLM-API-key config surface to V0 substrate, folded into `0.1.0`); T-7 (team equals workspace/tenant; one-layer deferred hierarchy); OD-B (permissions-model research queued for separate dispatch, non-blocking); PRV-1 (decision-name plus lock-date provenance form confirmed); AMEND-1 (project-context-file drift routed to retrospective); DEFER-1 (brief-home trip-wire wording confirmed); µVM-OQ1..4 (all confirmed parked until streamable-HTTP is active); APPARATUS-1 (confirmed tracked separately, no mid-brief absorption); the alignment-doc framing flag confirmed as a separate downstream amendment candidate. The brief relocated from `mnemra.dev/docs/intent/mnemra.md` to `mnemra-core/docs/src/intent/mnemra-core.md`: the brief travels with the component it scopes (per-repo-first), so DEFER-1 resolves to relocation rather than parking. Hard constraints updated for the license lock; `0.1.0` substrate updated for the LLM-API-key config surface. Two suppressed-r2 tweaks applied: the provenance line reads "scheduled at" instead of "committed to," and changelog vocabulary was tightened. The intake-exit gate (Stage 1d, human touchpoint 1) is closed; the brief enters lock state. Stage 2 (Frame) is the next pipeline stage when re-engaged.
+- **2026-05-20**: intake review pass reconciled (external review-mode pass, six findings, all resolved). Brief retitled "Mnemra Core," a focus correction: this brief is mnemra-core's product intent and roadmap, and sibling components (dispatch CLI, spec-delta/merge tool, markdown review/annotation tool) are external, with their own forthcoming briefs and their own independent versions. A no-meta-version decision was recorded for mnemra-as-a-whole. F1 resolved: V0/V0.1 made explicit as marketing-tier labels with `1.0.0`/`1.1.0`+ SemVer corollaries. D3 (`get_context_for`) promoted from `idea` to `proposed` @ `1.1.0`; a new Proposed §V0.1 (post-`1.0.0` immediate roadmap) was added with the `1.1.0` retrieval verb and `1.2.0` ongoing-ingest entries. F2: retro defined at intent level (the "review-after" capture in a trust-then-review workflow). F3a: `0.6.0` renamed to "Collaboration session friction tracking," disambiguating the operator-with-team layer from `0.1.0`'s per-MCP-connection agent session (MCP-protocol-defined); intent-level definitions were added for the event-type 3-tuple and the dimension 5-tuple. F3b: "AC" expanded to "Acceptance Criteria (AC)" on first use. F4: `0.4.0`'s "skill" defined at intent level, plus clarification that skill-run measurement doesn't depend on the D8 migration. F5: the pre-resolution `V0.01` label retired (the Live-tier entry renamed to "pre-`0.1.0` substrate spike"). F6 / OD-A resolved: the ongoing-ingest pipeline is distinct from `0.14.0`, placed at V0.1 / `1.2.0`. The dispatch CLI and spec-delta/merge tool Idea entries were reframed as external components (operationally required before the mnemra-core V0 build, but living in their own repositories, briefs, and versions), not items in this brief's register. The Build prerequisites paragraph was updated to match.
+- **2026-05-18**: V0 remodeled from a single monolithic `proposed` entry into a builtin-substrate-first, one-capability-per-increment staged sequence (`0.1.0` host core → `0.14.0`, then `1.0.0` cutover), each increment its own `proposed` entry. Versioning resolved to Semantic Versioning 2.0.0 applied without abuse: feature equals minor within `0.y.z`, fix equals patch, commit equals `+build` metadata (not `-pre-release`), and `1.0.0` equals public API defined, the dogfood-cutover/MVP (SemVer §5). The substrate boundary was corrected against the architecture-alignment record: workspace, users, auth, session, perms, projects, and agents are builtin (projects and agents aren't plugins, given the per-project plugin chicken-and-egg problem). Resolves INCR-1. Empty `designed`/`committed` tiers preserved. Canonical-model residue folded into APPARATUS-1; the stale alignment-record core-plugin framing is flagged in the maintainer-internal intake record for separate amendment.
+- **2026-05-18**: re-tiered to the v4 five-tier model (`idea → proposed → designed → committed → live`, pipeline-artifact validators, permanent/ephemeral boundary) across six refine rounds with the decomposer. This brief is the forcing instance for the canonical register-model amendment (APPARATUS-1). Honest state recorded: `committed` and `designed` are empty, with no locked spec for any feature and no committed release date. The register declining to over-claim is the mirror of the under-capture gap it remediates. Elicited in-head intent was folded in: the prior-tooling capability families, MCP-server-as-V0-deliverable, deliberate single-use-case focus, tenant-hierarchy deferral plus invariant, sibling-tool-as-plugin entries, microVM hosting posture. Scope: whole-product intent plus roadmap; commercial/GTM strategy held in a separate internal record by deliberate seam.
+- **2026-05-18**: initial draft. Stage 1 (Intake) of a product-altitude structured product-intent authoring pass. Home and scope were set by the decomposer across the intake conversation. (Superseded by the re-tier above; retained per [decision-space preservation](../glossary.md#p-preservedecisionspace).)
