@@ -14,8 +14,16 @@
 #   bash scripts/flake-runner.sh [N] [TEST_THREADS] [BIN ...]
 #     N             iterations per binary                (default 20)
 #     TEST_THREADS  --test-threads value, or "default"   (default "default")
-#                   Pass 1 to match the serialized CI recipe.
-#     BIN ...       space-separated --test binary names  (default = all 14 PG binaries)
+#                   Pass 1 to match the serialized CI recipe (R-0034) — the
+#                   CLI default (parallel) measures an UNSHIPPED configuration
+#                   and must not back acceptance evidence (R-0039 item 1).
+#     BIN ...       space-separated --test binary names  (default = all 17 PG
+#                   binaries, mirroring justfile's PG_TEST_FLAGS — R-0039 item 2)
+#
+#   Every cargo invocation below passes --features test-hooks (additive-only,
+#   libs/mnemra-host/Cargo.toml:17) so artifact_list_paging_whitebox's
+#   crate-level `#![cfg(feature = "test-hooks")]`-gated tests actually compile
+#   and run wherever this harness measures it (R-0039 item 3).
 #
 # SIGNATURE CLASSIFICATION (per run)
 #   SIGABRT   log has "signal: 6" / "SIGABRT"                  -> #1852 teardown abort family
@@ -56,10 +64,17 @@ if [ "$#" -ge 1 ]; then shift; fi
 if [ "$#" -ge 1 ]; then
     BINS=("$@")
 else
-    # Default: all 14 PG-touching integration test binaries (R-0024).
+    # Default: all 17 PG-touching integration test binaries (R-0024, updated
+    # R-0039 item 2). Mirrors justfile's PG_TEST_FLAGS member-for-member so
+    # this default never silently drifts behind the shipped CI enumeration —
+    # includes startup_run_full (T5, #1992) and the paging-harness-mediated
+    # pair artifact_list_paging / artifact_list_paging_whitebox (tier-2 T5,
+    # R-0031), which the tier-1 14-member default omitted.
     BINS=(
         admin_token
         admin_token_behavior
+        artifact_list_paging
+        artifact_list_paging_whitebox
         artifact_machinery
         content_schema
         identity_builtins
@@ -70,6 +85,7 @@ else
         postgres_engine
         schema_init
         startup_population
+        startup_run_full
         storage_contract_postgres
         tenancy_isolation
     )
@@ -105,10 +121,15 @@ echo "host: $(uname -srm) | cores: $(getconf _NPROCESSORS_ONLN 2>/dev/null || ec
 echo "baseline postmaster PID count: $(echo "$BASELINE_PM_PIDS" | grep -c . 2>/dev/null || echo 0)"
 
 # Build once: plugin wasm guest + host test binaries.
+# NOTE: the plugin build below is a DIFFERENT package (mnemra-echo, the wasm
+# guest) which does not define the test-hooks feature — `cargo build -p
+# mnemra-echo --features test-hooks` fails with "does not contain this
+# feature" (verified). test-hooks threading applies only to the mnemra-host
+# invocations (R-0039 item 3).
 echo "--- building (once) ---"
 cargo build --release -p mnemra-echo --target wasm32-wasip2 --manifest-path "$MANIFEST" >/dev/null 2>&1 \
     || { echo "FATAL: plugin build failed"; exit 2; }
-cargo test -p mnemra-host --no-run --manifest-path "$MANIFEST" >/dev/null 2>&1 \
+cargo test -p mnemra-host --features test-hooks --no-run --manifest-path "$MANIFEST" >/dev/null 2>&1 \
     || { echo "FATAL: test build failed"; exit 2; }
 
 BASE_PM="$(count_postmasters)"
@@ -145,7 +166,7 @@ for i in $(seq 1 "$N"); do
         # No errexit is enabled (top of script is `set -uo pipefail`, not `-e`),
         # so a non-zero cargo exit is captured in $code and classified below
         # rather than aborting the sweep.
-        cargo test -p mnemra-host --test "$b" --manifest-path "$MANIFEST" \
+        cargo test -p mnemra-host --features test-hooks --test "$b" --manifest-path "$MANIFEST" \
             -- "${THREADARGS[@]}" >"$LOG" 2>&1
         code=$?
 
