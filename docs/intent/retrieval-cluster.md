@@ -5,11 +5,11 @@ frame_relevant: true
 
 # Intake: retrieval cluster — get_context_for + provenance envelope + search activation + typed edges + source-roles
 
-**Locked: 2026-07-02**
+**Locked: 2026-07-02 · Amendment A1 locked: 2026-07-04**
 
 **Stakes:** high
 **Date:** 2026-07-02
-**Status:** locked (intake-exit gate confirmed 2026-07-02; Stage 1c review: Warden round 1, zero blocker/high, six findings resolved, none dismissed)
+**Status:** locked (intake-exit gate confirmed 2026-07-02; Stage 1c review: Warden round 1, zero blocker/high, six findings resolved, none dismissed). Amendment A1 locked 2026-07-04 — see the A1 section's status line for its gate record.
 **Consumer:** agents — MCP-client coding agents consuming the retrieval verbs at runtime; the design and verification pipeline consuming the resulting spec.
 
 > `spec_type: architecture` ratified by the maintainer 2026-07-02. The heuristic was
@@ -94,3 +94,54 @@ Firm-to-defer: committed work whose design choice the Frame constraint-walk reso
 ## Dismissed review flags
 
 - _none — all six round-1 findings (F1–F6) were resolved by edits; none dismissed._
+
+## Amendment A1 (2026-07-04) — ANIMUS anti-phantom instruments
+
+**Status:** locked 2026-07-04 (A1 intake-exit gate confirmed by the maintainer 2026-07-04. Stage 1c review: Warden r1 approve-with-conditions — 1 High + 1 Low + 1 Nit folded in-loop, r2 delta re-verify verified-clean 3/3 folds, zero new findings; the 1 Medium — a pre-existing cross-spec R-NNNN numbering overlap, not an A1 defect — was escalated at the gate and dispositioned defer-with-named-trigger, task #2126, firing at this cluster's designed→committed pickup.)
+**Authorization:** task #2104. Maintainer-ratified decision walk 2026-07-04 (task #2102, all four OQs decided) — decision record in `brain/projects/mnemra/2026-07-04-animus-v4-applicability-research.md` §Decision record (brief locked 2026-07-04, Ink terminal review r1+r2 complete). Re-opening this locked intake is the conscious unlock that record authorizes; scope is strictly the additions below. The original sections above are untouched — A1 is additive.
+
+### JTBD (A1)
+
+The locked cluster's honesty instruments *measure* but do not *enforce*: ES-4/R-0034-d record coverage and population counts per index run, and the P-0015 admission gate is specified per write path, but nothing structurally fails when a measurement diverges or a write path bypasses the gate. The ANIMUS v4.0 primary source demonstrates the failure class this leaves open — a system whose specified guarantee (dedup, honesty filter) was silently narrowed by one unguarded write path, inflating its reported metrics 2× until an external audit caught it. The maintainer needs the retrieval cluster's integrity guarantees to be **self-enforcing at build and test time, before implementation starts**, so a specified-but-unrealized guarantee (a phantom) cannot survive an index build or a test run.
+
+### Success criteria (A1 additions — SC-8 to SC-11)
+
+Each is an observable outcome a downstream check could verify; numbering continues from SC-7.
+
+8. **Build-failing integrity gate (ratified OQ2).** The index build fails — not logs — when either assertion of the pair diverges: (a) reported distinct-key count == live distinct-key count; (b) provenance/coverage population counted against **live rows** (not "the migration ran"). ES-4's existing measurement becomes an assertion pair. *Observable: a seeded divergence (fixture corpus with a mismatched count) causes a non-zero index-build exit.*
+9. **Write-path admission-gate enumeration test (ratified OQ3, spec-tier AC).** A conformance test enumerates every write path to the content/edge store and asserts each passes the P-0015 admission gate + envelope validators; adding a write path that bypasses the gate makes the test fail. In-family precedent: the reporting-engine R-0044 reconciliation pattern (locked 2026-07-04; the per-table matrix itself lives at its R-0050, referenced from R-0044). *Observable: a seeded bypassing write path turns the test red.*
+10. **Content-addressed idempotent ingest (ratified OQ1-b).** Every ingest path this cluster owns computes a SHA-256 content address and is idempotent on it: re-ingesting byte-identical content is a no-op (no duplicate row, no spurious new version). The requirement is forward-binding on register `1.2.0` (ongoing ingest) when that feature is built. *Observable: double-ingest of identical content leaves row counts unchanged.*
+11. **Named near-dup tripwire (ratified OQ1-a).** The near-dup rate on `origin = extracted` edges and chunk-grain retrieval is instrumented, riding the ES-4/R-0034-d measurement surface; the spec names the instrument, the measured rate, and a **numeric threshold** whose crossing re-opens the write-time-dedup question (OQ1). Firing is a threshold crossing in stored data — not prose review. *Observable: the per-run build record carries the near-dup measure; a fixture run seeded above threshold produces the fired flag.*
+
+### Non-goals (A1 boundary)
+
+- **The no-ongoing-ingest non-goal stands.** SC-10 constrains the write/ingest paths this cluster already owns (batch corpus load, host-side extractor re-runs) and binds forward onto `1.2.0`; it does not pull the ingest pipeline into scope.
+- **No write-time semantic dedup.** Ratified OQ1 keeps the current bet (exact-key PK + explicit supersession + retrieval-time consolidation). The tripwire instruments the bet; it does not hedge it into write-time dedup.
+- **No reshaping of the reporting-engine consumed contract.** R-0025, R-0026, and R-0025-g are pinned by the reporting-engine BOM (`0b948ea2`); A1 does not alter their shape (see Hard constraints).
+
+### Hard constraints (A1 additions)
+
+- **Consumed-contract stability:** the amendment SHALL NOT reshape R-0025 / R-0026 / R-0025-g (the reporting-engine BOM `[consumed_contracts.retrieval-cluster]` pin scope). This keeps the ride-along re-pin mechanical (no D4 re-derivation). If a review finding forces reshaping any pinned R-ID, pause-and-escalate — that converts the ride-along into a reporting-engine re-derivation.
+- **Tripwire completeness:** SC-11 lands only with instrument + measured rate + numeric threshold + named re-open action, per the standing firing-mechanism discipline. A tripwire without a firing mechanism is prose intent and does not pass the gate.
+- **Additive amendment:** no locked requirement is removed or weakened. New requirements SHOULD slot as lettered sub-items of this spec's existing R-IDs (no new number allocation) — but never under the pinned IDs (R-0025 / R-0026, incl. R-0025-g). If a new number is unavoidable, the spec author SHALL verify global uniqueness across every locked spec in `docs/specs/` before allocating — R-0036–R-0039 are **not** free (owned by the ci-flake-tier2 spec, which claims R-0026–R-0039 in the same global series), and the corpus already carries a pre-existing cross-spec numbering overlap (retrieval R-0023–R-0035 vs tier1 R-0020–R-0025 / tier2 R-0026–R-0039) — escalated at the A1 intake-exit gate; if its resolution renumbers, the amendment follows it.
+
+### Evidence (A1)
+
+- **ANIMUS v4.0 applicability brief** (`brain/projects/mnemra/2026-07-04-animus-v4-applicability-research.md`, locked 2026-07-04, Ink-reviewed, committed `daa8ac0`). Primary source: the paper's own v3.3→v4.0 confession — a dedup guarantee silently narrowed by one unguarded write path (`integrate_knowledge`), reported metrics inflated ~2×, caught only by an external line-level audit. The brief maps the class onto this cluster: every guarantee here that matches an ANIMUS theme is currently specified-only.
+- **In-family workspace precedents:** the live-data-not-just-schema discipline (a writer + migration ≠ capturing; count live rows) and silent-failure-classes-structuralize-at-first-sighting (ratified 2026-07-02) — both cited in the decision record's rationale; the reporting-engine R-0044 reconciliation pattern (matrix at its R-0050) as the same pattern at its second use.
+
+### Consumer (A1)
+
+Unchanged — agents consuming the retrieval verbs; the design/verification pipeline consuming the amended spec. The new instruments additionally serve the implementation-time CI surface (the build and test gates are consumed by the committed-tier pipeline when implementation starts).
+
+### Risk profile (A1)
+
+**No new trust surface.** The additions are build-time assertions, a conformance test, ingest idempotency, and instrumentation — no new egress, no auth or policy-semantics change, no new schema authority. The original risk profile's surfaces are untouched. Standard (non-security-mode) review applies.
+
+### Open items carried to Frame/Spec (A1)
+
+- **Frame mapping (brownfield):** SC-8 → Frame R4/R11 (edge substrate + instrumentation home); SC-9 → Frame R3 (envelope/admission gate); SC-10 → Frame R4 (extraction/ingest contract, ES-3/ES-4 idempotency); SC-11 → Frame R11 (instrumentation) — recorded as a dated Frame addendum, no new architectural surface.
+- **Near-dup threshold value:** the spec author proposes the numeric threshold + rationale (and what "near-dup" is measured against at chunk grain); maintainer ratifies at the A1 spec-exit gate.
+- **SC-8(a) counter mapping:** which existing measure the distinct-key assertion extends — ES-4/R-0034-d record per-source resolved/unresolved *edge-coverage* counts, not a distinct-key count per se — the spec author confirms the mapping (or introduces the distinct-key counter as part of the gate) at spec precision. The locked OQ2 assertion-pair language stands verbatim.
+- **Content-address mechanics:** key space (what content is hashed), storage location (column/constraint), and interaction with ES-3 upsert byte-idempotency — spec precision against P-0001/P-0016.
+- **Write-path enumeration source:** the test's authoritative write-path list starts from ES-6's two named writers (repos-plugin CRUD path, host-side extractor) plus any batch-load path the spec names; the enumeration mechanism (how a new path is forced into the list) is spec work.
