@@ -424,7 +424,8 @@ The very-next-update phase after MVP cutover — net-new value beyond V0 workspa
 Each V0.1 entry starts `proposed` at this product altitude (this brief's intake locks the
 phase placement); each entry's own feature-altitude intake locks its frame+spec before
 build, promoting it to `designed` (see Designed §V0.1 for the entries that have — the
-retrieval cluster's four). Maintainer ruling 2026-05-20: V0 = workspace-replacement (no
+retrieval cluster's four plus the extensible reporting engine). Maintainer ruling
+2026-05-20: V0 = workspace-replacement (no
 regression); V0.1 = the core product promise activates plus operational follow-ups V0
 deliberately did not promise.
 
@@ -455,6 +456,12 @@ deliberately did not promise.
   Provenance: architecture-overview ELT subsystem (ADR-16) + product-intake refine 2026-05-20
   (OD-A resolved: distinct from `0.14.0`, deferred to V0.1).
 
+- **`1.3.0`+ (candidate) — Extensible reporting engine** — **promoted to `designed`
+  @ V0.1 / `1.3.0`+ (candidate)** (2026-07-04). See Designed §V0.1 for the live entry;
+  pointer retained so the `1.3.0`+ reporting-engine reference stays resolvable.
+  Provenance: reporting-engine spec (`docs/specs/2026-07-03-reporting-engine.md`, locked
+  2026-07-04; verify verdict passed_with_concerns).
+
 Future V0.1 increments (`1.3.0`+) land here as the "very-next-update" trigger fires for
 new capabilities.
 
@@ -469,9 +476,11 @@ references them as build-time dependencies, does not absorb them into its regist
 
 ### Designed
 
-A locked frame + locked spec exists. The retrieval cluster is this tier's first tenant:
-its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its
-four constituent entries below from `proposed`. Stated explicitly: the register does not
+A locked frame + locked spec exists. Two tenants: the retrieval cluster — its spec
+(`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four
+constituent entries below from `proposed` — and the extensible reporting engine — its
+spec (`docs/specs/2026-07-03-reporting-engine.md`) locked 2026-07-04, promoting the
+`1.3.0`+ (candidate) entry below from `proposed`. Stated explicitly: the register does not
 infer design completion beyond what a locked spec actually covers.
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
@@ -518,11 +527,27 @@ infer design completion beyond what a locked spec actually covers.
   `idea → proposed` promotion; retrieval-cluster spec
   (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
   `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **`1.3.0`+ (candidate) — Extensible reporting engine.** One report surface backed by a
+  registry: canonical built-in reports (which ride their V0 capability-family increments
+  as workspace-fidelity content) plus declarative, runtime-added, **read-only** user
+  reports invoked via MCP (admin-CLI convenience secondary). Read-only execution is the
+  identity invariant (defense-in-depth, re-derived for the Postgres substrate); because
+  report queries are user-authored, the guard graduates from operator-mistake to
+  adversary — workspace isolation, the role matrix, and the provenance/policy-envelope
+  predicates must hold on a caller-written query, which is the Frame threat model's
+  headline boundary. Deliberately sequenced after `1.1.0`: the policy-envelope
+  enforcement machinery this surface must honor lands with the retrieval feature.
+  *Order: value activates once the measurement families hold data and the envelope
+  machinery exists.* Tier: `designed`. Provenance: reporting-engine intake (locked
+  2026-07-03) placed the entry at `proposed`; reporting-engine spec
+  (`docs/specs/2026-07-03-reporting-engine.md`, locked 2026-07-04) performed the
+  `proposed → designed` promotion (verify verdict passed_with_concerns). *(ADDED 2026-07-04.)*
 
 ### Committed
 
-`designed` plus a plan, release-bound. **Empty.** The retrieval cluster is now `designed`,
-but no feature has yet moved `designed → committed` (no committed-tier plan exists, and no
+`designed` plus a plan, release-bound. **Empty.** The retrieval cluster and the extensible
+reporting engine are now `designed`, but no feature has yet moved `designed → committed`
+(no committed-tier plan exists, and no
 release has a committed date) — consistent with the product's stated posture that a phase
 commits a date only when work is far enough along. Stated explicitly: the register does
 not over-claim commitment. An empty `committed` tier early in a project is the register
@@ -616,6 +641,15 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-04** — Reporting-engine spec locked
+  (`docs/specs/2026-07-03-reporting-engine.md`; verify verdict passed_with_concerns).
+  Register: `proposed → designed` promotion for the `1.3.0`+ (candidate) extensible
+  reporting engine — moved from Proposed §V0.1 into Designed §V0.1 (the tier's second
+  tenant, after the retrieval cluster), with a pointer-stub retained in Proposed §V0.1.
+  No Idea-section pointer is retargeted: the entry was born at `proposed` via the
+  2026-07-03 intake (not promoted from a Deferred D-item), so it never had one.
+  Register-promotion deferred to merge per the f0f570d direct+stubs convention (the
+  design branch's base predated main's post-retrieval-cluster register state).
 - **2026-07-02** — Retrieval-cluster spec locked
   (`docs/specs/2026-07-02-retrieval-cluster.md`). Register: `proposed → designed`
   promotion for the four clustered entries — `1.1.0` (`get_context_for` retrieval verb),
@@ -2295,6 +2329,8 @@ Nine Tier-A ADRs from WS-E-2 Stage 3; the storage substrate/engine ADR (P-0010, 
 | [P-0017-storage-cluster-model](P-0017-storage-cluster-model.md) | Refines P-0001: per-artifact-type tables classified by a closed four-shape data-shape taxonomy (state-bearing / narrative / reference / associative), with cluster membership — not the table — carrying the shared index/RLS/retention/projection/promotion policy. Locks the source-of-truth principle (content row authoritative; derived surfaces rebuildable; cross-plugin refs are soft, only core entities are hard FK targets) and the column-promotion policy (JSONB default; additive/non-destructive; physical extraction forbidden at V0). Carves out P-0001's `tasks_history` trigger-shadow, superseded by host-fn audit emission. |
 | [P-0018-core-entity-manifest](P-0018-core-entity-manifest.md) | The core opinionated entity set every plugin may reference: projects, actors (single table, `actor_type ∈ {human, agent, system}`), tags, attachments as the four hard-FK-target core entities, plus audit-log/events as a core-owned emit-target surface (storage deferred to the observability baseline + event-bus ADR). Locks the negative space: workflow primitives (tasks, dispatches, skill-runs, specs, comments) are NOT core — they are plugin-introduced. |
 | [P-0019-plugin-contract](P-0019-plugin-contract.md) | Foundational plugin-contract capstone: Path B (WebAssembly Component Model + WIT), locked 2026-05-04, proven by the V0.01 spike (`c9018e3`). Locks the cross-cutting contract no sibling owns — WIT ABI shape invariants (sync WIT both directions, Layer-1 async, per-concern interfaces, `@since`/`@unstable`/`@deprecated` gates, host-derived workspace-ctx), Wasmtime `>=44` floor, `wasm32-wasip2`-via-`wit-bindgen` toolchain, the closed Extism door, and the composite lifecycle. Four tripwired deferrals; cites P-0003/P-0007/P-0012/P-0013 for the detail each owns; supersedes/overrides null. |
+| [P-0020-report-execution-context](P-0020-report-execution-context.md) | The reporting engine's dedicated read-only Postgres execution context: a SELECT-only report role + `READ ONLY` transaction (two independent write-blocks), table + function-EXECUTE allow-lists with default-deny exclusions (`admin_tokens`, policy-audit stores), a scoped RLS exception keyed on per-execution `SET LOCAL` session settings with session-key tamper-resistance via GUC-setter revocation (chosen over `SET ROLE`/`current_user` keying), the ownership/`BYPASSRLS`/`FORCE ROW LEVEL SECURITY` model as a correctness precondition, timeout/row-cap/bounded-pool cost containment, and the OC-10 reconciliation check. Scoped exception to the P-0006/P-0009 deferred-RLS posture on exactly the caller-authored-SQL path; converges with the general R-0001 activation. Resolves the reporting-engine Frame `{{P-ReportExecutionContext}}` slot. |
+| [P-0021-report-definition-type](P-0021-report-definition-type.md) | The report-definition content type: a host-core-owned `reference`-cluster content artifact written through the existing content-write machinery — argued deliberately OFF the P-0018 core-entity short list (referenced by name at lookup, never a hard FK target; a third host-owned-content category). Locks the definition schema, write-time validation (including rejection of data-modifying CTEs so an invalid definition never registers), full P-0015 policy-record inheritance (`visibility` not-found / `dont_use` stub dispositions), reserved-built-in-name reservation, and `(workspace_id, name)` uniqueness. Resolves the reporting-engine Frame `{{P-ReportDefinitionType}}` slot. |
 
 <!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
 
@@ -5967,6 +6003,302 @@ This ADR is a **capstone that cites**. It records the foundational Path-B decisi
   - When the async host-fn invocation path lands (P-0013 Bucket A), enable the Wasmtime `async` feature and register host-fn bodies async (D3 AC); confirm whether P-0012's feature-list record wants a companion note (Reconciliation obligation 1 — maintainer's call).
   - At V0.1+ third-party plugin authoring: publish the DEF-3 language matrix in the plugin-author docs, tiered by then-current tooling maturity, and build the DEF-2 distribution-signature verifier over `wkg`/OCI.
 - **Related precedent:** [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) and [P-0013](P-0013-plugin-invocation-model.md) established the accepted-on-landing / forward-contract framing this ADR follows for a foundational decision recorded after its dependent detail.
+
+<!-- ===== docs/src/adrs/P-0020-report-execution-context.md ===== -->
+
+---
+title: "P-0020: Report Execution Context"
+summary: "The dedicated read-only Postgres execution context for the reporting engine: a SELECT-only report role plus READ ONLY transaction (two independent write-blocks), a derived table grant set + two-part function-EXECUTE lock with nameable-complete default-deny exclusions, a scoped RLS exception keyed on per-execution session settings with session-key tamper-resistance (GUC-setter revocation), the ownership-without-FORCE host-bypass model as a correctness precondition (BYPASSRLS excluded), timeout/row-cap/bounded-pool cost containment with a caller-visible saturation contract, and the OC-10 reconciliation check with a standing migration-apply trigger — the scoped exception to the P-0006/P-0009 deferred-RLS posture on exactly the caller-authored-SQL path."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-03"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator", "the security reviewer"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0020: Report Execution Context
+
+**Project:** mnemra-core
+
+## Status
+
+`proposed`
+
+Authored at the reporting-engine Stage-3 spec; flipped to `accepted` at the spec-exit gate. Resolves the Frame's `{{P-ReportExecutionContext}}` open ADR slot. Binding requirement text: [reporting-engine spec](../../specs/2026-07-03-reporting-engine.md) R-0043–R-0046, R-0048, R-0050, R-0060.
+
+## Context and Problem Statement
+
+The reporting engine (register post-`1.0.0`, `1.3.0`+ candidate) lets operators and agents author declarative reports whose bodies are **caller-authored SQL** executed against the shared mnemra-core substrate. That single fact graduates the read-only-execution guard from the worked reference design's "operator-mistake guard, single operator, local file" (its trust-boundary NONE) to an **adversary guard**: authenticated principals — multiple humans and agents per workspace, roles per [P-0009](P-0009-rls-admin-token.md), workspaces per [P-0006](P-0006-v0-tenant-enforcement.md), a policy envelope per [P-0015](P-0015-provenance-envelope-source-roles.md) — author and invoke reports against one shared Postgres instance.
+
+Two mnemra invariants do not extend to this path:
+
+1. **Workspace isolation.** [P-0006](P-0006-v0-tenant-enforcement.md) enforces `workspace_id` by threading a typed `WorkspaceCtx` into a **host-built** `WHERE` clause. A caller-written SELECT has no host-built `WHERE` clause to thread — the P-0006 mechanism cannot bind it — and the general RLS **policy** enforcement is deferred at V0 (accepted risk `R-0001`).
+2. **Read-only.** Every other read path is host-constructed; here the statement text comes from the caller.
+
+This ADR locks the **dedicated read-only execution context** — the mechanism by which report SQL (both user definitions and built-ins) executes with read-only, workspace-isolation, policy-envelope, and cost-containment guarantees the host cannot otherwise provide on caller-authored SQL. The Frame ratified the direction (2a-3) and locked the property space; several sub-mechanisms had a fixed candidate space the Frame delegated to this ADR to pick and argue. The Frame's D3 is the elaborated source; this ADR is the durable, adopter-facing record of the engine's headline security guarantee.
+
+A scoped exception to a two-ADR accepted-risk posture ([P-0006](P-0006-v0-tenant-enforcement.md)/[P-0009](P-0009-rls-admin-token.md) defer RLS) needs its own ADR because its reversal or drift forces re-derivation of the engine's headline security guarantee, and because external adopters and every downstream security review reference it.
+
+## Decision Drivers
+
+- **P-SecurityLayered — each layer independently load-bearing.** Read-only must survive the loss of any single mechanism; workspace and policy isolation must be database-enforced on the one path where application-layer discipline cannot reach.
+- **The `Security ⇄ Simplicity` conflict edge, resolved default-to-Security.** Caller-authored SQL is an adversarial surface; the extra mechanism is warranted (constraint-edges: "default-to-Security per default-on, never opt-in").
+- **The general R-0001 RLS deferral must stand unchanged.** The exception is scoped to exactly the caller-authored-SQL path; host-constructed queries keep the P-0006 application-layer posture, and the R-0001 trip-wire (first multi-workspace production deployment) is unchanged. The exception must **converge** with — not fork from — the eventual general RLS activation.
+- **`ENABLE ROW LEVEL SECURITY` activates RLS for every role.** Attaching a report-role policy to a table turns RLS on for the host's primary role too; the host stays untouched only if it provably bypasses. This is a correctness precondition of the "deferral-stands" claim, not spec-tier detail.
+- **A `READ ONLY` transaction does NOT block `set_config()`.** Postgres does not treat GUC changes as writes, and `EXECUTE` on `set_config` is a default `PUBLIC` grant; the session-key integrity property must be proven, never assumed from transaction mode (the folded review-H1 correction).
+- **TrustworthySignal TS2 — an execution-gating enumeration ships with its reconciliation check.** The grant sets (tables, functions) and RLS coverage are hand-maintained allow-lists that decide what a caller can read and execute; they carry a computed-reality-vs-declared check that fails on a seeded violation.
+- **Cost containment is an availability primitive P-0007 does not provide.** [P-0007](P-0007-plugin-resource-limits.md) bounds plugin CPU (fuel/epoch), not Postgres query cost; the report path needs its own timeout/row-cap/pool.
+
+## Considered Options
+
+The Frame ratified the **dedicated read-only execution context** direction (2a-3) and locked the property space; this ADR's genuine option is the **session-key tamper-resistance mechanism**, whose candidate space the Frame fixed at exactly two. (Introducing a third is not on the table.)
+
+1. **S-a — Revoke the GUC-setter surface from the report role.** Remove `set_config(text,text,boolean)` and its `pg_catalog` kin from the report role's function-EXECUTE allow-list; RLS policies stay keyed on the host-set session GUCs (the [P-0009](P-0009-rls-admin-token.md) V0.1 keying shape). No permitted function may set a GUC directly or indirectly.
+2. **S-b — Key the report-path RLS on a caller-unreachable value.** Per-execution `SET ROLE` to a workspace-bound role, so policies key on `current_user` rather than a settable GUC.
+
+## Decision Outcome
+
+**The dedicated read-only execution context, with session-key tamper-resistance delivered by S-a (revoke the GUC-setter surface).** Six mechanisms lock.
+
+### D-CTX — All report SQL executes in a dedicated read-only context
+
+All report SQL — user definitions AND built-ins — executes in a dedicated execution context: a dedicated Postgres role, `READ ONLY` transactions, RLS policies scoped to that role, per-execution session settings carrying the **caller's** identity, `statement_timeout`, a host-enforced row cap, and a bounded, separate connection pool. Running built-ins here too is deliberate: intake Non-goal 1 makes read-only the engine's identity "of any kind," so the execution posture is uniform — built-ins carry a *third* layer (their host-built SQL keeps the P-0006 host-threaded workspace predicate). *(Anchors: 2a-3 ratified; P-SecurityLayered; the `Security ⇄ Simplicity` edge resolved default-to-Security. Binding text: spec R-0043-a, R-0060-a.)*
+
+### D-RO — Two independent write-blocks, each alone sufficient
+
+The worked reference design's R85 defense-in-depth pair, re-derived for Postgres:
+
+1. **Report role holds `SELECT`-only privileges** — no `INSERT`/`UPDATE`/`DELETE`, no DDL, no sequence usage.
+2. **Every report transaction is `READ ONLY`** (`SET TRANSACTION READ ONLY` / `default_transaction_read_only`).
+
+Either alone blocks a write; both apply together. The spec's threat tests prove each independently (spec R-0043-c / threat-test T2). *(Anchors: P-SecurityLayered — each layer independently load-bearing; worked-reference R85. Binding text: spec R-0043.)*
+
+### D-GRANT — Table + function-EXECUTE allow-lists, default-deny exclusions, reconciliation
+
+The report role's readable and callable surface is an **allow-list**, the Postgres re-derivation of the worked reference design's SQLite authorizer allow-set.
+
+- **Table grant allow-list — a derivation rule over two canonical sources.** The granted-table set is *derived*, not hand-listed (the substrate's content tables are generated per-artifact-type from the content-type registry, manifest-extensible — a hand-maintained list would drift): **(i)** every per-artifact-type content table created through the host content machinery is in the grant set, and receives its report-role RLS policies at table creation through that same machinery — **primary tables only**; the machinery's history/shadow tables are excluded (deferred behind the first versioned-rows report need); **(ii)** the product-measurement tables (the dispatch/skill-run/activity measurement families) are enumerated by name in the provisioning DDL — the canonical enumeration source the reconciliation parses. Changing the membership *rules* (adding a family, granting a core-entity or substrate table, removing an exclusion) is an amendment to this ADR, not a config knob; a new content type flowing through the content machinery is the rule applying, not an extension.
+- **Default-deny exclusions — nameable-complete.** No grant = unreadable. Excluded by default-deny, by name: the identity/auth/session tables (`admin_tokens` foremost, `users`, `sessions`, `workspaces` — readable workspace rows would disclose tenant existence); the P-0015 policy-audit stores (`policy_write_audit`, `policy_decision_audit`); the retrieval-cluster operator-side instrumentation/audit tables (`egress_events` — its `payload_audit` carries actual egressed content — plus `retrieval_runs`, `traversal_log`, `index_builds`); the content machinery's history/shadow tables; and the operator-internal substrate tables (`state_config`, `schema_migrations`). These are operator-side signals whose exposure through caller SQL would itself be an existence-disclosure or content-egress channel. The core-entity tables (`projects`, `agents`, and kin) are simply not granted at V0 — not sensitive-class; adding one is an amendment.
+- **Function-EXECUTE surface — the two-part lock.** Postgres grants `EXECUTE` to `PUBLIC` by default, so a table-only allow-list is default-*allow* on the function axis. The callable surface is locked as a two-part structure: **(1) non-`pg_catalog` functions are default-deny** — executable only via an explicit per-function grant enumerated in the provisioning DDL (EMPTY at V0; adding an entry is an amendment to this ADR); any in-schema `SECURITY DEFINER` function is categorically outside the permittable set. **(2) `pg_catalog` built-ins are callable except the enumerated revocation classes**: (a) GUC/session mutators — `set_config` and kin (D-KEY); (b) the server-info/statistics/file-access family — the `pg_stat_*` view+function family, `pg_ls_*`, `pg_read_file`-style file access, `pg_current_logfile`. A literal positive enumeration of `pg_catalog`'s thousands of built-ins is deliberately not the mechanism — it would be unauditable and version-drift-prone; the auditable invariant is *no revocation-class function and no non-`pg_catalog` function is executable*, reconciliation-asserted. Concretely permitted (the spec's constructible positive cases): `count`, `sum`, `avg`, `min`, `max`, `percentile_cont`, `percentile_disc`, `coalesce`, `date_trunc`, `now`, `pg_sleep` (bounded by `statement_timeout`).
+- **PUBLIC-default revocation mechanics.** Because a plain `REVOKE … FROM <report-role>` does not remove a `PUBLIC` grant the role inherits, the revocation SHALL operate on the `PUBLIC` grant itself for the report path: either `REVOKE EXECUTE ON FUNCTION … FROM PUBLIC` (making function EXECUTE opt-in) with explicit re-grants to the roles that need them, or a report-role that is not a member of `PUBLIC`-inheriting groups for the relevant functions. The implementation picks within this shape; the invariant is that no `PUBLIC`-default `EXECUTE` reaches the report role for a revocation-class or non-`pg_catalog` function.
+- **Reconciliation check (OC-10 / TS2) — the full assertion matrix.** The grant sets and RLS coverage ship with a reconciliation check in the same change, demonstrably failing on a seeded violation. Per granted table it asserts: RLS enabled AND the spec R-0050 per-family predicates present (content-artifact tables: the workspace-RLS policy AND the P-0015 policy-envelope predicates; measurement tables: the workspace-RLS policy) AND the host primary path provably bypasses via ownership-without-`FORCE` AND the report role provably does not (D-RLS) AND relkind is constrained to base tables or `security_invoker` views (a non-`security_invoker` view would evaluate base-table RLS as its owner, silently bypassing the report-role policies; a materialized view cannot carry RLS and fails the RLS-enabled assertion fail-closed). On the function axis: no revocation-class function executable, no non-`pg_catalog` function beyond the (empty) inventory, no `SECURITY DEFINER` function executable, and the executable surface is GUC-setter-free (D-KEY's inside-set assertion).
+- **Provisioning, standing trigger — fail-closed, rollback + drift recovery (spec R-0044-e).** The role/grant/revocation/RLS DDL ships migration-borne through the forward-only migration runner, idempotent across fresh init and upgrade-in-place; later-registered content types get grants+policies at table-generation time through the content machinery. The reconciliation has a standing trigger — every migration-apply completion and artifact-table generation — not a one-time ship-time gate, and its failure semantics are **fail-closed at every firing point**: a reconciliation failure aborts the operation that fired it (a failing startup apply means the host refuses to start; a failing table generation means the table never becomes report-readable), never log-and-continue, and there is deliberately no skip-reconciliation switch — a bypass flag would be the fail-open backdoor. Recovery from a drift lockout is **diagnose-then-reapply** (the structured error names each violated assertion; the idempotent provisioning DDL restores missing state; surplus state is reversed by hand — `REVOKE` the extra grant, drop the seeded object), a runbook entry distinct from intentional teardown. The provisioning change includes a documented ordered rollback procedure (`DROP POLICY` → `REVOKE` → `DISABLE ROW LEVEL SECURITY` → `DROP ROLE` — `REVOKE` precedes `DISABLE` so the report role stays fail-closed until its access is gone, avoiding a transient grants-live-RLS-off cross-tenant window); the forward-only migration system does not auto-reverse security DDL, and an out-of-order teardown can strand RLS enabled without its host-bypass precondition or open that transient window.
+
+*(Anchors: worked-reference R85.2 (allow-set); P-TrustworthySignal TS2; the discovery-stage security review's default-`PUBLIC` finding. Binding text: spec R-0044, R-0060-b, threat-tests T3/T8/T9/T11.)*
+
+### D-RLS — The scoped RLS exception + the ownership-without-FORCE host-bypass precondition
+
+RLS is **enabled on every table in the grant set, with policies scoped `TO` the report role**, keyed on session settings the host sets per execution from the caller's validated `WorkspaceCtx` (`SET LOCAL` of the workspace id and role — the [P-0009](P-0009-rls-admin-token.md) V0.1 keying shape, adopted early on this one path). Per family (spec R-0050): content-artifact tables (policy columns present) carry the workspace-RLS predicate AND the [P-0015](P-0015-provenance-envelope-source-roles.md) policy-envelope predicates; measurement/metric tables (no policy columns) carry the workspace-RLS predicate only.
+
+**The host-bypass model is a correctness precondition, locked here — and the mechanism is ownership-without-`FORCE` ONLY.** `ALTER TABLE … ENABLE ROW LEVEL SECURITY` — required to attach the report-role policy — activates RLS on that table for **every** role, including the roles the retrieval path reads under. The host's primary role stays untouched only if it provably bypasses the newly-enabled RLS: **the primary role owns each granted table and no granted table carries `FORCE ROW LEVEL SECURITY`** (table owners bypass RLS unless `FORCE`d) — this single mechanism keeps both the host-isolation claim and retrieval's own reads intact. **`BYPASSRLS` on the host/application role is NOT an available alternative** (r2 fold): the spec's R-0062-b carries "the application role holds no `BYPASSRLS`" as a P-0009/P-0010 RLS precondition, and a `BYPASSRLS` host role would bypass *every* policy when general RLS activates — defeating the convergence this decision guarantees and forcing a `BYPASSRLS`-removal at activation instead of P-0009's additive `CREATE POLICY` path. The two mechanisms are not equivalent; offering both would hand the implementer a latent misconfiguration. The report role is a non-owner, non-`BYPASSRLS`, non-superuser role, so its policies bind. The OC-10 reconciliation (D-GRANT) asserts this per granted table: RLS enabled AND the host primary role owns without `FORCE` AND no application role holds `BYPASSRLS` AND the report role provably does not bypass.
+
+**Convergence with the general R-0001 deferral.** The general V0 RLS deferral stands: application-layer `WorkspaceCtx` discipline remains the enforcement on every host-constructed query, and the R-0001 trip-wire is unchanged. The exception is scoped to exactly the path where the deferral's premise (host-built `WHERE` clauses) fails. When R-0001 fires and general RLS activates, the report-path policies **converge** with the general activation — D-KEY's mechanism pick preserves the P-0009 V0.1 session-setting keying verbatim, so the general activation adds host-role policies without reshaping the report-role policies. *(Anchors: 2a-3; P-0006/P-0009 (R-0001); P-0009 V0.1 policy shape; P-SecurityLayered. Binding text: spec R-0045, R-0050.)*
+
+### D-KEY — Session-key tamper-resistance: revoke the GUC-setter surface (S-a)
+
+**The locked property:** the RLS session keys MUST be unreachable from caller-authored SQL, proven by threat test, never assumed from transaction mode. A caller's single prepared SELECT — including a `set_config()` call in an expression or inside a `MATERIALIZED` CTE — MUST NOT re-key the report-path RLS.
+
+**The mechanism (S-a):** revoke the GUC-setter surface — `set_config(text,text,boolean)` and its `pg_catalog` kin — from the report role via the D-GRANT function-EXECUTE allow-list, with the end-to-end argument that no permitted function can set a GUC directly or indirectly.
+
+**Why S-a over S-b (the end-to-end argument).** The Frame fixed the candidate space at two. S-b (key on `current_user` via per-execution `SET ROLE`) does **not** escape the GUC channel: `role` is itself a settable GUC in Postgres — `set_config('role', …)` is reachable from a SELECT expression, and under a role the report role is a member of, a `SET ROLE` is caller-reversible. So S-b's `current_user` key is only tamper-resistant if the GUC-setter surface is *also* revoked — i.e. S-b presupposes S-a and then adds per-workspace role machinery (one Postgres role per workspace, or a role-switching layer) on top. S-a delivers the property with the smaller mechanism AND preserves the P-0009 V0.1 session-setting keying verbatim, which is D-RLS's convergence path; S-b would trade keying identity for a role-isolation boundary and owe a separate convergence argument. **The end-to-end argument, channel by channel (r2 fold — every GUC-writing path a caller could reach, and what closes it):** (1) **the function channel** — `set_config` and GUC-setting kin are revoked under the D-GRANT revocation class (a); (2) **the utility-statement channel** — `SET` / `SET LOCAL` / `RESET` are utility statements, structurally absent from the report path: the executor prepares exactly **one** statement (spec R-0047-a) and the write-time gate admits only read statements (spec R-0042-c), so no utility statement is ever prepared; (3) **the catalog-write channel** — `UPDATE pg_settings` never reaches the report path: it is a non-`SELECT` statement, rejected at the write-time gate (spec R-0042-c admits only `SELECT`/`WITH…SELECT` bodies and rejects data-modifying CTEs), and its rule-rewritten form — `pg_settings` is an updatable view whose rule rewrites the UPDATE into `SELECT set_config(…)` — is closed by the channel-(1) `set_config` EXECUTE revocation; the D-RO write-blocks are NOT the closers here (the rewrite leaves no DML node for the `READ ONLY` block to fire on, and the rewritten call needs `EXECUTE`, not table-write privilege); (4) **the indirect channel** — no *permitted* function can set a GUC on the caller's behalf, because the executable surface is reconciliation-asserted GUC-setter-free: no `SECURITY DEFINER` function, no non-`pg_catalog` function beyond the (empty) inventory, every revocation-class function non-executable (spec R-0044-d, threat-test T9's inside-set sweep). The write discipline is that the host writes the settings once per execution (`SET LOCAL`, inside the transaction, before the user statement is prepared), and the caller has no channel through which to overwrite them. The threat test seeds a `set_config`/materialized-CTE re-key attempt that demonstrably fails (spec threat-test T1). *(Anchors: Frame D3 fixed two-candidate space; P-SecurityLayered; Simplicity; the folded review-H1 correction. Binding text: spec R-0046.)*
+
+### D-COST — Query-cost containment
+
+- **`SET LOCAL statement_timeout`** per execution (default 10 s, spec-pinned; config-tunable). An availability primitive [P-0007](P-0007-plugin-resource-limits.md)'s plugin CPU limits do not provide.
+- **A host-enforced row cap** (default 10,000, spec-pinned) with **reported truncation** — the result envelope carries a truncation flag and the capped count, never a silent trim (P-TrustworthySignal).
+- **A bounded, separate connection pool** (default max 4, spec-pinned; process-global at V0 — the noisy-neighbor trade-off is named plainly in the spec's calibrations, with per-workspace scoping deferred) so runaway report load cannot starve the host's primary pool. **Saturation is caller-visible, never a hang** (r2 fold): acquisition uses a bounded acquire-timeout (default 2 s, spec-pinned); on expiry the caller gets a structured pool-saturated error, retry-safe — the fail-fast posture P-0007 takes against indistinguishable hangs on the plugin path, taken here too. On host shutdown, in-flight report queries are cancelled — safe by construction, the transactions are read-only.
+- **The host-enforced calibrations are config-backed and startup-validated** (spec R-0048-e): unset = spec default; an invalid value fails startup naming the key — hardcoded constants would silently void the config-tunable property the calibrations promise.
+- **A cost-*estimate* ceiling (planner-cost rejection before execution) is deferred** — decision content: whether to add an `EXPLAIN`-based pre-execution cost gate and its threshold; deferral anchor: P-Defer (timeout + cap bound the damage; a cost model is mechanism ahead of evidence) with the `P-LockContract ⇄ P-PreserveDecisionSpace` discriminator; firing instrument: the spec's telemetry reporting timeout-kill events at or above the spec-pinned rate, computed over the retained emitted stream (spec R-0059-b).
+
+*(Anchors: P-0007 (the gap); P-TrustworthySignal; P-Defer. Binding text: spec R-0048.)*
+
+### Consequences
+
+**Good:**
+- Read-only holds adversarially: two independent write-blocks, each alone sufficient; single-statement-by-construction; bind-never-interpolate.
+- Workspace isolation is database-enforced on the one path where the P-0006 application layer cannot reach, with the general R-0001 posture unchanged elsewhere and a clean convergence path.
+- The session-key integrity property is proven, not assumed — the folded review-H1 factual error (that `READ ONLY` blocks `set_config`) is corrected by the revoke-the-setter mechanism.
+- The grant sets and RLS coverage carry a reconciliation check that fails loud on drift (TS2) — the silent-gap class (a granted table without a policy) fails the check, not the tenant.
+- Cost containment closes the availability gap P-0007 structurally cannot.
+
+**Bad / Trade-offs:**
+- The report path activates RLS early on one role, ahead of the general activation — added mechanism relative to a pure application-layer posture, warranted by the adversarial surface (the `Security ⇄ Simplicity` edge, resolved default-to-Security).
+- The ownership-without-`FORCE` host-bypass model is a correctness precondition the reconciliation must assert per granted table; a misconfiguration here silently weakens host-path isolation, which is why it is locked scope (with `BYPASSRLS` explicitly excluded) and reconciliation-checked rather than left to review.
+- The grant-surface enumerations that remain hand-maintained (the measurement-table list in the provisioning DDL, the exclusion list, the function revocation classes) are drift surfaces; the reconciliation check *with its standing migration-apply trigger* is the mitigation, the content-table side is derived by rule rather than listed, and extension-by-amendment (not config) keeps the rules auditable.
+- System-catalog readability: `pg_catalog` metadata (schema shape, not row data) is readable by default; disclosure is bounded to the structure of a shared-schema instance. The spec carries the hardening-checklist artifact ([spec §pg_catalog hardening checklist](../../specs/2026-07-03-reporting-engine.md) — authored at the r2 fold: the `pg_stats`/`pg_statistic`/`pg_stats_ext` sampled-value surfaces recorded closed via the built-in RLS guard, contingent on R-0045 enablement and pinned to the embedded Postgres 16.4; what can and cannot be revoked without breaking query planning enumerated); accepted as Low with this ADR owning the disposition.
+
+## Pros and Cons of the Options
+
+### S-a — Revoke the GUC-setter surface (chosen)
+
+- Pro: delivers the locked property with the smallest mechanism; the function-EXECUTE allow-list already gives it structural footing.
+- Pro: preserves the P-0009 V0.1 session-setting keying verbatim — the D-RLS convergence path.
+- Con: relies on the completeness of the GUC-setter revocation (every direct and indirect GUC-setting function); the end-to-end argument and the T9 function-allow-list threat test are the mitigation.
+
+### S-b — Key RLS on `current_user` via per-execution `SET ROLE`
+
+- Con: does not escape the GUC channel — `role` is a settable GUC; `SET ROLE` is caller-reversible under shared role membership — so it presupposes S-a's revocation anyway.
+- Con: adds per-workspace role machinery (a role per workspace or a role-switching layer) on top of the revocation S-a already needs.
+- Con: trades keying identity for a role-isolation boundary and owes a separate convergence argument against the general R-0001 activation.
+
+## More Information
+
+- Frame open ADR slot: `{{P-ReportExecutionContext}}` ([Frame](../intent/reporting-engine-frame.md) §Open ADR slots). This ADR resolves it.
+- Binding requirement text: [reporting-engine spec](../../specs/2026-07-03-reporting-engine.md) R-0043–R-0046, R-0048, R-0050, R-0060; threat-test suite T1–T4, T8, T9, T11.
+- Depends on / cites: [P-0006](P-0006-v0-tenant-enforcement.md) (the R-0001 deferral this scopes an exception to; the `WorkspaceCtx` mechanism built on); [P-0009](P-0009-rls-admin-token.md) (the V0.1 session-setting RLS policy shape adopted early; the role matrix); [P-0015](P-0015-provenance-envelope-source-roles.md) (the policy-envelope predicates the content-artifact tables carry — D-RLS; the fragment module the spec's R-0049 consumes); [P-0007](P-0007-plugin-resource-limits.md) (the plugin-CPU limits that do NOT cover Postgres query cost — the D-COST gap); [P-0010](P-0010-storage-substrate-engine.md) (the Postgres substrate behind the `Storage` seam; telemetry emitted, not stored).
+- Companion: [`{{P-ReportDefinitionType}}`](P-0021-report-definition-type.md) (P-0021) — the definition content type whose bodies execute in this context; its write-time validation is the first read-only layer (a non-read statement never registers), this context is the back-stop.
+
+<!-- ===== docs/src/adrs/P-0021-report-definition-type.md ===== -->
+
+---
+title: "P-0021: Report Definition Type"
+summary: "The report-definition content type: a host-core-owned reference-cluster content artifact written through the existing host-fn content-write machinery — deliberately NOT a P-0018 core FK-target entity — with a locked definition schema, write-time validation semantics (including rejection of data-modifying CTEs so an invalid definition never registers), full P-0015 policy-record inheritance, reserved-name reservation, and (workspace_id, name) uniqueness."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-03"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator", "the security reviewer"]
+informed: []
+supersedes: null
+superseded_by: null
+overrides: null
+---
+
+# P-0021: Report Definition Type
+
+**Project:** mnemra-core
+
+## Status
+
+`proposed`
+
+Authored at the reporting-engine Stage-3 spec; flipped to `accepted` at the spec-exit gate. Resolves the Frame's `{{P-ReportDefinitionType}}` open ADR slot. Binding requirement text: [reporting-engine spec](../../specs/2026-07-03-reporting-engine.md) R-0041–R-0042, R-0053, R-0057, R-0061–R-0062.
+
+## Context and Problem Statement
+
+The reporting engine's headline capability is **runtime extensibility** (intake SC1): a named report definition can be added while the system is deployed — no recompile, no redeploy — and then invoked through the locked MCP surface. That requires report definitions to be **durable data, not code**. Intake Non-goal 2 forbids the engine growing bespoke storage machinery beyond what the definition-persistence decision sanctions; the Frame's 2a-2 direction resolved that decision: report definitions are **content artifacts written through the existing host-fn content-write machinery** — no new writer, no new schema beyond the one per-artifact-type table every content type gets.
+
+Three questions this ADR closes, each of which the reporting spec gates on:
+
+1. **What kind of content type is a report definition, and where does it sit relative to the [P-0018](P-0018-core-entity-manifest.md) core-entity set?** It is host-core-owned (like the core entities, it lives above the plugin boundary) but it is deliberately **not** a P-0018 hard-FK-target core entity. The ADR must *argue the kind's place* against P-0018's short-list/portability value, not merely name it: a host-core content type is inherited by every adopter, so its place on (or off) the short list is a real commitment.
+2. **What is the definition schema, and what does write-time validation enforce?** A definition's body is caller-authored SQL; the validation semantics are a contract definition authors (human and agent) write against, and one clause — the rejection of data-modifying CTEs at write time (the folded review-L1 finding) — is load-bearing: an invalid definition must never register.
+3. **How do policy, naming, and uniqueness bind?** Definitions inherit the [P-0015](P-0015-provenance-envelope-source-roles.md) policy record (their `sql` text can embed sensitive filter literals); reserved built-in names are excluded; `(workspace_id, name)` is unique.
+
+This ADR does **not** own the execution security model (the read-only role, RLS, session-key integrity, cost containment) — that is [`{{P-ReportExecutionContext}}`](P-0020-report-execution-context.md) (P-0020). It owns the *definition-as-content-artifact* contract: the type, the schema, and the write-time gate.
+
+## Decision Drivers
+
+- **SC1 runtime extensibility requires durable data, not code (Decomposition).** A definition that lands must be resolvable on the next lookup with no restart; the only canon-clean home under Non-goal 2 is the existing content-artifact machinery.
+- **Non-goal 2 — no new writer, no bespoke store (Simplicity, Migration cost).** Reusing the content-write internals (validation, `WorkspaceCtx` threading, workspace scoping, P-0015 policy columns, audit emission) means no new writer class.
+- **The P-0018 negative space is load-bearing (Honesty, portability).** [P-0018](P-0018-core-entity-manifest.md) closes the core FK-target set at four (projects, actors, tags, attachments) because each core entity is a permanent commitment every adopter and every alternative orchestrator inherits. A report-definition type that became a core entity would force that inheritance for no FK-target reason — it is referenced by name at lookup, not FK'd to.
+- **Every content type must be classified (P-0017 D-CM).** The four-shape taxonomy (state-bearing / narrative / reference / associative) attaches shared policy to a shape; a definition must be classified.
+- **Validator before field (P-ShiftLeft D2).** The definition schema's fields (name pattern, typed parameters, single-read-statement body) each have a mechanical validator run at write time; a definition failing any clause never registers.
+- **The write-time gate is the first read-only layer, not the security boundary.** The P-0020 role + read-only transaction are the security back-stop; the write-time single-read-statement check is validation-completeness (an invalid definition never registers, rather than registering and failing at every invocation). Both exist; neither is a single gate.
+
+## Considered Options
+
+The Frame ratified the **content-artifact-through-existing-write-machinery** direction (2a-2), so the store-shape option is decided. The genuine options this ADR closes are the **kind/placement** relative to P-0018 and the **cluster classification**.
+
+1. **K1 — Host-core-owned `reference`-cluster content type, NOT a P-0018 core entity (chosen).** A per-artifact-type content table under C1, classified `reference`, written through the existing machinery; referenced by name at lookup, never a hard FK target.
+2. **K2 — A P-0018 core entity.** Add report-definitions to the closed core-entity set as a fifth hard-FK-target entity.
+3. **K3 — A bespoke definition store** (its own writer/table shape outside the content machinery). Disfavored by Non-goal 2.
+
+## Decision Outcome
+
+**K1 — a host-core-owned `reference`-cluster content type that is deliberately not a P-0018 core entity.** Four decisions lock.
+
+### D-KIND — Host-core content type, argued off the P-0018 short list
+
+A report definition is a **content artifact**: one row in its own per-artifact-type table under the C1 layout (JSONB frontmatter + body + system fields per [P-0001](P-0001-storage-layout.md)), owned by **host-core**. Like the [P-0018](P-0018-core-entity-manifest.md) core entities it lives above the plugin boundary (report SQL spans plugin table families — [D1 of the Frame / P-0002](P-0002-core-plugin-partition.md) places cross-plugin projection host-side); **unlike** them it is *not* a hard-FK target and does not join P-0018's closed core-entity set.
+
+**Argued against P-0018's short-list/portability value.** P-0018 draws the core/plugin line at *universality of reference target*, not frequency: a core entity is a permanent commitment every adopter and every alternative orchestrator inherits, so the bar is "genuinely universal FK target." A report definition fails that bar in the right direction: it is **referenced by name at registry lookup** (R-0041-a), never FK'd to — nothing in the system holds a `report_definition_id` foreign key. It is host-core-owned for a *placement* reason (cross-plugin read projection is host-side, P-0002), not a *reference-target* reason. Making it a core entity (K2) would force every adopter to inherit a workflow-shaped content type as a hard-FK target for no integrity need — exactly the negative-space error P-0018 D-BOUNDARY guards against (workflow primitives are plugin-introduced; a host-core *projection/read-surface* artifact is a third category, neither a core FK entity nor a plugin content type). It is host-owned because the read surface it powers is host-mediated, and it is off the FK-target short list because nothing references it by key. *(Anchors: 2a-2 ratified; [P-0018](P-0018-core-entity-manifest.md) D-ENT/D-BOUNDARY — the closed four-entity set + the negative space; [P-0002](P-0002-core-plugin-partition.md) — host-side cross-plugin projection; [P-0001](P-0001-storage-layout.md) C1. Binding text: spec R-0042-a.)*
+
+### D-CLUSTER — `reference` cluster classification
+
+The definition classifies as the [P-0017](P-0017-storage-cluster-model.md) **`reference`** cluster shape: a read-mostly, long-lived, named lookup — authored rarely, invoked repeatedly, resolved by exact name — the same shape as the taxonomy's `templates` exemplar. It is not `state-bearing` (it carries no mutating lifecycle state at V0) and not `narrative` (frontmatter dominates; the body is one SQL statement). Audit on authoring writes comes from the write path itself (admin-gated, attributable — the PE-6 pattern), not from a per-shape policy. The classification was proposed at the Frame and **accepted at the Frame-exit gate** (P-0017's maintainer-call rule for non-self-evident shapes). *(Anchors: [P-0017](P-0017-storage-cluster-model.md) D-CM (the four-shape taxonomy; `reference` shape); Frame-exit gate acceptance. Binding text: spec R-0042-a.)*
+
+### D-SCHEMA — The definition schema contract
+
+A definition's frontmatter carries:
+
+- `name` — string, REQUIRED, matching `^[a-z0-9][a-z0-9-]*$` (lowercase alphanumeric + hyphen, not starting with a hyphen), and NOT a reserved built-in name (D-VALID); the registry key.
+- `description` — string, REQUIRED; the one-line human/agent description surfaced by `report.list`/`report.get`.
+- Typed parameter declarations — zero or more, each declaring a `type` from the closed V0 set `{string, date, int}` with `required` (default `true`) and optional `default` semantics: an omitted parameter with a declared `default` binds the default at invocation; an unrecognized parameter key at invocation is rejected (spec R-0057, all four required/default/NULL cases + the unknown-key mirror). Richer types are a spec amendment.
+- A default output format.
+
+The body is **exactly one read statement** (D-VALID). Uniqueness is `(workspace_id, name)` among definitions, plus the reserved-name exclusion. Any unknown top-level frontmatter key is ignored (forward-compat) and does not invalidate the definition. *(Anchors: [P-0001](P-0001-storage-layout.md) C1; carried worked-reference R86/R93; P-LockContract — the schema is the locked contract, storage mechanics vary behind the `Storage` seam. Binding text: spec R-0042-b, R-0057.)*
+
+### D-VALID — Write-time validation; a data-modifying CTE never registers
+
+Before the row lands, the write path runs:
+
+1. **Schema validity** at declared types.
+2. **Name rules + built-in-name reservation** — a create/update naming a reserved built-in name is rejected with the collision named; the definition does not register (R-0041-b). `(workspace_id, name)` uniqueness is enforced (R-0041-c).
+3. **The single-read-statement check** — the body parses, is exactly one statement, and is a read (`SELECT` / `WITH…SELECT`), with **every CTE itself read-only**. A **data-modifying CTE** such as `WITH t AS (DELETE … RETURNING *) SELECT …` is `WITH…SELECT`-shaped yet writes, and is **rejected at write time** (the folded review-L1 finding). The P-0020 role + read-only transaction already reject it at execution, so this bar is validation-completeness, not the security boundary — an invalid definition never registers rather than registering and failing at every invocation.
+4. **Placeholder↔parameter reconciliation** — a `:param`-style placeholder with no declaration is a hard error naming the placeholder; a declared-but-unused parameter is a warning naming it, and the definition still registers (carried worked-reference R94).
+5. **Parameter `default` values** pass their own type validation.
+
+An invalid definition never registers. The worked reference design's validity-vs-not-a-manifest discrimination (its R87) collapses here to plain schema validation, because the store contains only rows written through this gate; the "unrelated file in a shared directory" case has no Postgres analog and is **dropped** with the filesystem discovery model. *(Anchors: P-ShiftLeft D2 (validator before field); the folded review-L1 data-modifying-CTE finding; carried worked-reference R86/R87/R94. Binding text: spec R-0042-c, threat-test T5.)*
+
+### D-POLICY — Full P-0015 policy-record inheritance; naming and uniqueness
+
+A definition inherits the full [P-0015](P-0015-provenance-envelope-source-roles.md) policy record with unchanged semantics:
+
+- `visibility` governs who can list/read/invoke a definition — its body text can embed sensitive filter literals (the intake's stated motivation). `admin-only` serves callers whose session role is `admin` (the canonical lowercase P-0009 `mnemra.role` encoding — spec R-0045-a); `owner-only` follows PE-4 V0 semantics (serves no one until per-user identity lands); a `visibility`-withheld definition resolves **not-found**, indistinguishable from a nonexistent name (PE-4 not-found-over-stub — spec R-0053-b).
+- `dont_use` is the curatorial kill switch: a killed definition resolves to the **metadata-only stub** with the policy reason (PE-4 `dont_use` disposition — curatorial policy announces itself; spec R-0053-b).
+- **Disposition precedence when both flags apply (r2 fold):** `visibility` entitlement is evaluated FIRST — a `visibility`-unentitled caller receives not-found regardless of `dont_use`; the stub reaches only a caller already `visibility`-entitled (the retrieval precedent: the R-0025-g edge filter gates on the `visibility` serving predicate before any other disposition). Evaluating `dont_use` first would leak a withheld definition's existence and kill reason — the existence oracle PE-4's indistinguishability exists to prevent (spec R-0053-b, threat-test T6's both-flags fixture).
+- `tenant_share` is the structural workspace-only constant at V0.
+
+Every policy-field write on a definition rides the PE-6 admin-gated path with an attributable audit row (actor token identity NOT NULL). The definition table carries the P-0015 policy columns with their permissive not-set DDL defaults (PE-2), applied through the content-write path. *(Anchors: [P-0015](P-0015-provenance-envelope-source-roles.md) PE-2/PE-4/PE-6; carried worked-reference R83 (name reservation) adapted to write-time rejection + `(workspace_id, name)` uniqueness. Binding text: spec R-0042-d, R-0041-b/-c, R-0053.)*
+
+### Consequences
+
+**Good:**
+- SC1 runtime extensibility is write-then-invoke with no restart: a definition that lands through the gate is resolvable on the next lookup, because the store is the source of truth (P-0017 D-SoT) and the registry cache is a rebuildable derivation.
+- No new writer, no bespoke store — the content-write internals carry validation, `WorkspaceCtx` threading, workspace scoping, policy columns, and audit, satisfying Non-goal 2 on everything but the one gate-accepted definition table.
+- The P-0018 short list stays closed at four; portability is preserved — an alternative orchestrator adopts mnemra-core without inheriting a report-definition FK target.
+- The write-time gate makes an invalid definition never register (validation-completeness), and the data-modifying-CTE rejection closes the L1 finding at authoring time as well as execution time.
+- Definitions inherit the policy envelope, so a definition whose body embeds sensitive literals is `visibility`-governed like any content.
+
+**Bad / Trade-offs:**
+- One new per-artifact-type table strains a literal reading of Non-goal 2 ("no new schema, tables, or migrations") — named and gate-accepted (the intent self-report strain flag a); the execution path adds zero schema.
+- The definition type is a *third category* (host-core projection/read-surface content) alongside P-0018's core-entity and plugin-content categories; the ADR names it explicitly rather than forcing it into one of the two existing kinds, which is a small conceptual addition future host-owned content types can reuse.
+- Write-time SQL parsing to enforce the single-read-statement + no-data-modifying-CTE check is a parse-shape dependency; the spec assesses any SQL-parsing need against in-stack Postgres paths first (the `Storage` seam can prepare-and-inspect) before adding a parser dependency, under the workspace license-tier gate.
+
+## Pros and Cons of the Options
+
+### K1 — Host-core `reference`-cluster content type, not a core entity (chosen)
+
+- Pro: reuses the content-write machinery (Non-goal 2); classified into the existing taxonomy; policy-inherited.
+- Pro: keeps the P-0018 short list closed — no adopter inherits a report-definition FK target.
+- Con: adds one new content table (the gate-accepted Non-goal-2 strain); introduces a third host-owned-content category the ADR must name.
+
+### K2 — A P-0018 core entity
+
+- Con: forces every adopter and alternative orchestrator to inherit a workflow-shaped content type as a hard-FK target for no integrity need — the negative-space error P-0018 D-BOUNDARY guards against.
+- Con: nothing references a definition by key, so the FK-target commitment buys nothing.
+
+### K3 — A bespoke definition store
+
+- Con: a new writer class + bespoke table shape outside the content machinery — the exact bespoke-storage growth Non-goal 2 forbids.
+- Con: re-implements validation, `WorkspaceCtx` threading, policy columns, and audit that the content path already provides.
+
+## More Information
+
+- Frame open ADR slot: `{{P-ReportDefinitionType}}` ([Frame](../intent/reporting-engine-frame.md) §Open ADR slots). This ADR resolves it.
+- Binding requirement text: [reporting-engine spec](../../specs/2026-07-03-reporting-engine.md) R-0041 (registry + reservation + uniqueness), R-0042 (content type + schema + write-time validation), R-0053 (enumeration/disposition), R-0057 (parameters), R-0061 (live-schema contract), R-0062 (tenancy invariants); threat-test T5 (data-modifying-CTE rejection).
+- Depends on / cites: [P-0001](P-0001-storage-layout.md) (C1 single-document layout — the definition row shape); [P-0017](P-0017-storage-cluster-model.md) (D-CM `reference` cluster classification; D-SoT store-as-source-of-truth); [P-0018](P-0018-core-entity-manifest.md) (D-ENT/D-BOUNDARY — the closed core set + the negative space this type argues off of); [P-0002](P-0002-core-plugin-partition.md) (host-side cross-plugin projection — the placement reason); [P-0015](P-0015-provenance-envelope-source-roles.md) (PE-2/PE-4/PE-6 — policy inheritance, dispositions, write gate).
+- Companion: [`{{P-ReportExecutionContext}}`](P-0020-report-execution-context.md) (P-0020) — the read-only execution context whose role + transaction back-stop the write-time single-read-statement check; the two together are the defense-in-depth (validation-completeness at write, security at execution).
 
 <!-- ===== docs/src/adrs/placeholder-resolution.md ===== -->
 
