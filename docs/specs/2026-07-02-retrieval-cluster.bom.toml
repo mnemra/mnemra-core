@@ -1,9 +1,9 @@
 # BOM sidecar — retrieval cluster (get_context_for + provenance envelope +
 # search activation + typed edges + source-roles). Schema authority:
 # .claude/commands/verify.md Stage A. Blocks append at each /brief stage-exit lock.
-# A1 amendment (2026-07-04, task #2104): intent block re-locked at the A1
-# intake-exit gate; frame + spec blocks re-lock at their own A1 gates
-# (their generated_against.intent_version reflects the pre-A1 intent until then).
+# A1 amendment (2026-07-04, task #2104): intent + frame blocks re-locked at their
+# A1 gates; the spec block re-locks at the A1 spec-exit gate (its
+# generated_against reflects the pre-A1 chain until then).
 
 spec_type = "code"  # artifact taxonomy per verify.md Stage A (2026-07-02 hardening): code-destined even while parked at designed tier
 
@@ -14,12 +14,12 @@ locked_at = 2026-07-04T23:27:00Z
 
 [audit_chain.frame]
 ref = "docs/intent/retrieval-cluster-frame.md"
-version = "65b1d0562a6cb5e81b43775d2f9493fe44be568f"
+version = "22090762c250c015c80c363093322521e7ed56ae"
 internal_conformance = "pass"
-locked_at = 2026-07-02T21:40:00Z
+locked_at = 2026-07-04T23:56:00Z
 
 [audit_chain.frame.generated_against]
-intent_version = "48fd4f59d845d084ab2f914571f0399830137a4a"
+intent_version = "fa74ac11fcdd6b2f3ac497a44e85ba1617b3880e"
 
 [audit_chain.spec]
 ref = "docs/specs/2026-07-02-retrieval-cluster.md"

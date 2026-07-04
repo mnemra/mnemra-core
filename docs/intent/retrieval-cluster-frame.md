@@ -267,7 +267,7 @@ P-0009, P-0010, P-0012, P-0013), which applies over the workspace principles it 
 
 ### Keystone edge — the envelope is an authorization control, not metadata
 
-**`P-SecurityLayered → Security` (specializes, `constraint-edges.md:43`)**, specifically the
+**`P-SecurityLayered → Security` (specializes, `constraint-edges.md:42`)**, specifically the
 value's "each layer independently load-bearing" clause (`architecture-values.md:31`). The intake's
 risk profile (a) states it precisely: the `sensitive` / `dont-use` semantics *are* a
 use-policy control, and **a retrieval path that ignores them leaks by design**. Under the
@@ -288,8 +288,8 @@ refinement of the other — losing either leaks.
 |---|---|---|
 | `P-Defer → Simplicity, Reversibility` (specializes, `constraint-edges.md:34–35`) + DF1 | Every deferral this Frame makes | Each deferral names its mechanical firing instrument: the clustered tree-builder (R5, eval signal), the index-granularity flag (R10, storage instrument + self-announcing adopter ask), `pg_textsearch` (P-0010 D3's golden-query regression harness), Apache AGE (P-0010 D4's traversal instrument), the second storage adapter (P-0010 D5, rides D4's signal), local generative migration (research §5.3/§5.5 throughput/sovereignty/latency triggers), TimescaleDB (P-0010 D8). Deferrals without a self-firing instrument are labelled parked with a named cadence. |
 | `P-LockContract → Simplicity, Migration cost` (specializes, `constraint-edges.md:38–40`) | The envelope contract; the policy decision port; the host-fn inference ABI; the verb surface; the tree-build seam | Lock what is intrinsic: the two-axis envelope shape, the permission-record mechanics + the single decision-port boundary (R3 mechanics 1–8 — the maintainer's "capture the hard to change stuff now"), the closed per-axis vocabulary *shape* (the labels themselves are demoted to `{{P-0015}}` as deliberately easy-to-change), the three-verb surface, and the inference-primitive ABI shape are intrinsic to what this cluster *is* and lock at this stage (research §5.6/OQ5: consider the ABI shape now to avoid breaking it at activation). Implementations vary behind them: model choice behind `embed`/`rerank`, tree-build strategy behind the `TreeBuilder` seam, generative provider behind the egress config, the policy engine behind the decision port (V0: hardcoded validator predicates; Cedar/NGAC research, locked 2026-05-18 — port substitution, not a rewrite). |
-| `P-LockContract ⇄ P-PreserveDecisionSpace` (conflicts-with, when-to-lock axis, `constraint-edges.md:140`) | What locks now vs what stays open | Applied per the edge's discriminator, not escalated: intrinsic invariants (envelope shape, verb surface, edge substrate unification, budget-as-tunable) lock now; separable future options (clustered tree-build, BM25 upgrade, AGE, local generative models, granularity flag) are preserved behind named trip-wires. The authored-first default is explicitly a **lock of the seam + a preserved hypothesis**, not a lock of the winner (§6 R5). |
-| `P-InstrumentBefore → Observability` (specializes, `constraint-edges.md:43`) + IB1 | Narrowing signals; extraction coverage; egress volume; traversal latency | The retrieval surface is production (it is meant to keep running; no time-box). Instrumentation ships **with the surface, before first user-touch**: retrieval-run records, per-placement egress counters, extraction-coverage and hierarchy-coverage measures, and the D4 traversal instrument are in-scope deliverables of this cluster, not follow-ups (§6 R11). Backfillable-first: run records retain enough per-query detail to recompute A/B metrics offline. The `P-Defer ⇄ P-InstrumentBefore` tension (`constraint-edges.md:139`) resolves per its stated posture — P-InstrumentBefore wins for production surfaces; the instruments are precisely what makes every other deferral here safe. |
+| `P-LockContract ⇄ P-PreserveDecisionSpace` (conflicts-with, when-to-lock axis, `constraint-edges.md:145`) | What locks now vs what stays open | Applied per the edge's discriminator, not escalated: intrinsic invariants (envelope shape, verb surface, edge substrate unification, budget-as-tunable) lock now; separable future options (clustered tree-build, BM25 upgrade, AGE, local generative models, granularity flag) are preserved behind named trip-wires. The authored-first default is explicitly a **lock of the seam + a preserved hypothesis**, not a lock of the winner (§6 R5). |
+| `P-InstrumentBefore → Observability` (specializes, `constraint-edges.md:43`) + IB1 | Narrowing signals; extraction coverage; egress volume; traversal latency | The retrieval surface is production (it is meant to keep running; no time-box). Instrumentation ships **with the surface, before first user-touch**: retrieval-run records, per-placement egress counters, extraction-coverage and hierarchy-coverage measures, and the D4 traversal instrument are in-scope deliverables of this cluster, not follow-ups (§6 R11). Backfillable-first: run records retain enough per-query detail to recompute A/B metrics offline. The `P-Defer ⇄ P-InstrumentBefore` tension (`constraint-edges.md:144`) resolves per its stated posture — P-InstrumentBefore wins for production surfaces; the instruments are precisely what makes every other deferral here safe. |
 | `P-TrustworthySignal → Observability, Quality` (specializes, `constraint-edges.md:70–71`) | Degraded-mode honesty; budget reporting | A retrieval response that silently omits what the caller is **entitled to** (truncation, disabled tag filters) is a signal that lies. Locked consequences: over-budget reduction is always reported in the response envelope (R2); a tag-filtered query against a tag-gen-disabled corpus returns a structured degraded-mode notice, never silently-empty results (R7); an inference host-fn that is unavailable errors structurally rather than no-op'ing (R8). **Policy-filtered items are categorically different and deliberately NOT in this set** (Stage-2 review M1): policy filtering produces the caller's *entitled view* — the withheld items were never the caller's to see — so their exclusion is not an omission-that-lies. `dont_use`/visibility-restricted exclusion is caller-silent **by security requirement** (a caller-visible "N items hidden" marker would be an existence-disclosure oracle an unauthorized caller could probe), and the operator-side audit event is the observability signal that satisfies this principle there (R3, TB-1, QA-4). |
 | `G-0015 (relational substrate default) → P-LockContract` (specializes, `constraint-edges.md:94`) + project ADR **P-0010** (most-specific) | The entire storage shape | Postgres + pgvector behind the engine-agnostic `Storage` trait; A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); no new engine, no extension beyond pgvector (D2); keyword leg = native `ts_rank` with the `pg_textsearch` fidelity trip-wire (D3); graph leg = recursive CTEs with the AGE strain trip-wire (D4); the retrieval additions must be expressible through the `Storage` trait's contract, preserving its two co-equal invariants (single-transaction keyed supersession; workspace-scoped isolation). This cluster is **D6's named firing event**: the four method-borrows land in `{{P-0014}}` (§8). |
 | Project ADR **P-0002** (core-plugin partition; specializes the brief's plugin constraints) | Where retrieval lives | Retrieval reads across every artifact family, and cross-plugin aggregation is "a projection concern, not a substrate concern" (P-0002 verbatim) — the per-family plugin cohesion model does not fit it; P-0013's domain-verb deferral is the decisive second prong (row below). The inference-substrate dependency (one model serves all consumers — research §3.1) is supporting context, not P-0002's *builtin* criterion — that criterion is bootstrap-ordering (state that must exist before any plugin loads), which retrieval is not (Stage-2 review L4, citation precision). Applied in §6 R1: retrieval is a host subsystem, its verbs host-served. |
@@ -307,16 +307,16 @@ refinement of the other — losing either leaks.
 its edge's stated resolution posture, so none is a live `conflicts-with` requiring the
 decomposer:
 
-1. **Security ⇄ Simplicity** (`constraint-edges.md:133`): policy-aware egress gating and the
+1. **Security ⇄ Simplicity** (`constraint-edges.md:138`): policy-aware egress gating and the
    policy filter add mechanism. Resolution per the edge ("default-to-Security"): both mechanisms
    are minimal *and* load-bearing — a WHERE predicate and an index-admission check behind one
    decision port, no new subsystem. Mutual reinforcement, not a trade-off to escalate.
-2. **Observability ⇄ Simplicity** (`constraint-edges.md:134`): the retrieval-run records and
+2. **Observability ⇄ Simplicity** (`constraint-edges.md:139`): the retrieval-run records and
    egress counters are instrumentation cost. Resolution per the edge: default-to-Observability
    for production surfaces — and here the instruments are doubly load-bearing, because the
    maintainer's "all placements ship, narrow later" ruling is only honest if the narrowing
    signals exist (RC-3 is *premised* on the instrumentation).
-3. **P-LockContract ⇄ P-PreserveDecisionSpace** (when-to-lock, `constraint-edges.md:140`):
+3. **P-LockContract ⇄ P-PreserveDecisionSpace** (when-to-lock, `constraint-edges.md:145`):
    applied per the edge's discriminator (intrinsic locks now; separable options behind
    trip-wires) — see the edge table row above. The authored-vs-clustered call is the worked
    case: the *seam* is intrinsic (locks), the *winner* is a separable hypothesis (preserved
@@ -1359,3 +1359,298 @@ is set (every direction anchors to existing canon or to a maintainer-ratified 2a
   trust table), N10 `declared`-origin/first-party coupling + `1.2.0` ingest trip-wire (§5,
   R3, §9, `{{P-0015}}` slot), N11 no change (a deliberate forward-prep placeholder —
   disposition recorded in the r3 report). Status: draft → locked.
+- **2026-07-04 (A1)** — Addendum A1 authored (§16, Stage 2b, **brownfield-extension** modulation —
+  Stage 2a skipped; the maintainer-ratified decision walk of 2026-07-04 is the elicitation record).
+  Maps intake Amendment A1's SC-8..SC-11 onto the locked directions (SC-8 → R11 + R4; SC-9 → R3;
+  SC-10 → R4; SC-11 → R11), confirms no new architectural surface, walks the bearing constraint
+  edges (zero escalations), extends §9's deferral table by two rows (§16.6), adds QA-10..QA-13
+  (§16.7), and carries the consumed-contract + numbering constraints to the Stage-3 spec author
+  (§16.5). R1–R11 and every pre-A1 section untouched. A1 Frame-exit gate (light maintainer scan)
+  pending.
+- **2026-07-04 (A1 r1)** — Stage-2 review folded (Warden, verdict Approve, zero blocker/high):
+  ten stale `constraint-edges.md` line citations re-pointed across §3 and §16 (canon drift —
+  rows inserted upstream in the conflicts-with table on 2026-07-04 shifted the cited lines;
+  every resolution posture was and remains correctly stated, so no decision changed); the SC-8
+  failed-gate disposition routed to the Stage-3 spec author (§16.5, from a sub-threshold review
+  note). A1 Frame-exit gate confirmed (light maintainer scan, ack) 2026-07-04. Status: A1 locked.
+
+## 16. Addendum A1 (2026-07-04) — ANIMUS anti-phantom instruments
+
+**Date:** 2026-07-04 · **Status:** draft — A1 Frame-exit gate (light maintainer scan) pending ·
+**Modulation:** brownfield-extension (A1) — Stage 2a elicitation skipped; the maintainer-ratified
+decision walk (2026-07-04, all four OQs decided) is the elicitation record · **Altitude:**
+unchanged — retrieval subsystem architecture, designed tier · **Authorization:** intake
+[`Amendment A1`](retrieval-cluster.md) (locked 2026-07-04, intake blob `fa74ac1`; A1 intake-exit
+gate confirmed), decision record: the ANIMUS v4.0 applicability brief (locked 2026-07-04)
+§Decision record — ratified OQ1/OQ2/OQ3 carried verbatim, off-limits to reopen.
+
+> **Scope discipline.** This addendum is **additive**: it maps the intake A1 additions
+> (SC-8..SC-11) onto the locked directions R1–R11 and extends §9's deferral table. Nothing above
+> the 2026-07-04 changelog entry is edited; no locked direction, ratified walk item, or gate
+> outcome is re-opened. The pinned consumed contract (spec R-0025 / R-0026 / R-0025-g — the
+> reporting-engine BOM pin) is a hard boundary this addendum routes around, never into (§16.5).
+> The intake A1's open items are **routed** to Stage-3 spec precision with direction-level
+> constraints — none is resolved here.
+
+### 16.1 Direction mapping — SC-8..SC-11 onto the locked directions (decided)
+
+| A1 addition | Owning direction(s) | Component(s) | Spec-landing gravity (Stage 3) |
+|---|---|---|---|
+| SC-8 build-failing integrity gate | **R11** (primary — the measurement surface that becomes assertive) + **R4** (the asserted coverage measures); verifies an R3 substrate invariant | C1 (enforcement), C9 (measures) | Extends the R-0034-d build record (lettered sub-item(s)); the fail-the-build behavior lands on the index-build path |
+| SC-9 write-path admission-gate enumeration test | **R3** (the enforcement contract under test) + R4 (ES-6's writer census as the enumeration seed) | C1/C2/C3 write paths; the R3 decision port | Non-pinned R-ID (R-0027 family gravity); consumes pinned R-0025 **by reference** |
+| SC-10 content-addressed idempotent ingest | **R4** (the extraction/ingest idempotency contract) | C1/C2/C3 | R-0027-c idempotency family + Data Model |
+| SC-11 named near-dup tripwire | **R11** (the instrument home) — guards the R4/R6 dedup bet | C9 | Extends R-0034-d measures + the §16.6 deferral row |
+
+The intake A1's own carried expectation (SC-8 → R4/R11; SC-9 → R3; SC-10 → R4; SC-11 → R11) is
+**confirmed against the Frame's text**, with one precision: SC-8's *primary* owner is R11, not
+R4 — the build record is R11's physical home and the gate is that instrument made assertive; R4
+co-owns because the coverage counts asserted are R4's contract.
+
+**SC-8 — build-failing integrity gate (ratified OQ2).**
+
+**Decision:** The R-0034-d-family index-build record gains an **assertion pair evaluated at every
+index build**, and divergence **fails the build** (non-zero exit) rather than logging: (a)
+reported distinct-key count == live distinct-key count; (b) provenance/coverage population
+counted against **live rows** — not "the migration ran." Owning directions: **R11** owns the
+instrument surface that becomes assertive (the build record; enforcement lands in C1's build
+path); **R4** owns the coverage measures asserted (extraction coverage per source class, measured
+never assumed). The live-row provenance-population assertion additionally *verifies* R3's
+populated-by-default substrate invariant (the not-set-is-a-value DDL defaults) against the real
+corpus every build — verification of a locked invariant, not a change to it: the assertion is
+what keeps the opt-in-labeling residual (i) from ever reproducing "present in schema, absent in
+practice." *(Anchors: P-TrustworthySignal — a measure that is logged but never checked is a
+signal that reports success without verifying, worse than no signal; the silent-failure-class
+structuralize-at-first-sighting rule (ratified 2026-07-02, cited in the decision record);
+P-InstrumentBefore — R11 shipped the instrument with the surface, SC-8 is its fidelity half;
+ratified OQ2 (maintainer, 2026-07-04) — off-limits to reopen.)*
+
+Routed to spec precision (per the intake A1 open items): the **SC-8(a) counter mapping** —
+ES-4/R-0034-d record per-source resolved/unresolved *edge-coverage* counts, not a distinct-key
+count per se; the spec author confirms which existing measure the distinct-key assertion extends,
+or introduces the distinct-key counter as part of the gate. Constraints bounding the answer: the
+ratified OQ2 assertion-pair language stands verbatim; both assertion legs read **live rows**
+(the operator-SQL-surface family the build record already declares); the assertion runs against
+the real corpus, not a fixture (ES-4's posture). Binary measure: QA-10.
+
+**SC-9 — write-path admission-gate enumeration test (ratified OQ3, spec-tier AC).**
+
+**Decision:** A conformance test **enumerates every write path to the content/edge store** and
+asserts each passes the P-0015 admission gate + envelope validators through the R3 decision port
+(mechanic 8); adding a write path that bypasses the gate turns the test red. Owning direction:
+**R3** — the test is a coverage guarantee on R3's named-enforcement-point contract (mechanic 4's
+discipline extended one step: no point, no dimension — and now no *enumerated path*, no write),
+in the same instrument family as R3's port conformance suite and differential serving-path test.
+The enumeration's authoritative seed is R4's writer census (the ES-6 rendering): the
+`repos`-plugin CRUD path, the host-side extractor, plus the batch corpus-load path C1 owns. The
+enumeration *mechanism* — how a new write path is forced into the list — is spec work, bounded by
+the TS2 shape: a hand-maintained enumeration ships its reconciliation check (computed reality ==
+declared list) in the same change and demonstrably fails on a seeded violation; opt-out polarity
+preferred where the design allows — deriving the census from the structural chokepoint the
+writers already share (the `Storage`-trait surface) beats a hand list if the derivation is
+mechanical. *(Anchors: P-TrustworthySignal TS2 — silently-narrowed coverage produces no signal
+by which its recurrence could be noticed; P-SecurityLayered keystone edge (§3) — the envelope is
+an authorization control, and an unenumerated write path is the leak-by-design vector the
+primary source demonstrates (a real gate silently narrowed by one unguarded write path);
+P-ShiftLeft — a spec-tier AC catches the defect class before an implementation ships a phantom;
+in-family precedent: the reporting-engine R-0044 reconciliation pattern (matrix at its R-0050) —
+this is the pattern's second use; ratified OQ3 — off-limits to reopen.)*
+
+**Consumed-contract guard:** the admission-gate contract SC-9 asserts is *specified* in pinned
+R-0025-b/-c/-g. The conformance requirement **consumes that contract by reference** — it cites
+the gate, asserts every path passes it, and neither restates nor reshapes the pinned text; no
+sub-item lands under R-0025/R-0026. Landing gravity: the R-0027 family (the write-discipline
+home), or a new globally-unique number under §16.5's numbering constraint if the fit strains.
+Binary measure: QA-11.
+
+**SC-10 — content-addressed idempotent ingest (ratified OQ1-b).**
+
+**Decision:** Every ingest path this cluster owns computes a **SHA-256 content address** and is
+**idempotent on it**: re-ingesting byte-identical content is a no-op — no duplicate row, no
+spurious new version. Owning direction: **R4** — the idempotency contract R4 already locks for
+edge rows (the upsert no-op and idempotent-re-extraction renderings) extends to the content rows
+the same pipeline writes; the content address is the mechanical instrument that makes
+byte-identity decidable at write time. The requirement is **forward-binding on register `1.2.0`**
+(ongoing ingest) when that feature is built (§16.4). *(Anchors: P-LockContract — ingest
+idempotency is intrinsic to the ingest contract's identity and locks now, before `1.2.0` exists
+to reshape it; ratified OQ1-b; the agent-memory landscape research's content-addressed-ingestion
+borrow (2026-05-21, cited by name and lock-date) — the cheapest hedge on the kept dedup bet;
+P-MinBlastRadius — one identity mechanism per store: the address composes with the exact-key PK,
+it does not add a second identity vocabulary.)*
+
+Routed to spec precision: **content-address mechanics** — key space (what content is hashed),
+storage location (column/constraint), and interaction with the ES-3 upsert byte-idempotency —
+resolved against P-0001 (exact-key identity, byte-round-trip storage) and P-0016. Direction-level
+guidance the spec author **verifies rather than assumes**: the V0 substrate's artifact IDs are
+already content-addressed (R3's citation form rides them), so part of SC-10's mechanism may be
+latent in the identity layer — the spec confirms whether the existing address already yields the
+idempotency observable (double-ingest leaves row counts unchanged) or a dedicated hash
+column/constraint is required at chunk/ingest grain. Binary measure: QA-12.
+
+**SC-11 — named near-dup tripwire (ratified OQ1-a).**
+
+**Decision:** The near-dup rate on `origin = extracted` edges and on chunk-grain retrieval is
+instrumented as **first-class build-record measures** riding the ES-4/R-0034-d measurement
+surface, and the spec names the instrument, the measured rate, and a **numeric threshold** whose
+crossing mechanically re-opens the write-time-dedup question (OQ1). Owning direction: **R11** —
+the measures live where every other narrowing signal lives (C9: plain timestamped,
+workspace-scoped Postgres measurement tables; backfillable-first). The instrument guards the
+R4/R6 dedup bet (exact-key PK + explicit supersession + retrieval-time collapsed-tree
+consolidation) **without hedging it into write-time dedup** — the tripwire is a measurement, not
+a mechanism; firing is a threshold crossing in stored data, never prose review. *(Anchors:
+P-Defer/DF1 — a deferral names what mechanically fires it, and the intake A1's
+tripwire-completeness hard constraint makes DF1 a gate condition for this addendum;
+P-InstrumentBefore/IB1 — both rates are computable from rows the cluster already stores, so the
+measure is backfillable on day one; P-TrustworthySignal — the firing signal is stored data an
+operator query reads; ratified OQ1-a — off-limits to reopen.)*
+
+Routed to spec precision: the **near-dup threshold value + rationale**, and what "near-dup" is
+measured against at chunk grain (the measure's mechanical definition is the spec author's
+proposal); the maintainer ratifies both at the A1 spec-exit gate. Constraint bounding the answer:
+the measure is computed from data the cluster already stores — no model call and no egress in
+the measure's path (consistent with R3's no-inference-in-assignment posture; at V0 the measure
+feeds only the tripwire, never a served predicate). Binary measure: QA-13. Deferral row: §16.6.
+
+### 16.2 Surface check — declared
+
+**None of SC-8..SC-11 opens a new architectural surface.** Walked against the §4 boundary and
+§5 trust-boundary set: SC-8 is a build-time assertion inside C1 — no new boundary, transport, or
+verb; SC-9 is a design-time conformance test over existing write paths — test tier, no runtime
+surface; SC-10 is a write-time identity computation + constraint on existing ingest paths — a
+storage detail inside C3's locked shape (no new engine, no new table family, tenancy invariant
+untouched); SC-11 is additional measures in the existing R11 build-record tables. No new egress
+(nothing in the four additions calls a model or leaves the process), no auth or
+policy-semantics change (SC-9 *tests* the R3 gate, it does not alter it), no multi-tenancy
+change, no plugin-model change. The intake A1 risk profile's "no new trust surface" position is
+**confirmed**; standard (non-security-mode) review applies.
+
+### 16.3 Constraint-graph walk (additions only)
+
+Traversal per §3's rule (G-0013 most-specific). The pre-A1 walk stands untouched; this section
+walks only the edges bearing on the four additions.
+
+**Keystone edge for the additions — `P-TrustworthySignal → Observability, Quality`
+(specializes, `constraint-edges.md:70–71`).** All four additions are the same principle applied
+at three points: SC-8 converts a logged measure into a checked one (a signal that reports
+success without verifying is worse than no signal — the exact defect the primary source's
+inflated metrics demonstrate); SC-9 is TS2 (an execution-gating enumeration ships its
+reconciliation check; an unenumerated write path is a silent false-green on the gate's coverage)
+applied to the write surface; SC-11's tripwire fires from stored data, so the deferral it guards
+cannot silently rot. This is the addendum's decision anchor the way P-SecurityLayered was the
+original walk's.
+
+| Edge (type) | Bears on | How it applies |
+|---|---|---|
+| `P-InstrumentBefore → Observability` (specializes, `constraint-edges.md:43`) + IB1 | SC-8, SC-11 | The instruments ship with the surface, before first user-touch, as R11 already locks; SC-8/SC-11 extend that same in-scope deliverable. Backfillable-first holds: the near-dup rates and the distinct-key/population counts are computable from stored rows on day one — no forward-only blind window. |
+| `P-Defer → Simplicity, Reversibility` (specializes, `constraint-edges.md:34–35`) + DF1 | SC-11 tripwire; SC-10 forward-binding | SC-11 is the DF1-complete rendering of the OQ1 deferral: decision content + deferral anchor + a mechanically-fireable threshold crossing (§16.6). SC-10's `1.2.0` binding is self-announcing — the ingest feature cannot arrive without its own intake, which inherits the requirement. |
+| `P-Defer ⇄ P-InstrumentBefore` (conflicts-with, `constraint-edges.md:144`) | SC-11 | Resolves per the edge's stated posture — P-InstrumentBefore wins for production surfaces; the instrument is precisely what makes the OQ1 deferral safe. The same resolution §3 already applied; not a live conflict. |
+| `P-LockContract → Simplicity, Migration cost` (specializes, `constraint-edges.md:38–40`) | SC-10; the §16.5 pin discipline | Ingest idempotency is intrinsic to the ingest contract's identity — it locks now and `1.2.0` binds forward without a contract break. The R-0025/R-0026/R-0025-g pin is the same principle at the cross-spec seam: the reporting engine consumes a stable contract, so this amendment varies *beside* it, never inside it. |
+| `P-LockContract ⇄ P-PreserveDecisionSpace` (conflicts-with, when-to-lock, `constraint-edges.md:145`) | What locks now vs what stays open | Applied per the edge's discriminator, not escalated: the honesty instruments (assertion pair, enumeration test, content address, near-dup measure) are intrinsic to the guarantees' identity and lock now; **write-time semantic dedup remains a separable preserved option** behind SC-11's named tripwire — the A1 rendering of the same worked case §3 records for R5. |
+| `P-SecurityLayered → Security` (specializes, `constraint-edges.md:42`) | SC-9; SC-8's fail-closed build | The §3 keystone edge's second-order application: the admission gate is a security layer, and SC-9 is the layer-integrity check that its coverage cannot silently narrow (a control is software that can fail open — the control-integrity clause). SC-8 fail-closes the build itself: an index whose honesty counters diverge does not ship. |
+| `P-ShiftLeft → Reversibility, Decomposition` (specializes, `constraint-edges.md:48–49`) + D2 | All four | Each addition carries its mechanical validator before it earns a slot (validator-before-field), and each observable is a seeded-failure protocol (seeded divergence, seeded bypass, double-ingest, seeded above-threshold run — QA-10..QA-13). The defect class is caught at build/test time, before implementation ships a specified-but-unrealized guarantee. |
+| `P-MinBlastRadius → Maintainability` (specializes, `constraint-edges.md:65`) | SC-9, SC-10 | The enumeration is tractable only because R4 already bounded the write surface (one table, two writers, origin-discriminated) — SC-9 banks that bound as a checked invariant. SC-10 composes with the exact-key identity rather than adding a second identity mechanism. All four additions land inside existing components (C1/C2/C3/C9) behind existing seams; no new module family. |
+| `Observability ⇄ Simplicity` (conflicts-with, `constraint-edges.md:139`) | SC-8/SC-11 instrumentation cost | Resolves per the edge — default-to-Observability for production surfaces; identical to §3's walk item 2, with added weight: these instruments are enforcement, not only measurement. |
+| `Security ⇄ Simplicity` (conflicts-with, `constraint-edges.md:138`) | SC-9 | Resolves per the edge (default-to-Security): one conformance test guarding a load-bearing layer is minimal mechanism — mutual reinforcement, the §3 walk item 1 shape. |
+
+**Conflicts-with findings: none escalate.** Four conflicts-with edges were touched
+(P-Defer ⇄ P-InstrumentBefore; P-LockContract ⇄ P-PreserveDecisionSpace; Observability ⇄
+Simplicity; Security ⇄ Simplicity); each resolves inside its edge's canon-stated resolution
+posture, so none is a live conflict requiring the decomposer.
+
+### 16.4 SC-10 scope note — the ingest-path boundary
+
+The intake's **no-ongoing-ingest non-goal stands.** SC-10 binds exactly the write/ingest paths
+this cluster already owns — the batch corpus load (C1's input side) and host-side extractor
+re-runs (C2) — and **forward-binds** onto register `1.2.0` (ongoing ingest) when that feature is
+built: `1.2.0`'s own intake inherits SC-10 as a standing requirement on its ingest paths
+(self-announcing firing, the same shape as §9's `declared`-origin re-open row, which fires on
+the same event). SC-10 does not pull the ingest pipeline into scope, does not design `1.2.0`'s
+arrival mechanics, and does not extend the corpus the cluster serves.
+
+### 16.5 Consumed-contract + numbering constraints carried to the spec author (Stage 3)
+
+- **Pinned:** spec R-0025 / R-0026 / R-0025-g (the reporting-engine BOM
+  `[consumed_contracts.retrieval-cluster]` pin, `0b948ea2`). The amendment SHALL NOT reshape
+  them; no new sub-items land under them. SC-9 consumes the admission-gate contract **by
+  reference** (§16.1). If a review finding forces reshaping any pinned R-ID:
+  **pause-and-escalate** — the mechanical ride-along re-pin becomes a reporting-engine
+  re-derivation.
+- **Additive numbering:** new requirements SHOULD land as lettered sub-items of existing
+  non-pinned R-IDs (gravity per §16.1's table: R-0034 for SC-8/SC-11; the R-0027 family for
+  SC-9/SC-10). If a new number is unavoidable, the spec author SHALL verify global uniqueness
+  across every locked spec in `docs/specs/` before allocating — R-0036–R-0039 are **not** free
+  (the ci-flake-tier2 spec claims R-0026–R-0039 in the same global series), and the pre-existing
+  cross-spec numbering overlap is a dispositioned deferral (task #2126, firing at this cluster's
+  designed → committed pickup); if its resolution renumbers, the amendment follows it.
+- **SC-8 failed-gate disposition (routed from the Stage-2 review):** whether a failed
+  integrity-assertion pair blocks only the new index build's promotion (the prior index
+  continues serving) or halts serving entirely — the spec author SHALL state the disposition
+  explicitly at Stage 3. Surfaced as a sub-threshold Stage-2 review note; routed rather than
+  dropped.
+
+### 16.6 Deferral-table extension (§9, additive rows)
+
+Same shape and discipline as §9 (P-Defer/DF1); these rows extend that table without editing it.
+
+| Deferred | Decision content when it fires | Firing instrument |
+|---|---|---|
+| Write-time semantic/near-dup dedup (ratified OQ1 — the kept bet: exact-key PK + explicit supersession + retrieval-time collapsed-tree consolidation) | Re-open OQ1: design write-time near-dup handling — the option set at fire time: write-time semantic dedup at the ingest boundary, strengthened retrieval-time consolidation, or extending the SC-10 content address toward near-identity classes | The SC-11 instrument: the near-dup rate on `origin = extracted` edges / chunk-grain retrieval crossing the spec-named numeric threshold — a threshold crossing in stored build-record data (QA-13), never prose review |
+| SC-10 on ongoing-ingest paths | Apply the content-addressed idempotency requirement to register `1.2.0`'s ingest paths as a standing inherited requirement | Self-announcing — the `1.2.0` feature's own intake (the same firing event as §9's `declared`-origin re-open row) |
+
+### 16.7 Quality-attribute scenarios (A1 additions)
+
+Numbering continues from QA-9; each measure is a conjunction of binary checks.
+
+**QA-10 — Build-failing integrity gate (SC-8).** *Stimulus:* an index build runs over a fixture
+corpus seeded with a mismatched distinct-key count (and, separately, an unpopulated
+provenance/coverage value on live rows). *Environment:* any configuration. *Response:* the build
+fails. *Measure (all must hold):* (1) the seeded run exits non-zero with a machine-readable
+divergence reason; (2) an unseeded run over the real corpus passes, with both assertion legs'
+counts recorded in the build record; (3) the assertion reads **live rows** — removing a live row
+without updating the reported count flips the result.
+
+**QA-11 — Write-path enumeration turns red on a bypass (SC-9).** *Stimulus:* a write path to the
+content/edge store is added that bypasses the P-0015 admission gate. *Environment:* the
+conformance suite. *Response:* red. *Measure (all must hold):* (1) the seeded bypassing path
+turns the test red; (2) the enumeration covers, at minimum, R4's writer census — the
+`repos`-plugin CRUD path, the host-side extractor, and the batch corpus-load path; (3) the
+enumeration's reconciliation check (computed write-path reality vs the declared list) fails on a
+seeded omission.
+
+**QA-12 — Content-addressed ingest is idempotent (SC-10).** *Stimulus:* byte-identical content
+is ingested twice on a cluster-owned ingest path. *Environment:* any configuration. *Response:*
+the second ingest is a no-op. *Measure (all must hold):* (1) row counts are unchanged after the
+second ingest; (2) no spurious new version and no spurious supersession edge exists; (3) a
+one-byte-different ingest is **not** a no-op (the address discriminates, not merely dedupes).
+
+**QA-13 — Near-dup tripwire fires mechanically (SC-11).** *Stimulus:* a fixture index run seeded
+above the spec-named near-dup threshold. *Environment:* default configuration. *Response:* the
+fired flag. *Measure (all must hold):* (1) every build record carries both near-dup measures
+(`origin = extracted` edge rate; chunk-grain retrieval rate); (2) the seeded run produces the
+fired flag with a machine-readable reason; (3) a below-threshold run carries the measures and no
+flag (the tripwire can also not-fire).
+
+### 16.8 Intent self-report (A1)
+
+**(1) I read the A1 JTBD as:** the cluster's honesty guarantees must be self-enforcing at build
+and test time, before implementation starts, so that a specified-but-unrealized guarantee — a
+phantom, the failure class the primary source demonstrates twice — structurally cannot survive
+an index build or a test run; the four additions are one discipline (a guarantee is only as
+strong as its weakest write path, and a metric that is logged but never checked drifts
+unobserved) applied at the four points the locked design left it unenforced.
+
+**(2) Decisions that strain an enumerated A1 non-goal or success criterion:** none diverge; one
+near-boundary flag, concrete and diffable — SC-9's subject is the admission-gate contract
+*specified in pinned R-0025*, so the mapping holds the consume-by-reference line (§16.1, §16.5):
+the conformance requirement cites the pinned gate and adds no sub-item under it; if spec-stage
+drafting finds the test unspecifiable without touching pinned text, that is the §16.5
+pause-and-escalate, not a drafting liberty. The SC-11 mapping was checked against A1 Non-goal 2
+("no write-time semantic dedup") and stays on the instrument side of that line: the tripwire's
+decision content is *re-opening the question* (§16.6), not pre-building the mechanism.
+
+### 16.9 Consultations (A1)
+
+None — no Mode A consultation fired during this synthesis. The one place an expert lens was
+considered and judged non-blocking: the near-dup measure's mechanical definition at chunk grain
+(a spec-stage proposal the maintainer ratifies at the A1 spec-exit gate; the direction-level
+constraint — computable from stored rows, no model call in the measure's path — bounds it
+without a consultation).
