@@ -65,10 +65,15 @@
 //!
 //! See report prose section "Design decisions for Puck to validate before green".
 //!
-//! # Engine startup
+//! # Engine acquisition
 //!
-//! Each DB-touching test starts its own embedded Postgres instance. Startup is
-//! serialized within this binary via `STARTUP_LOCK` (A-11).
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` (which already
+//! runs the full schema-init sequence — no redundant `init()` call needed).
+//! No per-file boot-serialization mutex needed — the fixture's own
+//! get-or-init semantics guarantee exactly-once boot.
 //!
 //! # verify: []
 //!
@@ -76,14 +81,17 @@
 //! `mnemra_host::mcp::*` — there is no just recipe to run against a red binary.
 //! Green phase adds the recipe.
 
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
+
 use mnemra_host::auth::token::{AdminToken, generate, hash};
-use mnemra_host::schema::init::{DEFAULT_WORKSPACE_ID, init};
+use mnemra_host::schema::init::DEFAULT_WORKSPACE_ID;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 use rmcp::model::{CallToolRequestParams, ErrorCode, Meta, RawContent};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::json;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::io::duplex;
 use uuid::Uuid;
 
@@ -107,20 +115,6 @@ use wasmtime::component::Component;
 // ---------------------------------------------------------------------------
 use mnemra_host::mcp::errors::{AUTH_FAILURE_CODE, PERMISSION_DENIED_CODE};
 use mnemra_host::mcp::server::MnemraMcpServer;
-
-/// Serializes engine startup across concurrent test threads within this binary (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh embedded engine with startup serialized (mirrors admin_token_behavior.rs).
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        // Guard dropped here; async engine start races safely after this point.
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 /// Seed an admin-role token into `admin_tokens` and return (token, token_id).
 ///
@@ -306,9 +300,12 @@ async fn create_echo_fixture(
 async fn valid_admin_token_echo_create_returns_ok() {
     // R-0010-a/b/c/d: valid admin token → echo.create dispatches successfully.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -402,9 +399,12 @@ async fn valid_admin_token_echo_create_returns_ok() {
 async fn bogus_token_returns_distinguishable_auth_failure() {
     // R-0010-c/f: bogus token → auth-failure code, not a standard JSON-RPC code.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let server = MnemraMcpServer::new(pool.clone(), echo_plugin_pool());
 
@@ -499,9 +499,12 @@ async fn bogus_token_returns_distinguishable_auth_failure() {
 async fn read_observer_write_denied_permission_error() {
     // R-0010-d/f, R-0009-e: read_observer + write verb → PERMISSION_DENIED_CODE.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
@@ -603,9 +606,12 @@ async fn read_observer_write_denied_permission_error() {
 async fn control_plane_verbs_absent_from_tools_list() {
     // R-0010-g: control-plane verbs must not appear in tools/list response.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // No token needed: tools/list is unauthenticated (R-0010-g only checks the
     // structural content of the advertised tool set, not auth behavior on list).
@@ -734,9 +740,12 @@ async fn control_plane_verbs_absent_from_tools_list() {
 async fn read_observer_non_read_verb_denied_permission_error() {
     // R-0009-d/e: ReadObserver + non-read verb tail → PERMISSION_DENIED_CODE.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
@@ -842,9 +851,12 @@ async fn read_observer_non_read_verb_denied_permission_error() {
 async fn read_observer_get_verb_not_denied() {
     // R-0009-d: ReadObserver + echo.get → permission check passes (not denied).
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_read_observer_token(pool, workspace_id).await;
@@ -937,9 +949,12 @@ async fn read_observer_get_verb_not_denied() {
 async fn valid_admin_token_echo_list_returns_created_ids() {
     // R-0019-c: admin echo.list returns the ids it created.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -1032,9 +1047,12 @@ async fn valid_admin_token_echo_list_returns_created_ids() {
 async fn echo_list_is_workspace_scoped() {
     // R-0006-d: echo.list does not leak cross-workspace artifacts.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_a = Uuid::new_v4();
     let workspace_b = Uuid::new_v4();
@@ -1117,9 +1135,12 @@ async fn echo_list_is_workspace_scoped() {
 async fn echo_list_reachable_by_read_observer() {
     // R-0009-d: a ReadObserver may echo.list (read verb), not denied.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (admin_token, _admin_id) = seed_admin_token(pool, workspace_id).await;
@@ -1230,9 +1251,12 @@ async fn echo_list_reachable_by_read_observer() {
 async fn valid_admin_token_echo_update_merges_and_persists() {
     // R-0019-c: admin echo.update merges frontmatter, replaces body, persists.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -1394,9 +1418,12 @@ async fn valid_admin_token_echo_update_merges_and_persists() {
 async fn echo_update_cannot_modify_another_workspace_artifact() {
     // R-0006-d: echo.update is tenant-isolated on write — B cannot modify A.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_a = Uuid::new_v4();
     let workspace_b = Uuid::new_v4();
@@ -1521,9 +1548,12 @@ async fn echo_update_cannot_modify_another_workspace_artifact() {
 async fn echo_update_absent_body_preserves_existing_body() {
     // R-0019-c: echo.update with body absent (None) preserves the existing body.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -1675,9 +1705,12 @@ async fn echo_update_absent_body_preserves_existing_body() {
 async fn valid_admin_token_echo_delete_removes() {
     // R-0019-c: admin echo.delete removes the artifact; verified via echo.get absent.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -1804,9 +1837,12 @@ async fn valid_admin_token_echo_delete_removes() {
 async fn echo_delete_cannot_remove_another_workspace_artifact() {
     // R-0006-d: echo.delete is tenant-isolated on write — B cannot delete A.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_a = Uuid::new_v4();
     let workspace_b = Uuid::new_v4();
@@ -2041,9 +2077,12 @@ async fn seed_echo_fixture_row(pool: &sqlx::PgPool, id: &str, workspace_id: Uuid
 async fn create_persists_a_real_echo_fixture_row() {
     // R-0012-a, R-0001-a: echo.create must write to the echo_fixture table.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -2176,9 +2215,12 @@ async fn create_persists_a_real_echo_fixture_row() {
 async fn cross_workspace_isolation_at_echo_fixture_table() {
     // R-0006-d: echo_fixture reads are workspace-scoped; B cannot see A's row.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_a = Uuid::new_v4();
     let workspace_b = Uuid::new_v4();
@@ -2307,9 +2349,12 @@ async fn cross_workspace_isolation_at_echo_fixture_table() {
 async fn create_survives_fresh_db_query() {
     // R-0001-a: created artifacts persist to Postgres, not just in-process memory.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -2422,9 +2467,12 @@ async fn create_survives_fresh_db_query() {
 async fn crud_update_reflected_in_echo_fixture_table() {
     // R-0019-e: echo.update must apply the patch to the echo_fixture table.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -2527,9 +2575,12 @@ async fn crud_update_reflected_in_echo_fixture_table() {
 async fn crud_delete_removes_echo_fixture_row() {
     // R-0019-e: echo.delete must remove the row from the echo_fixture table.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -2706,9 +2757,12 @@ async fn crud_delete_removes_echo_fixture_row() {
 async fn update_with_malformed_patch_fails_closed() {
     // HIGH-1: echo.update with malformed frontmatter_patch must fail closed.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;
@@ -2849,9 +2903,12 @@ async fn update_with_malformed_patch_fails_closed() {
 async fn db_error_message_is_scrubbed_of_sqlx_detail() {
     // MEDIUM-1: DB error message must not expose raw sqlx/Postgres internals.
     // GIVEN
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let (token, _token_id) = seed_admin_token(pool, workspace_id).await;

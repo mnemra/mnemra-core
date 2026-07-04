@@ -26,16 +26,16 @@
 //! | token_row_exactly_six_fields               | R-0008-h (behavioral complement) |
 //! | rotation_new_token_is_live                 | R-0008-f (adversarial complement) |
 //!
-//! # Engine bring-up
+//! # Engine acquisition
 //!
-//! Each test starts its own embedded Postgres instance. Engine startup is
-//! serialized within this binary via `STARTUP_LOCK` (A-11 — archive-extraction
-//! race). The lock is acquired and immediately released in a synchronous block
-//! before the async `.start().await`, satisfying `clippy::await_holding_lock`
-//! (fix of the latent violation in `schema_init.rs`).
-//!
-//! `init(&engine, "vector")` is called at the start of every DB-touching test to
-//! create the `admin_tokens` table (migration 7) and the default workspace.
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` — which runs the
+//! same schema-init sequence (migrations, `admin_tokens` table via migration
+//! 7, default workspace) that `init(&engine, "vector")` used to run. No
+//! per-file boot-serialization mutex needed — the fixture's own
+//! get-or-init semantics guarantee exactly-once boot.
 //!
 //! # Env-var safety
 //!
@@ -45,41 +45,22 @@
 //!
 //! # Pool notes
 //!
-//! `engine.pool` (mnemra_app role, table owner) is used for all DB operations.
-//! The `mnemra_host_fns` role does NOT have DELETE on `admin_tokens` (cross-
+//! `db.pool` (mnemra_app role, table owner, bound to the test's own
+//! fixture-provisioned database) is used for all DB operations. The
+//! `mnemra_host_fns` role does NOT have DELETE on `admin_tokens` (cross-
 //! dispatch note 4); `rotate()` therefore requires the app-owner pool, which
-//! `engine.pool` is.
+//! `db.pool` is.
+
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 
 use mnemra_host::auth::token::{
     TokenRow, check_token_file_mode, generate, hash, lookup_by_hash, rotate, write_token_file,
 };
-use mnemra_host::schema::init::{DEFAULT_WORKSPACE_ID, init};
+use mnemra_host::schema::init::DEFAULT_WORKSPACE_ID;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
 use tempfile::tempdir;
 use uuid::Uuid;
-
-/// Serializes engine startup across concurrent test threads within this binary (A-11).
-///
-/// Independent of locks in `postgres_engine.rs`, `schema_init.rs`, etc.
-/// Under `cargo test --workspace` (default sequential binary scheduling) there
-/// is no cross-binary race. This lock covers within-binary test parallelism.
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh embedded engine with startup serialized.
-///
-/// The lock is acquired and released in a synchronous block BEFORE the async
-/// `.start().await` call — satisfies `clippy::await_holding_lock` while still
-/// serializing the archive-extraction phase.
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        // Guard dropped here; async engine start races safely after this point.
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 // ---------------------------------------------------------------------------
 // R-0008-a — token shape: length, alphabet, distinctness
@@ -188,10 +169,13 @@ async fn token_shape_entropy_n_calls_all_distinct() {
 #[tokio::test]
 async fn round_trip_via_db() {
     // R-0008-c: full round-trip through the real DB.
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let scopes = vec!["admin".to_owned()];
 
@@ -241,10 +225,13 @@ async fn round_trip_via_db() {
 #[tokio::test]
 async fn bogus_hash_lookup_returns_none() {
     // R-0008-f adversarial: a bogus hash must return Ok(None).
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
 
     // Generate a token that was NEVER inserted into the DB.
     let phantom_token = generate();
@@ -352,10 +339,13 @@ async fn file_mode_check_rejects_644() {
 #[tokio::test]
 async fn revocation_lookup_by_old_hash_returns_none() {
     // R-0008-f: old hash unreachable after rotate (no block-list, DELETE semantics).
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let scopes = vec!["admin".to_owned()];
 
@@ -398,10 +388,13 @@ async fn revocation_lookup_by_old_hash_returns_none() {
 #[tokio::test]
 async fn rotation_new_token_is_live() {
     // R-0008-f adversarial: new token is live after rotate.
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let scopes = vec!["admin".to_owned()];
 
@@ -449,10 +442,13 @@ async fn rotation_new_token_is_live() {
 #[tokio::test]
 async fn rotation_event_token_id_matches_old_id() {
     // R-0008-g: rotation event carries the old token's id.
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let scopes = vec!["admin".to_owned()];
 
@@ -495,10 +491,13 @@ async fn rotation_event_token_id_matches_old_id() {
 #[tokio::test]
 async fn no_grace_period_after_rotation() {
     // R-0009-i: old hash unreachable IMMEDIATELY after rotate (no sleep, no grace period).
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let scopes = vec!["admin".to_owned()];
 
@@ -551,10 +550,13 @@ async fn no_grace_period_after_rotation() {
 #[tokio::test]
 async fn rotation_preserves_scopes_no_escalation() {
     // Given: an old token created with read_observer scope (not admin).
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     // Use a non-admin scope to make the escalation distinction observable.
     let old_scopes = vec!["read_observer".to_owned()];
 
@@ -612,10 +614,13 @@ async fn rotation_preserves_scopes_no_escalation() {
 #[tokio::test]
 async fn rotation_preserves_workspace_id() {
     // Given: an old token in a workspace DISTINCT from DEFAULT_WORKSPACE_ID.
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let scopes = vec!["admin".to_owned()];
 
     // A deterministic non-default workspace UUID (UUID v5 of "tenant-b" in DNS namespace).
@@ -678,10 +683,13 @@ async fn rotation_preserves_workspace_id() {
 #[tokio::test]
 async fn token_row_exactly_six_fields() {
     // R-0008-h behavioral: exhaustive destructure of TokenRow — compile fails if a 7th field is added.
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let pool = engine.pool.as_ref();
+    let pool = &db.pool;
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let scopes = vec!["admin".to_owned()];
 

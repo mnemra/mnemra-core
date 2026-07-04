@@ -39,48 +39,22 @@
 //! against the missing Task 11 surface, not by compile failure — see rationale
 //! at the bottom of the file.
 //!
-//! # Startup serialization
+//! # Engine acquisition
 //!
-//! A `Mutex` serializes engine startup within this binary. Each test starts its
-//! own engine instance (mirrors the pattern in `schema_init.rs`).
-//!
-//! # A-11 note
-//!
-//! `STARTUP_LOCK` here is independent of the locks in `postgres_engine.rs`,
-//! `schema_init.rs`, and `storage_contract_postgres.rs`. Under `cargo test
-//! --workspace` (default sequential binary scheduling) there is no race. See
-//! `postgres_engine.rs` module doc for the full A-11 analysis.
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` (which itself
+//! runs the same schema-init sequence `init()` used to run) — no per-file
+//! boot-serialization mutex needed. The fixture's own get-or-init
+//! semantics guarantee exactly-once boot; a second lock here would be
+//! vestigial machinery (R-0029). Assertions below are unchanged from the
+//! pre-migration version.
 
-use mnemra_host::schema::init::init;
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
+
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
-
-/// Serializes engine startup across concurrent test threads within this binary (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh embedded engine with startup serialized.
-///
-/// Mirrors the helper in `schema_init.rs` — `common/mod.rs` is in forbid_scope
-/// for this dispatch, and that module covers the Storage trait, not auth.
-///
-/// The lock is acquired and immediately released in a synchronous block before
-/// the async `.start().await` call. This satisfies `clippy::await_holding_lock`
-/// while still serializing the archive-extraction phase of engine startup:
-/// only one test binary starts an engine at a time within this binary (A-11).
-///
-/// Note: `schema_init.rs` uses the same lock-then-await pattern (without the
-/// block wrapper) — that is a latent lint violation in the existing test suite.
-/// We fix it at the source here.
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        // Guard dropped here — engine startup archive extraction is serialized
-        // at the OS file-system level; the async portion races safely.
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 // ---------------------------------------------------------------------------
 // R-0008-c — admin_tokens table exists with exactly six columns
@@ -101,18 +75,18 @@ async fn start_engine() -> EmbeddedEngine {
 #[tokio::test]
 async fn admin_tokens_table_exists_after_init() {
     // R-0008-c: admin_tokens table must exist after mnemra init.
-    let engine = start_engine().await;
-
-    init(&engine, "vector")
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
         .await
-        .expect("init should succeed before checking admin_tokens schema");
+        .expect("provision_test_database should succeed before checking admin_tokens schema");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT table_name
          FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'admin_tokens'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.tables query failed");
 
@@ -138,16 +112,18 @@ async fn admin_tokens_table_exists_after_init() {
 #[tokio::test]
 async fn admin_tokens_has_exactly_six_columns() {
     // R-0008-c, R-0008-h
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let count: (i64,) = sqlx::query_as(
         "SELECT COUNT(*)
          FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = 'admin_tokens'",
     )
-    .fetch_one(engine.pool.as_ref())
+    .fetch_one(&db.pool)
     .await
     .expect("information_schema.columns count query failed");
 
@@ -179,9 +155,11 @@ async fn admin_tokens_has_exactly_six_columns() {
 #[tokio::test]
 async fn admin_tokens_column_types_correct() {
     // R-0008-c: each column must exist with the right data type.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // (column_name, expected_data_type, expected_udt_name)
     // For non-array types, udt_name == data_type lower-case in PG catalog.
@@ -204,7 +182,7 @@ async fn admin_tokens_column_types_correct() {
                AND column_name  = $1",
         )
         .bind(*col_name)
-        .fetch_optional(engine.pool.as_ref())
+        .fetch_optional(&db.pool)
         .await
         .expect("information_schema.columns query failed");
 
@@ -255,9 +233,11 @@ async fn admin_tokens_column_types_correct() {
 #[tokio::test]
 async fn admin_tokens_workspace_id_is_not_nullable() {
     // R-0008-d: workspace_id NOT NULL — absence of workspace claim is a schema violation.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -266,7 +246,7 @@ async fn admin_tokens_workspace_id_is_not_nullable() {
            AND table_name   = 'admin_tokens'
            AND column_name  = 'workspace_id'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query failed");
 
@@ -304,9 +284,11 @@ async fn admin_tokens_workspace_id_is_not_nullable() {
 #[tokio::test]
 async fn admin_tokens_token_hash_is_not_nullable() {
     // R-0008-b: token_hash NOT NULL — raw bytes are never stored; hash must always be present.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -315,7 +297,7 @@ async fn admin_tokens_token_hash_is_not_nullable() {
            AND table_name   = 'admin_tokens'
            AND column_name  = 'token_hash'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query failed");
 
@@ -348,9 +330,11 @@ async fn admin_tokens_token_hash_is_not_nullable() {
 #[tokio::test]
 async fn admin_tokens_token_hash_has_unique_constraint() {
     // R-0008-b: token_hash UNIQUE — each hash must map to at most one token row.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // information_schema.table_constraints + key_column_usage is the portable
     // way to check for a UNIQUE constraint on a specific column.
@@ -365,7 +349,7 @@ async fn admin_tokens_token_hash_has_unique_constraint() {
            AND kcu.column_name    = 'token_hash'
            AND tc.constraint_type = 'UNIQUE'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("table_constraints query failed");
 
@@ -393,9 +377,11 @@ async fn admin_tokens_token_hash_has_unique_constraint() {
 #[tokio::test]
 async fn admin_tokens_id_is_primary_key() {
     // R-0008-c: id UUID PK.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT tc.constraint_type
@@ -408,7 +394,7 @@ async fn admin_tokens_id_is_primary_key() {
            AND kcu.column_name    = 'id'
            AND tc.constraint_type = 'PRIMARY KEY'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("table_constraints query failed");
 
@@ -432,9 +418,11 @@ async fn admin_tokens_id_is_primary_key() {
 #[tokio::test]
 async fn admin_tokens_scopes_is_not_nullable() {
     // R-0008-c: scopes TEXT[] NOT NULL.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -443,7 +431,7 @@ async fn admin_tokens_scopes_is_not_nullable() {
            AND table_name   = 'admin_tokens'
            AND column_name  = 'scopes'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query failed");
 
@@ -472,9 +460,11 @@ async fn admin_tokens_scopes_is_not_nullable() {
 #[tokio::test]
 async fn admin_tokens_created_at_is_not_nullable() {
     // R-0008-c: created_at TIMESTAMPTZ NOT NULL.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -483,7 +473,7 @@ async fn admin_tokens_created_at_is_not_nullable() {
            AND table_name   = 'admin_tokens'
            AND column_name  = 'created_at'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query failed");
 
@@ -512,9 +502,11 @@ async fn admin_tokens_created_at_is_not_nullable() {
 #[tokio::test]
 async fn admin_tokens_rotated_at_is_nullable() {
     // R-0008-c: rotated_at TIMESTAMPTZ — nullable (no NOT NULL constraint).
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -523,7 +515,7 @@ async fn admin_tokens_rotated_at_is_nullable() {
            AND table_name   = 'admin_tokens'
            AND column_name  = 'rotated_at'",
     )
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query failed");
 
@@ -574,9 +566,11 @@ async fn admin_tokens_rotated_at_is_nullable() {
 #[tokio::test]
 async fn admin_tokens_has_no_signing_key_column() {
     // R-0008-h: no second signing key column in admin_tokens.
-    let engine = start_engine().await;
-
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // Look for any column whose name suggests raw key material (beyond token_hash).
     // The six-column count test is the red-phase guard; this guards the green phase.
@@ -594,7 +588,7 @@ async fn admin_tokens_has_no_signing_key_column() {
                 OR column_name ILIKE '%cert%'
                 OR column_name ILIKE '%signature%')",
     )
-    .fetch_one(engine.pool.as_ref())
+    .fetch_one(&db.pool)
     .await
     .expect("information_schema.columns key-material query failed");
 

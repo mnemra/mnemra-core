@@ -8,11 +8,15 @@
 //! - **R-0001-f:** A host-fn write enqueues a refresh; the worker drains it;
 //!   the `echo_fixture_status_counts` matview reflects the write.
 //!
-//! # Startup serialization
+//! # Engine acquisition
 //!
-//! A `std::sync::Mutex` serializes engine startup within this binary (A-11
-//! cross-binary archive-extraction race, same as `content_schema.rs`).
-//! Each test starts its own engine instance.
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` — which runs the
+//! same schema-init sequence `init()` used to run. No per-file
+//! boot-serialization mutex needed — the fixture's own get-or-init
+//! semantics guarantee exactly-once boot.
 //!
 //! # Synchronization (R-0001-f)
 //!
@@ -26,17 +30,15 @@
 //! `std::sync::mpsc::recv_timeout` to enforce a 10-second deadline without
 //! requiring the tokio `time` feature.
 
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
+
 use mnemra_host::projection::fixture_projection::{
     FIXTURE_MATVIEW, create_echo_fixture_projection,
 };
 use mnemra_host::projection::refresh_queue::new_refresh_queue;
 use mnemra_host::projection::worker::RefreshWorker;
-use mnemra_host::schema::init::init;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
-
-/// Serializes engine startup across concurrent test threads (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
 
 /// The fixture type used by all tests in this file.
 const FIXTURE_TYPE: &str = "echo_fixture";
@@ -49,14 +51,6 @@ const VALID_FRONTMATTER: &str =
     r#"{"id": "TESTULID00000000099", "frontmatter_version": 1, "status": "open"}"#;
 const VALID_FRONTMATTER_UPDATED: &str =
     r#"{"id": "TESTULID00000000099", "frontmatter_version": 2, "status": "done"}"#;
-
-/// Start a fresh engine with startup serialized.
-async fn start_engine() -> EmbeddedEngine {
-    let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 // ---------------------------------------------------------------------------
 // Helper: insert a row into echo_fixture
@@ -94,9 +88,12 @@ async fn insert_fixture_row(pool: &sqlx::PgPool, id: &str, frontmatter: &str) {
 /// pre-update frontmatter value's `::text` representation.
 #[tokio::test]
 async fn r0001e_update_writes_byte_exact_history_row() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let artifact_id = "TESTULID00000000091";
     insert_fixture_row(pool, artifact_id, VALID_FRONTMATTER).await;
@@ -161,9 +158,12 @@ async fn r0001e_update_writes_byte_exact_history_row() {
 /// be present.
 #[tokio::test]
 async fn r0001e_delete_writes_history_row_before_removal() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let artifact_id = "TESTULID00000000092";
     insert_fixture_row(pool, artifact_id, VALID_FRONTMATTER).await;
@@ -232,9 +232,12 @@ async fn r0001e_delete_writes_history_row_before_removal() {
 /// 'DELETE' in that order (R-0001-e composite).
 #[tokio::test]
 async fn r0001e_update_then_delete_produces_two_history_rows() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let artifact_id = "TESTULID00000000093";
     insert_fixture_row(pool, artifact_id, VALID_FRONTMATTER).await;
@@ -289,9 +292,12 @@ async fn r0001e_update_then_delete_produces_two_history_rows() {
 /// The matview assertion is therefore deterministic.
 #[tokio::test]
 async fn r0001f_enqueue_drain_matview_reflects_write() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // Create the fixture matview.
     create_echo_fixture_projection(pool)
@@ -303,7 +309,7 @@ async fn r0001f_enqueue_drain_matview_reflects_write() {
 
     // Create the refresh queue and start the worker.
     let (queue, drain) = new_refresh_queue();
-    let worker = RefreshWorker::start(drain, (*engine.pool).clone());
+    let worker = RefreshWorker::start(drain, db.pool.clone());
 
     // Enqueue a refresh for the fixture matview.
     queue
@@ -381,9 +387,12 @@ async fn r0001f_enqueue_drain_matview_reflects_write() {
 /// requiring the tokio `time` feature.
 #[tokio::test]
 async fn r0001f_concurrent_refresh_does_not_block_reads() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // Create projection.
     create_echo_fixture_projection(pool)
@@ -412,7 +421,7 @@ async fn r0001f_concurrent_refresh_does_not_block_reads() {
 
     // Start the worker and enqueue the refresh.
     let (queue, drain) = new_refresh_queue();
-    let worker = RefreshWorker::start(drain, (*engine.pool).clone());
+    let worker = RefreshWorker::start(drain, db.pool.clone());
     queue.enqueue(FIXTURE_MATVIEW).await.expect("enqueue");
 
     // Drop the queue (close sender) so the worker exits after processing the

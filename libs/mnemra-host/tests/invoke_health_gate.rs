@@ -54,6 +54,8 @@
 //! `Arc<PluginPool>` pointing to the SAME pool the server's invoke path reads,
 //! so injecting death here degrades the live invoke path.
 
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 #[path = "common/slice1_harness.rs"]
 mod slice1_harness;
 
@@ -62,23 +64,16 @@ use rmcp::model::CallToolRequestParams;
 use rmcp::model::ErrorCode;
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
-use std::sync::Mutex;
 
-use mnemra_host::schema::init::init;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 
-/// Serialises engine startup across concurrent test threads within this binary (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh embedded engine with startup serialised (A-11).
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
+// Engine acquisition: acquisition-migrated onto the shared-engine fixture (T3
+// sub-run, R-0030/R-0029) — each test acquires the binary-wide shared engine
+// via `shared_engine::shared_engine()` and provisions its own fresh, isolated
+// database via `EmbeddedEngine::provision_test_database()` (which already
+// runs the full schema-init sequence — no redundant `init()` call needed). No
+// per-file boot-serialization mutex needed — the fixture's own get-or-init
+// semantics guarantee exactly-once boot.
 
 /// Build a `Meta` carrying the auth token in the `token` key.
 /// Mirrors `token_meta` from `mcp_server.rs` (same open seam #1).
@@ -131,9 +126,12 @@ fn token_meta(token_str: &str) -> rmcp::model::Meta {
 async fn degraded_supervisor_blocks_call_tool() {
     // R-0007-h: degraded epoch-tick supervisor must block call_tool.
     // GIVEN: a slice-1 harness with a valid admin token
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = db.pool.clone();
 
     let harness = slice1_echo_harness(pool).await;
 
@@ -263,9 +261,12 @@ async fn degraded_supervisor_blocks_call_tool() {
 async fn healthy_supervisor_allows_call_tool() {
     // R-0007-h: healthy epoch-tick supervisor must NOT block call_tool.
     // GIVEN: a slice-1 harness with a valid admin token (no fault injection)
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = db.pool.clone();
 
     let harness = slice1_echo_harness(pool).await;
 

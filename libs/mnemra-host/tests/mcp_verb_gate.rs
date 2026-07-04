@@ -48,22 +48,29 @@
 //!   `echo.create`, `echo.get`, `echo.list`, `echo.update`, `echo.delete`, `echo.audit`
 //! `echo.audit` is declared but has no typed export (NON_DISPATCHABLE).
 //! `evil.create` is NOT declared — the probe for the new gate.
+//!
+//! # Engine acquisition
+//!
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` (which already
+//! runs the full schema-init sequence — no redundant `init()` call needed).
+//! No per-file boot-serialization mutex needed — the fixture's own
+//! get-or-init semantics guarantee exactly-once boot.
 
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 #[path = "common/slice1_harness.rs"]
 mod slice1_harness;
 
 use rmcp::model::{CallToolRequestParams, ErrorCode, Meta, RawContent};
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
-use std::sync::Mutex;
 
 use mnemra_host::auth::token::{AdminToken, generate, hash};
-use mnemra_host::schema::init::init;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 use uuid::Uuid;
-
-/// Serialises engine startup across concurrent test threads within this binary (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
 
 /// Seed a read_observer-scoped token into `admin_tokens` and return the raw AdminToken.
 ///
@@ -84,16 +91,6 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> Ad
     .await
     .expect("seed read_observer token");
     token
-}
-
-/// Start a fresh embedded engine with startup serialised (A-11).
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
 }
 
 /// Build a `Meta` carrying the auth token in the `token` key.
@@ -158,11 +155,13 @@ fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
 async fn unexposed_verb_rejected_pre_dispatch() {
     // R-0010-d, R-0019-c: verb not in manifest verbs list → rejected pre-dispatch.
     // GIVEN: a slice-1 harness with a valid admin token
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let harness = slice1_echo_harness(pool).await;
+    let harness = slice1_echo_harness(db.pool.clone()).await;
 
     // WHEN: call echo server with a verb NOT in the manifest verbs list.
     // `evil.create` is the probe — not declared in the echo manifest.
@@ -268,11 +267,13 @@ async fn unexposed_verb_rejected_pre_dispatch() {
 async fn exposed_but_undispatchable_verb_still_non_dispatchable() {
     // R-0010-d, R-0019-c: declared verb with no typed export → NON_DISPATCHABLE (-4003).
     // GIVEN: a slice-1 harness with a valid admin token
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let harness = slice1_echo_harness(pool).await;
+    let harness = slice1_echo_harness(db.pool.clone()).await;
 
     // WHEN: call echo.audit — declared in the manifest, but no typed export.
     let mut params = CallToolRequestParams::new("echo.audit");
@@ -343,11 +344,13 @@ async fn exposed_but_undispatchable_verb_still_non_dispatchable() {
 async fn exposed_dispatchable_verb_still_succeeds() {
     // R-0010-d, R-0019-c: declared + dispatchable verb → Ok with ULID (UNCHANGED).
     // GIVEN: a slice-1 harness with a valid admin token
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let harness = slice1_echo_harness(pool).await;
+    let harness = slice1_echo_harness(db.pool.clone()).await;
 
     // WHEN: call echo.create — declared in manifest AND has a typed export.
     let mut params = CallToolRequestParams::new("echo.create");
@@ -436,18 +439,20 @@ async fn exposed_dispatchable_verb_still_succeeds() {
 async fn readobserver_unexposed_read_verb_rejected() {
     // R-0010-d, R-0009-d: ReadObserver + evil.get (not in manifest) → -4005 from gate.
     // GIVEN: a slice-1 harness (real MnemraMcpServer with echo plugin loaded)
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // The harness seeds an admin token and exposes the connected client.
     // We seed a ReadObserver token separately against the same pool + workspace.
-    let harness = slice1_echo_harness(pool.clone()).await;
+    let harness = slice1_echo_harness(db.pool.clone()).await;
 
     // Seed a ReadObserver token for the same workspace as the harness.
     // Uses the harness's workspace_id (DEFAULT_WORKSPACE_ID) so the token
     // is valid for this server's auth lookup.
-    let ro_token = seed_read_observer_token(&pool, harness.workspace_id).await;
+    let ro_token = seed_read_observer_token(&db.pool, harness.workspace_id).await;
 
     // WHEN: call the server via the harness client, presenting the ReadObserver token.
     // Verb: evil.get — tail "get" is read-classified (passes role check);

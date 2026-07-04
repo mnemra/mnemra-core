@@ -15,18 +15,33 @@
 //! - Session lifecycle: open, list active, close.
 //! - Project CRUD: create, list, delete; plugin-scoping prerequisite.
 //!
-//! # Startup serialization (A-11)
+//! # Engine acquisition
 //!
-//! A `std::sync::Mutex` serializes engine startup within this binary. Each
-//! test starts its own engine instance.
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): every test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` — no per-file boot-serialization mutex
+//! needed. Most tests then provision a fresh, isolated database via
+//! `EmbeddedEngine::provision_test_database()`. The one test needing the
+//! OPPOSITE precondition, `builtin_init_order_fails_without_schema_init`,
+//! gets it for free: `shared_engine()` only boots the engine
+//! (`EmbeddedEngine::start()`) — it never runs `schema::init::init()` against
+//! the shared engine's own APP_DB (only `provision_test_database()` does
+//! that, and only for its own freshly-created per-test database). So that
+//! test reads `engine.pool` (bound to APP_DB) directly, with no
+//! `provision_test_database()` call — `builtins::init_all()` is read-only
+//! (`COUNT(*)` probes that fail fast on the first missing table), so this is
+//! safe with no pollution risk, and no other test in this binary touches
+//! APP_DB.
+
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 
 use mnemra_host::auth::role::Role;
 use mnemra_host::auth::workspace_ctx::WorkspaceCtx;
 use mnemra_host::builtins;
 use mnemra_host::builtins::agents::derive_agent_id;
-use mnemra_host::schema::init::{DEFAULT_WORKSPACE_ID, init};
+use mnemra_host::schema::init::DEFAULT_WORKSPACE_ID;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
 use uuid::Uuid;
 
 /// Construct an Admin `WorkspaceCtx` scoped to `workspace_id` for tests.
@@ -42,21 +57,6 @@ use uuid::Uuid;
 /// `tests/permissions.rs`.
 fn ctx_for(workspace_id: Uuid) -> WorkspaceCtx {
     WorkspaceCtx::new(workspace_id, Role::Admin, Uuid::new_v4())
-}
-
-/// Serializes engine startup across concurrent test threads (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh engine with startup serialized, then run schema init.
-async fn start_initialized_engine() -> EmbeddedEngine {
-    let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    let engine = EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres");
-    init(&engine, "vector")
-        .await
-        .expect("schema init must succeed before identity builtin tests");
-    engine
 }
 
 // ---------------------------------------------------------------------------
@@ -83,10 +83,14 @@ async fn start_initialized_engine() -> EmbeddedEngine {
 /// Validates the happy path: builtins ready → plugin load proceeds.
 #[tokio::test]
 async fn builtin_init_order_plugin_load_accepted_after_init_all() {
-    let engine = start_initialized_engine().await;
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // init_all() must succeed — all 7 builtin tables exist post schema init.
-    let ready = builtins::init_all(engine.pool.as_ref())
+    let ready = builtins::init_all(&db.pool)
         .await
         .expect("init_all must succeed after schema init");
 
@@ -103,11 +107,15 @@ async fn builtin_init_order_plugin_load_accepted_after_init_all() {
 /// not run (no `default` workspace exists).
 #[tokio::test]
 async fn builtin_init_order_fails_without_schema_init() {
-    let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    let engine = EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres");
-    // NOTE: deliberately NOT calling schema::init::init() here.
+    // Uses the shared engine's own APP_DB directly (no
+    // `provision_test_database()` call) — that is exactly the "schema init
+    // never ran" substrate this test needs: `shared_engine()` only boots the
+    // engine, it never runs `schema::init::init()` against APP_DB, and no
+    // other test in this binary reads or writes through `engine.pool`
+    // (every other test uses its own provisioned database). `init_all()`
+    // itself never writes (read-only COUNT(*) probes that fail fast on the
+    // first missing table), so probing APP_DB directly here is safe.
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
 
     let result = builtins::init_all(engine.pool.as_ref()).await;
 
@@ -182,8 +190,12 @@ fn builtins_are_host_code_not_sandboxed_r0002b() {
 /// derived id — succeeds and returns the agent row.
 #[tokio::test]
 async fn agent_canonical_registration_succeeds() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let user_id = Uuid::new_v4();
@@ -212,8 +224,12 @@ async fn agent_canonical_registration_succeeds() {
 /// R-0015-c: registration without a supplied id uses canonical derivation.
 #[tokio::test]
 async fn agent_registration_without_supplied_id_uses_canonical() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let user_id = Uuid::new_v4();
@@ -240,8 +256,12 @@ async fn agent_registration_without_supplied_id_uses_canonical() {
 /// This is the must-test correctness assertion for R-0015-c.
 #[tokio::test]
 async fn agent_identity_mismatch_returns_structured_error() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let user_id = Uuid::new_v4();
@@ -285,8 +305,12 @@ async fn agent_identity_mismatch_returns_structured_error() {
 /// AlreadyRegistered (idempotent, not silent overwrite).
 #[tokio::test]
 async fn agent_re_registration_returns_already_registered() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let user_id = Uuid::new_v4();
@@ -324,8 +348,12 @@ async fn agent_re_registration_returns_already_registered() {
 /// R-0015-a/h: create, list, and delete workspace lifecycle.
 #[tokio::test]
 async fn workspace_lifecycle_create_list_delete() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // Create a new workspace.
     let ws = builtins::workspaces::create(pool, "test-ws-lifecycle")
@@ -363,8 +391,12 @@ async fn workspace_lifecycle_create_list_delete() {
 /// R-0015-h: the `default` workspace cannot be deleted.
 #[tokio::test]
 async fn workspace_cannot_delete_default() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let result = builtins::workspaces::delete(pool, DEFAULT_WORKSPACE_ID).await;
 
@@ -386,8 +418,12 @@ async fn workspace_cannot_delete_default() {
 /// R-0015-b: register, get, and list users.
 #[tokio::test]
 async fn user_crud_round_trip() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // Register a user.
     let user = builtins::users::register(pool, "alice", Some("Alice Wonderland"))
@@ -419,8 +455,12 @@ async fn user_crud_round_trip() {
 /// R-0015-b: registering a duplicate username returns AlreadyExists.
 #[tokio::test]
 async fn user_duplicate_username_returns_error() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     builtins::users::register(pool, "bob", None)
         .await
@@ -446,8 +486,12 @@ async fn user_duplicate_username_returns_error() {
 /// R-0015-e: open, list active, and close a session.
 #[tokio::test]
 async fn session_lifecycle_open_list_close() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
     let user_id = Uuid::new_v4();
@@ -502,8 +546,12 @@ async fn session_lifecycle_open_list_close() {
 /// R-0015-g: create, list, and delete projects; plugin scoping prerequisite.
 #[tokio::test]
 async fn project_crud_round_trip_and_exists_check() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
 
@@ -557,8 +605,12 @@ async fn project_crud_round_trip_and_exists_check() {
 /// R-0015-g: duplicate project name in same workspace returns AlreadyExists.
 #[tokio::test]
 async fn project_duplicate_name_in_workspace_returns_error() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let workspace_id = DEFAULT_WORKSPACE_ID;
 
