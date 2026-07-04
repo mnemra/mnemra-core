@@ -395,7 +395,8 @@ The very-next-update phase after MVP cutover — net-new value beyond V0 workspa
 Each V0.1 entry starts `proposed` at this product altitude (this brief's intake locks the
 phase placement); each entry's own feature-altitude intake locks its frame+spec before
 build, promoting it to `designed` (see Designed §V0.1 for the entries that have — the
-retrieval cluster's four). Maintainer ruling 2026-05-20: V0 = workspace-replacement (no
+retrieval cluster's four plus the extensible reporting engine). Maintainer ruling
+2026-05-20: V0 = workspace-replacement (no
 regression); V0.1 = the core product promise activates plus operational follow-ups V0
 deliberately did not promise.
 
@@ -426,6 +427,12 @@ deliberately did not promise.
   Provenance: architecture-overview ELT subsystem (ADR-16) + product-intake refine 2026-05-20
   (OD-A resolved: distinct from `0.14.0`, deferred to V0.1).
 
+- **`1.3.0`+ (candidate) — Extensible reporting engine** — **promoted to `designed`
+  @ V0.1 / `1.3.0`+ (candidate)** (2026-07-04). See Designed §V0.1 for the live entry;
+  pointer retained so the `1.3.0`+ reporting-engine reference stays resolvable.
+  Provenance: reporting-engine spec (`docs/specs/2026-07-03-reporting-engine.md`, locked
+  2026-07-04; verify verdict passed_with_concerns).
+
 Future V0.1 increments (`1.3.0`+) land here as the "very-next-update" trigger fires for
 new capabilities.
 
@@ -440,9 +447,11 @@ references them as build-time dependencies, does not absorb them into its regist
 
 ### Designed
 
-A locked frame + locked spec exists. The retrieval cluster is this tier's first tenant:
-its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its
-four constituent entries below from `proposed`. Stated explicitly: the register does not
+A locked frame + locked spec exists. Two tenants: the retrieval cluster — its spec
+(`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four
+constituent entries below from `proposed` — and the extensible reporting engine — its
+spec (`docs/specs/2026-07-03-reporting-engine.md`) locked 2026-07-04, promoting the
+`1.3.0`+ (candidate) entry below from `proposed`. Stated explicitly: the register does not
 infer design completion beyond what a locked spec actually covers.
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
@@ -489,11 +498,27 @@ infer design completion beyond what a locked spec actually covers.
   `idea → proposed` promotion; retrieval-cluster spec
   (`docs/specs/2026-07-02-retrieval-cluster.md`, locked 2026-07-02) performed the
   `proposed → designed` promotion. *(ADDED 2026-07-02.)*
+- **`1.3.0`+ (candidate) — Extensible reporting engine.** One report surface backed by a
+  registry: canonical built-in reports (which ride their V0 capability-family increments
+  as workspace-fidelity content) plus declarative, runtime-added, **read-only** user
+  reports invoked via MCP (admin-CLI convenience secondary). Read-only execution is the
+  identity invariant (defense-in-depth, re-derived for the Postgres substrate); because
+  report queries are user-authored, the guard graduates from operator-mistake to
+  adversary — workspace isolation, the role matrix, and the provenance/policy-envelope
+  predicates must hold on a caller-written query, which is the Frame threat model's
+  headline boundary. Deliberately sequenced after `1.1.0`: the policy-envelope
+  enforcement machinery this surface must honor lands with the retrieval feature.
+  *Order: value activates once the measurement families hold data and the envelope
+  machinery exists.* Tier: `designed`. Provenance: reporting-engine intake (locked
+  2026-07-03) placed the entry at `proposed`; reporting-engine spec
+  (`docs/specs/2026-07-03-reporting-engine.md`, locked 2026-07-04) performed the
+  `proposed → designed` promotion (verify verdict passed_with_concerns). *(ADDED 2026-07-04.)*
 
 ### Committed
 
-`designed` plus a plan, release-bound. **Empty.** The retrieval cluster is now `designed`,
-but no feature has yet moved `designed → committed` (no committed-tier plan exists, and no
+`designed` plus a plan, release-bound. **Empty.** The retrieval cluster and the extensible
+reporting engine are now `designed`, but no feature has yet moved `designed → committed`
+(no committed-tier plan exists, and no
 release has a committed date) — consistent with the product's stated posture that a phase
 commits a date only when work is far enough along. Stated explicitly: the register does
 not over-claim commitment. An empty `committed` tier early in a project is the register
@@ -587,6 +612,15 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-04** — Reporting-engine spec locked
+  (`docs/specs/2026-07-03-reporting-engine.md`; verify verdict passed_with_concerns).
+  Register: `proposed → designed` promotion for the `1.3.0`+ (candidate) extensible
+  reporting engine — moved from Proposed §V0.1 into Designed §V0.1 (the tier's second
+  tenant, after the retrieval cluster), with a pointer-stub retained in Proposed §V0.1.
+  No Idea-section pointer is retargeted: the entry was born at `proposed` via the
+  2026-07-03 intake (not promoted from a Deferred D-item), so it never had one.
+  Register-promotion deferred to merge per the f0f570d direct+stubs convention (the
+  design branch's base predated main's post-retrieval-cluster register state).
 - **2026-07-02** — Retrieval-cluster spec locked
   (`docs/specs/2026-07-02-retrieval-cluster.md`). Register: `proposed → designed`
   promotion for the four clustered entries — `1.1.0` (`get_context_for` retrieval verb),
