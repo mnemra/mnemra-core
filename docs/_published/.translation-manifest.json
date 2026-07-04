@@ -140,12 +140,26 @@
       "source_sha256": "d2f60a22730f904fd8d89de2eeaf9f069460bb924093dfe2d09d75c2f61304ee",
       "translated_at": "2026-07-03T18:08:41Z"
     },
+    "adrs/P-0020-report-execution-context.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "24a0cb8a2aaf5e077c7579db11ab2f5b1aa5a38827f75e0203fdd35cb47425d0",
+      "translated_at": "2026-07-04T20:42:14Z"
+    },
+    "adrs/P-0021-report-definition-type.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "c408951119c0b092b40f5e09b5f6aa54fec0a2ecb6e6b4e5a412096855bd6f92",
+      "translated_at": "2026-07-04T20:42:14Z"
+    },
     "adrs/README.md": {
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "e4a1643c2a4dee3dc4c63e29329ea54e5625f93786362e527855cc7641899ce9",
-      "translated_at": "2026-07-03T18:08:41Z"
+      "source_sha256": "8791cdeaf7279dc6b518f6c748575a2c11b97869613aef50816ba24f8ae6ff99",
+      "translated_at": "2026-07-04T20:42:14Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
@@ -179,8 +193,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "172a272fd1e41accffa31aabcd2dd5e84ab93f9c8e78cb51a7596c2d34cb0533",
-      "translated_at": "2026-07-03T17:27:41Z"
+      "source_sha256": "ea3062638f957245a05d85bab5fce2bd902a4e6947856d2c353ece31ac8c229d",
+      "translated_at": "2026-07-04T20:42:14Z"
     },
     "intro.md": {
       "primary_audience": "human",
