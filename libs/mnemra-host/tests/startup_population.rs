@@ -65,17 +65,26 @@
 //! wrong-key and garbage-key cases. Both are `Err` — the test asserts only
 //! `.is_err()`, which is correct and sufficient. Forge must not weaken the
 //! Interpretation-B check to make the wrong-key path reach ed25519 math.
+//!
+//! # Engine acquisition
+//!
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): the one test that needs Postgres acquires the binary-wide
+//! shared engine via `shared_engine::shared_engine()` and provisions its own
+//! fresh, isolated database via `EmbeddedEngine::provision_test_database()`
+//! (which already runs the full schema-init sequence — no redundant `init()`
+//! call needed). No per-file boot-serialization mutex needed — the fixture's
+//! own get-or-init semantics guarantee exactly-once boot.
 
 // ---------------------------------------------------------------------------
 // Imports
 // ---------------------------------------------------------------------------
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use mnemra_host::auth::token::{generate, hash};
 use mnemra_host::mcp::server::MnemraMcpServer;
-use mnemra_host::schema::init::init;
 use mnemra_host::startup::populate_verified_pool;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 // StartupError is referenced via explicit type annotation to ensure it appears
@@ -88,23 +97,8 @@ use serde_json::json;
 use tokio::io::duplex;
 use uuid::Uuid;
 
-// ---------------------------------------------------------------------------
-// Startup serialisation lock (A-11 design decision)
-// ---------------------------------------------------------------------------
-
-/// Serialises embedded-Postgres engine startup across concurrent test threads
-/// within this binary. Mirrors the same lock in `mcp_slice1_e2e.rs` (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh embedded engine with startup serialised (A-11).
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 
 // ---------------------------------------------------------------------------
 // Signing fixture helpers (inlined from tests/signing_chain.rs — private fns
@@ -274,10 +268,13 @@ fn is_valid_ulid(s: &str) -> bool {
 /// the `is_ok()` assertion. Only a real `populate_verified_pool` that loads
 /// the echo component can satisfy both halves.
 ///
-/// # Engine lifetime
+/// # Engine acquisition
 ///
-/// The `engine` binding MUST remain in scope for the entire test — dropping it
-/// tears down the embedded Postgres. The pool is cloned (PgPool is Arc-backed).
+/// Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+/// R-0030/R-0029): acquires the binary-wide shared engine via
+/// `shared_engine::shared_engine()` and provisions its own fresh, isolated
+/// database via `EmbeddedEngine::provision_test_database()` (which already
+/// runs the full schema-init sequence).
 #[tokio::test]
 async fn verified_manifest_populates_pool_and_call_tool_dispatches() {
     // Build a synthetic signed manifest — on-disk manifest.toml has placeholder
@@ -320,11 +317,12 @@ async fn verified_manifest_populates_pool_and_call_tool_dispatches() {
     let plugin_pool = Arc::new(result.unwrap());
 
     // Build the embedded Postgres + schema to back the MCP server auth path
-    let engine = start_engine().await;
-    init(&engine, "vector")
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
         .await
-        .expect("schema init should succeed");
-    let pg_pool = engine.pool.as_ref().clone();
+        .expect("provision_test_database should succeed");
+    let pg_pool = db.pool.clone();
 
     // Seed an admin-scoped token for the default workspace (per-run, no literals)
     let admin_token = generate();
