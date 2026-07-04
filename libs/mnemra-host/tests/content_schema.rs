@@ -31,33 +31,28 @@
 //! failures against a missing `echo_fixture` table — not compile errors in this
 //! file.  A compile error in this file is a bug in this file.
 //!
-//! # Startup serialization
+//! # Engine acquisition
 //!
-//! A `std::sync::Mutex` serializes engine startup within this binary (A-11
-//! cross-binary archive-extraction race note from `postgres_engine.rs` applies
-//! here too). Each test starts its own engine instance.
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` (which already
+//! runs the full schema-init sequence — no redundant `init()` call needed).
+//! No per-file boot-serialization mutex needed — the fixture's own
+//! get-or-init semantics guarantee exactly-once boot.
 
-use mnemra_host::schema::init::init;
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
+
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
-
-/// Serializes engine startup across concurrent test threads (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
 
 /// The fixture artifact-type name Task 9 must register.
 ///
-/// After `init(&engine, "vector")` completes, the schema MUST contain a table
+/// After schema init completes (now run by
+/// `EmbeddedEngine::provision_test_database()`), the schema MUST contain a table
 /// named `FIXTURE_TYPE` created by the per-artifact-type table generator.
 /// Task 9 wires this registration into the `init()` path.
 const FIXTURE_TYPE: &str = "echo_fixture";
-
-/// Start a fresh engine with startup serialized.
-async fn start_engine() -> EmbeddedEngine {
-    let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 // ---------------------------------------------------------------------------
 // R-0001-a — C1 column set: id, workspace_id, type, frontmatter, body,
@@ -71,8 +66,11 @@ async fn start_engine() -> EmbeddedEngine {
 /// RED: table absent → 0 matching rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001a_c1_column_set() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // Column names required by R-0001-a for every artifact-type table.
     let required_columns: &[&str] = &[
@@ -98,7 +96,7 @@ async fn content_schema_r0001a_c1_column_set() {
         )
         .bind(FIXTURE_TYPE)
         .bind(*col)
-        .fetch_optional(engine.pool.as_ref())
+        .fetch_optional(&db.pool)
         .await
         .expect("information_schema.columns query failed");
 
@@ -116,8 +114,11 @@ async fn content_schema_r0001a_c1_column_set() {
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001a_workspace_id_not_null() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -127,7 +128,7 @@ async fn content_schema_r0001a_workspace_id_not_null() {
            AND column_name  = 'workspace_id'",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns nullability query failed");
 
@@ -149,8 +150,11 @@ async fn content_schema_r0001a_workspace_id_not_null() {
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001a_body_nullable() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT is_nullable
@@ -160,7 +164,7 @@ async fn content_schema_r0001a_body_nullable() {
            AND column_name  = 'body'",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns nullability query failed");
 
@@ -185,8 +189,11 @@ async fn content_schema_r0001a_body_nullable() {
 /// RED: table absent → 0 matching indexes → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001a_workspace_id_indexed() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // pg_indexes exposes the index definition; workspace_id must appear in it.
     let row: Option<(String,)> = sqlx::query_as(
@@ -197,7 +204,7 @@ async fn content_schema_r0001a_workspace_id_indexed() {
            AND indexdef   LIKE '%workspace_id%'",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("pg_indexes workspace_id query failed");
 
@@ -226,8 +233,11 @@ async fn content_schema_r0001a_workspace_id_indexed() {
 /// `jsonb` column) fails the matching assertion.
 #[tokio::test]
 async fn content_schema_t8_1_artifact_column_types() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // (column_name, expected information_schema.columns.data_type)
     let expected: &[(&str, &str)] = &[
@@ -247,7 +257,7 @@ async fn content_schema_t8_1_artifact_column_types() {
         )
         .bind(FIXTURE_TYPE)
         .bind(*col)
-        .fetch_optional(engine.pool.as_ref())
+        .fetch_optional(&db.pool)
         .await
         .expect("information_schema.columns data_type query failed");
 
@@ -275,8 +285,11 @@ async fn content_schema_t8_1_artifact_column_types() {
 /// composite key such as `(workspace_id, id)`.
 #[tokio::test]
 async fn content_schema_t8_1_primary_key_is_id_only() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let pk_columns: Vec<(String,)> = sqlx::query_as(
         "SELECT kcu.column_name
@@ -290,7 +303,7 @@ async fn content_schema_t8_1_primary_key_is_id_only() {
          ORDER BY kcu.ordinal_position",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_all(engine.pool.as_ref())
+    .fetch_all(&db.pool)
     .await
     .expect("primary-key column query failed");
 
@@ -320,8 +333,11 @@ async fn content_schema_t8_1_primary_key_is_id_only() {
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001b_migrated_from_is_dedicated_column() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String, String)> = sqlx::query_as(
         "SELECT column_name, data_type
@@ -331,7 +347,7 @@ async fn content_schema_r0001b_migrated_from_is_dedicated_column() {
            AND column_name  = 'migrated_from'",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query for migrated_from failed");
 
@@ -348,8 +364,11 @@ async fn content_schema_r0001b_migrated_from_is_dedicated_column() {
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001b_migrated_at_is_dedicated_column() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String, String)> = sqlx::query_as(
         "SELECT column_name, data_type
@@ -359,7 +378,7 @@ async fn content_schema_r0001b_migrated_at_is_dedicated_column() {
            AND column_name  = 'migrated_at'",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query for migrated_at failed");
 
@@ -381,8 +400,11 @@ async fn content_schema_r0001b_migrated_at_is_dedicated_column() {
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001b_frontmatter_version_is_dedicated_column() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String, String)> = sqlx::query_as(
         "SELECT column_name, data_type
@@ -392,7 +414,7 @@ async fn content_schema_r0001b_frontmatter_version_is_dedicated_column() {
            AND column_name  = 'frontmatter_version'",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.columns query for frontmatter_version failed");
 
@@ -412,9 +434,12 @@ async fn content_schema_r0001b_frontmatter_version_is_dedicated_column() {
 /// version, so the row is complete without any out-of-band column write.
 #[tokio::test]
 async fn content_schema_r0001b_frontmatter_carries_version_self_describing() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // INSERT supplying ONLY the JSONB (no explicit frontmatter_version column);
     // the JSONB is the interchange format and carries the version itself.
@@ -459,9 +484,12 @@ async fn content_schema_r0001b_frontmatter_carries_version_self_describing() {
 ///    column) — the column structurally cannot be set independently of the JSONB.
 #[tokio::test]
 async fn content_schema_r0001b_frontmatter_version_column_is_no_drift_projection() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // Insert a row carrying version 5 in the JSONB.
     // AssertSqlSafe: FIXTURE_TYPE is a crate constant, not user input.
@@ -544,9 +572,12 @@ async fn content_schema_r0001b_frontmatter_version_column_is_no_drift_projection
 /// future DDL change cannot silently weaken it (e.g. let a malformed row land).
 #[tokio::test]
 async fn content_schema_r0001b_nonnumeric_version_is_rejected_fail_closed() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // `frontmatter_version` is a non-numeric string; the generated ::bigint cast
     // rejects it at insert. (No explicit frontmatter_version column — it is
@@ -612,8 +643,11 @@ async fn content_schema_r0001b_nonnumeric_version_is_rejected_fail_closed() {
 /// accidentally pass today because `42P01` is also an error.
 #[tokio::test]
 async fn content_schema_r0001c_check_rejects_frontmatter_missing_id() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // Frontmatter JSONB has `frontmatter_version` but NOT `id` — must be rejected.
     // `frontmatter_version` is a GENERATED column (R-0001-b projection of the
@@ -629,7 +663,7 @@ async fn content_schema_r0001c_check_rejects_frontmatter_missing_id() {
          )",
         table = FIXTURE_TYPE
     )))
-    .execute(engine.pool.as_ref())
+    .execute(&db.pool)
     .await;
 
     assert!(
@@ -660,8 +694,11 @@ async fn content_schema_r0001c_check_rejects_frontmatter_missing_id() {
 /// GREEN: table present with CHECK constraint → 23514 → pass.
 #[tokio::test]
 async fn content_schema_r0001c_check_rejects_frontmatter_missing_frontmatter_version() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // Frontmatter JSONB has `id` but NOT `frontmatter_version` — must be rejected
     // by the CHECK (23514). The design relies on there being NO NOT NULL
@@ -682,7 +719,7 @@ async fn content_schema_r0001c_check_rejects_frontmatter_missing_frontmatter_ver
          )",
         table = FIXTURE_TYPE
     )))
-    .execute(engine.pool.as_ref())
+    .execute(&db.pool)
     .await;
 
     assert!(
@@ -718,8 +755,11 @@ async fn content_schema_r0001c_check_rejects_frontmatter_missing_frontmatter_ver
 /// RED: table absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001d_per_type_table_exists() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT table_name
@@ -728,7 +768,7 @@ async fn content_schema_r0001d_per_type_table_exists() {
            AND table_name   = $1",
     )
     .bind(FIXTURE_TYPE)
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("information_schema.tables query failed");
 
@@ -746,8 +786,11 @@ async fn content_schema_r0001d_per_type_table_exists() {
 /// RED: table or index absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001d_expression_index_status() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT indexname
@@ -758,7 +801,7 @@ async fn content_schema_r0001d_expression_index_status() {
     )
     .bind(FIXTURE_TYPE)
     .bind("%(frontmatter ->> 'status'::text)%")
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("pg_indexes status expression index query failed");
 
@@ -775,8 +818,11 @@ async fn content_schema_r0001d_expression_index_status() {
 /// RED: table or index absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001d_expression_index_priority() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT indexname
@@ -787,7 +833,7 @@ async fn content_schema_r0001d_expression_index_priority() {
     )
     .bind(FIXTURE_TYPE)
     .bind("%(frontmatter ->> 'priority'::text)%")
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("pg_indexes priority expression index query failed");
 
@@ -804,8 +850,11 @@ async fn content_schema_r0001d_expression_index_priority() {
 /// RED: table or index absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001d_expression_index_project_id() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT indexname
@@ -816,7 +865,7 @@ async fn content_schema_r0001d_expression_index_project_id() {
     )
     .bind(FIXTURE_TYPE)
     .bind("%(frontmatter ->> 'project_id'::text)%")
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("pg_indexes project_id expression index query failed");
 
@@ -833,8 +882,11 @@ async fn content_schema_r0001d_expression_index_project_id() {
 /// RED: table or index absent → 0 rows → assertion fails.
 #[tokio::test]
 async fn content_schema_r0001d_expression_index_parent_id() {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT indexname
@@ -845,7 +897,7 @@ async fn content_schema_r0001d_expression_index_parent_id() {
     )
     .bind(FIXTURE_TYPE)
     .bind("%(frontmatter ->> 'parent_id'::text)%")
-    .fetch_optional(engine.pool.as_ref())
+    .fetch_optional(&db.pool)
     .await
     .expect("pg_indexes parent_id expression index query failed");
 

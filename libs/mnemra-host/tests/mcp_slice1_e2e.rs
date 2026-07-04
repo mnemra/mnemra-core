@@ -50,45 +50,34 @@
 //! Text is accessed via `content.raw` → `RawContent::Text(RawTextContent { text, .. })`.
 //! This test extracts and asserts on `.text` from the first text content item.
 //!
-//! # Engine lifetime
+//! # Engine acquisition
 //!
-//! Each test starts its own embedded Postgres via `start_engine()`. The `engine`
-//! binding MUST remain in scope for the entire test — dropping it tears down the
-//! embedded Postgres. The pool is cloned (PgPool is Arc-backed) and passed to the
-//! harness; the test holds the engine.
+//! Acquisition-migrated onto the shared-engine fixture (T3 sub-run,
+//! R-0030/R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` (which already
+//! runs the full schema-init sequence — no redundant `init()` call needed).
+//! No per-file boot-serialization mutex needed — the fixture's own
+//! get-or-init semantics guarantee exactly-once boot.
 
 // Wire in only the slice1_harness sub-module — avoids compiling the storage
 // contract helpers (which assert on types unrelated to MCP) into this binary
 // and avoids unused-symbol warnings across test binaries.
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 #[path = "common/slice1_harness.rs"]
 mod slice1_harness;
 
 use mnemra_host::auth::token::{generate, hash};
-use mnemra_host::schema::init::init;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 use rmcp::model::{CallToolRequestParams, Meta, RawContent};
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
-use std::sync::Mutex;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// Serialises engine startup across concurrent test threads within this binary.
-/// Mirrors the same lock in `mcp_server.rs` (A-11 design decision).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh embedded engine with startup serialised (A-11).
-async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 /// Build a `Meta` carrying the auth token in the `token` key.
 /// Mirrors `token_meta` from `mcp_server.rs` (same open seam #1 — per-request
@@ -152,16 +141,18 @@ fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
 #[tokio::test]
 async fn echo_create_returns_well_formed_ulid_and_get_round_trips() {
     // GIVEN: a slice-1 harness
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
     // A recognisable test string that round-trips through the create→get path.
     // Using a fresh Uuid ensures the payload is unique per test run; the test
     // asserts the exact string is present in the get response.
     let recognisable_payload = format!("slice1_e2e_payload_{}", Uuid::new_v4());
 
-    let harness = slice1_echo_harness(pool).await;
+    let harness = slice1_echo_harness(db.pool.clone()).await;
 
     // WHEN: call echo.create with the recognisable payload
     let mut create_params = CallToolRequestParams::new("echo.create");
@@ -271,11 +262,13 @@ async fn echo_create_returns_well_formed_ulid_and_get_round_trips() {
 #[tokio::test]
 async fn cross_workspace_get_returns_none() {
     // GIVEN: a slice-1 harness for workspace A
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let pool = engine.pool.as_ref().clone();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
 
-    let harness = slice1_echo_harness(pool.clone()).await;
+    let harness = slice1_echo_harness(db.pool.clone()).await;
 
     // Create an artifact in workspace A
     let recognisable_payload = format!("workspace_isolation_payload_{}", Uuid::new_v4());
@@ -321,7 +314,7 @@ async fn cross_workspace_get_returns_none() {
     .bind(token_b_hash.as_bytes())
     .bind(workspace_b_id)
     .bind(&vec!["admin".to_owned()])
-    .execute(&pool)
+    .execute(&db.pool)
     .await
     .expect("INSERT workspace-B admin token failed");
 
