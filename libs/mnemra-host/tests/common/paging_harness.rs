@@ -22,39 +22,44 @@
 //! right-reason RED for every walk/boundary test, AND a plan-scope gap: the
 //! `server.rs` result-mapping change is in **no** GREEN task's Files list (T16 lists
 //! only `component.rs`). Flagged to Puck in the completion report.
+//!
+//! # Engine acquisition
+//!
+//! Acquisition-migrated onto the shared-engine fixture (tier-2 T5 sub-run,
+//! R-0030/R-0029 — completes the 15-site set): [`setup_in_workspace`] acquires
+//! the binary-wide shared engine via `shared_engine::shared_engine()` and
+//! provisions its own fresh, isolated database via
+//! `EmbeddedEngine::provision_test_database()` (which already runs the full
+//! schema-init sequence — no redundant `init()` call needed). No per-file
+//! boot-serialization mutex needed — the fixture's own get-or-init semantics
+//! guarantee exactly-once boot.
 
 #![allow(dead_code)]
+
+// This file itself lives in `tests/common/` (it is pulled into each consumer
+// binary via `#[path = "common/paging_harness.rs"]`), so a `#[path]` written
+// HERE resolves relative to `tests/common/` — the bare filename, not
+// `common/shared_engine.rs` (that form is correct only from a `tests/*.rs`
+// includer's own directory, e.g. `admin_token.rs`).
+#[path = "shared_engine.rs"]
+mod shared_engine;
 
 use mnemra_host::auth::token::{AdminToken, generate, hash};
 use mnemra_host::mcp::server::{ECHO_PLUGIN_NAME, MnemraMcpServer};
 use mnemra_host::plugin::pool::PluginPool;
-use mnemra_host::schema::init::init;
-use mnemra_host::storage::postgres::engine::EmbeddedEngine;
+use mnemra_host::storage::postgres::engine::{EmbeddedEngine, TestDatabase};
 use rmcp::model::{CallToolRequestParams, CallToolResult, Meta};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::io::duplex;
 use uuid::Uuid;
 use wasmtime::component::Component;
 
-/// Serializes embedded-Postgres startup across concurrent test threads (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
 // ---------------------------------------------------------------------------
-// Engine + MCP wiring (mirrors tests/mcp_server.rs — the proven list harness).
+// MCP wiring (mirrors tests/mcp_server.rs — the proven list harness).
 // ---------------------------------------------------------------------------
-
-/// Start a fresh embedded engine with startup serialized.
-pub async fn start_engine() -> EmbeddedEngine {
-    {
-        let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    }
-    EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres")
-}
 
 /// Seed an admin-role token into `admin_tokens`; return the raw token for `_meta`.
 pub async fn seed_admin_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> AdminToken {
@@ -103,10 +108,11 @@ pub fn echo_plugin_pool() -> Arc<PluginPool> {
     Arc::new(pool)
 }
 
-/// A connected fixture: an embedded engine, a running MCP server over an in-process
-/// duplex transport, an rmcp client, and one seeded admin token + its workspace.
+/// A connected fixture: a shared-engine-provisioned per-test database, a running
+/// MCP server over an in-process duplex transport, an rmcp client, and one seeded
+/// admin token + its workspace.
 pub struct Setup {
-    pub engine: EmbeddedEngine,
+    pub db: TestDatabase,
     pub client: RunningService<RoleClient, ()>,
     pub server_handle: tokio::task::JoinHandle<()>,
     pub token: AdminToken,
@@ -116,7 +122,7 @@ pub struct Setup {
 impl Setup {
     /// The live `PgPool` (for direct-SQL seeding).
     pub fn pool(&self) -> &sqlx::PgPool {
-        self.engine.pool.as_ref()
+        &self.db.pool
     }
 
     /// Graceful shutdown — cancel the client, join the server task.
@@ -126,14 +132,18 @@ impl Setup {
     }
 }
 
-/// Start engine + init schema + seed one admin token + connect a client.
-/// `workspace_id` lets tenant-isolation tests pick an explicit workspace.
+/// Acquire the shared engine + a fresh per-test database, seed one admin token,
+/// and connect a client. `workspace_id` lets tenant-isolation tests pick an
+/// explicit workspace.
 pub async fn setup_in_workspace(workspace_id: Uuid) -> Setup {
-    let engine = start_engine().await;
-    init(&engine, "vector").await.expect("init should succeed");
-    let token = seed_admin_token(engine.pool.as_ref(), workspace_id).await;
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let token = seed_admin_token(&db.pool, workspace_id).await;
 
-    let server = MnemraMcpServer::new(engine.pool.as_ref().clone(), echo_plugin_pool());
+    let server = MnemraMcpServer::new(db.pool.clone(), echo_plugin_pool());
     let (server_transport, client_transport) = duplex(8192);
     let server_handle = tokio::spawn(async move {
         match serve_server(server, server_transport).await {
@@ -148,7 +158,7 @@ pub async fn setup_in_workspace(workspace_id: Uuid) -> Setup {
         .expect("client init failed");
 
     Setup {
-        engine,
+        db,
         client,
         server_handle,
         token,

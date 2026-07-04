@@ -85,7 +85,7 @@ sign-ceremony key wasm manifest:
 # No recipe has --fix side effects.
 # ---------------------------------------------------------------------------
 
-# PG-touching integration test binaries (15 members).
+# PG-touching integration test binaries (17 members).
 # Defined once; all three verify-* recipes reference this variable so the list
 # stays in sync (R-0022: identical serialization directive across all recipes).
 # These binaries run at --test-threads 1 to prevent concurrent embedded-Postgres
@@ -93,7 +93,15 @@ sign-ceremony key wasm manifest:
 # startup_run_full (T5, #1992, R-0022-a): both scenarios reach real
 # start_embedded() (the happy path completes it; the builtin-init injection
 # fires after storage init succeeds), so it belongs here.
-PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
+# artifact_list_paging / artifact_list_paging_whitebox (tier-2 T5, R-0031 AC1):
+# both construct an engine via the shared-engine fixture through
+# tests/common/paging_harness.rs, so they inherit the same --test-threads 1
+# serialization as every other PG member (R-0034). The whitebox binary is
+# crate-level `#![cfg(feature = "test-hooks")]`-gated — it stays in this
+# shared, feature-agnostic list rather than a feature-scoped side list (a
+# side list would break R-0033): structurally zero-test (green) under
+# verify-test / verify-coverage, meaningfully active under verify-test-hooks.
+PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
 # Non-PG integration test binaries (16 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
@@ -164,17 +172,44 @@ verify-test: plugin
 # Depends on `plugin` for the same wasm-artifact reason as verify-test.
 #
 # PG serialization mirrors verify-test (R-0022: identical directive in all three recipes).
+#
+# Non-vacuity check (R-0031 AC4, tier-2 T5 — Warden-hardening pattern, mirrors
+# verify-signing-root above): artifact_list_paging_whitebox is `#![cfg(feature =
+# "test-hooks")]`-gated crate-level — structurally ZERO tests under verify-test /
+# verify-coverage (no test-hooks feature), meaningfully active only here. A
+# broken cfg-gate, an accidentally-emptied suite, or a silent regression back to
+# 0 tests under test-hooks must FAIL this gate — not pass silently because
+# `cargo test` exits 0 on an empty run (the same false-green class
+# verify-signing-root already guards against). We capture a SCOPED rerun of
+# just this one binary (same shape as verify-signing-root's single-test
+# invocation) so the pass count checked is unambiguously this binary's own,
+# not a count borrowed from the combined PG_TEST_FLAGS run above.
 verify-test-hooks: plugin
     #!/usr/bin/env bash
     set -euo pipefail
     if cargo test -p mnemra-host --features test-hooks {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
         && cargo test -p mnemra-host --features test-hooks {{NONPG_TEST_FLAGS}} 2>&1 \
         && cargo test -p mnemra-host --features test-hooks --lib 2>&1; then
-        echo "GATE test-hooks PASS"
+        :
     else
         echo "GATE test-hooks FAIL"
         exit 1
     fi
+    set +e
+    wb_output="$(cargo test -p mnemra-host --features test-hooks --test artifact_list_paging_whitebox -- --test-threads 1 2>&1)"
+    wb_code=$?
+    set -e
+    echo "$wb_output"
+    if [[ "$wb_code" -ne 0 ]]; then
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$wb_output"; then
+        echo "artifact_list_paging_whitebox non-vacuity check failed: no non-zero pass count found (R-0031 AC4)"
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+    echo "GATE test-hooks PASS"
 
 # Verify: coverage (emit number; no threshold gate at scaffold stage)
 # Depends on `plugin` for the same wasm-artifact reason as verify-test.
