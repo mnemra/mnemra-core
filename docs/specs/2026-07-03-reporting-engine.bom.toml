@@ -13,3 +13,41 @@ locked_at = 2026-07-03T19:54:20Z
 
 [audit_chain.frame.generated_against]
 intent_version = "eab0553635904e025f6e97ce3242a409d902f0e7"
+
+[audit_chain.spec]
+ref = "docs/specs/2026-07-03-reporting-engine.md"
+version = "932fe23a6c5ceb0fe3ffa298a0284f967291605f"
+internal_conformance = "pass"
+locked_at = 2026-07-04T18:00:40Z
+
+[audit_chain.spec.generated_against]
+intent_version = "eab0553635904e025f6e97ce3242a409d902f0e7"
+frame_version = "871441da32d9cbbb799ac7ea96c3b0806b40f196"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true
+
+# Consumed-contract pin (spec R-0049-f; Frame OC-11/D4 firing instrument): the
+# retrieval-cluster contract surface this spec designs against. A reshape of the
+# pinned R-IDs fails this hash comparison at the designed->committed freshness
+# re-check and fires the D4 re-derivation before implementation proceeds.
+[consumed_contracts.retrieval-cluster]
+ref = "docs/specs/2026-07-02-retrieval-cluster.md"
+version = "0b948ea22ef77ffd122a9aec3700b5bdeb2098a5"
+scope = "R-0025 + R-0026 + R-0025-g"
