@@ -158,8 +158,8 @@
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "8791cdeaf7279dc6b518f6c748575a2c11b97869613aef50816ba24f8ae6ff99",
-      "translated_at": "2026-07-04T20:42:14Z"
+      "source_sha256": "e4491beb1e7062590fa9e8430cf676722a17857b49e8b73f150959f12d3fbf4b",
+      "translated_at": "2026-07-05T01:45:07Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
