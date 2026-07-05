@@ -3,13 +3,6 @@
 //! Exercises the same two invariants from `common` against the Postgres adapter
 //! backed by the embedded engine (`postgresql_embedded`).
 //!
-//! Each test starts its own embedded engine.  A `std::sync::Mutex` serialises
-//! the startup phase so concurrent test threads do not race on archive
-//! extraction or pgvector download — both of which are non-idempotent under
-//! concurrent access.  After startup, each engine runs independently on its
-//! own ephemeral port; the unique `WorkspaceId` values per test prevent data
-//! interference.
-//!
 //! # Invariants under test
 //!
 //! **A — Atomic multi-write:**
@@ -20,44 +13,52 @@
 //! - Cross-workspace read returns zero rows.
 //! - Cross-workspace write does not mutate the target workspace's rows.
 //!
+//! # Engine acquisition (Tier-2 T4, R-0037/R-0030/R-0029)
+//!
+//! Acquisition-migrated onto the shared-engine fixture: each test acquires
+//! the binary-wide shared engine via `shared_engine::shared_engine()` and
+//! provisions its own fresh, isolated database via
+//! `EmbeddedEngine::provision_test_database()` — no per-file
+//! boot-serialization mutex needed. The fixture's own get-or-init semantics
+//! guarantee exactly-once boot; the per-file boot-serialization mutex
+//! previously here is retired as vestigial (R-0029).
+//!
+//! `PostgresStorage` is now pool-injected (R-0037: `PostgresStorage` is a pure
+//! pool adapter and no longer boots or owns an engine): `start()` bootstraps
+//! the `records` table on the provisioned database's pool via
+//! `postgres::bootstrap_records_table` — the SAME helper the production
+//! composition root (`mnemra_host.rs`) calls, so both stay in sync — then
+//! hands the pool to `PostgresStorage::new`. Assertions below are unchanged
+//! from the pre-migration version.
+//!
 //! # Known residual risks
 //!
-//! **A-10 — zombie postmaster on test panic:**
-//! See `postgres_engine.rs` module-level doc for the full analysis.  The same
-//! residual risk applies here: SIGKILL or async-drop failure can leave orphaned
-//! postmaster processes.  Accepted at Gate A.
-//!
-//! **A-11 — cross-binary archive-extraction race:**
-//! `STARTUP_LOCK` here and the one in `postgres_engine.rs` are independent
-//! per-binary mutexes.  Under `cargo test --workspace` (sequential binary
-//! scheduling by default) they do not race.  If parallel binary execution is
-//! enabled, the no-dep fix is consolidating both Postgres test binaries into one.
-//! Current CI posture (`cargo test --workspace`) is safe.  Deferred to a
-//! follow-up task.
-//!
 //! **A-12 — temp data-dir leak on SIGKILL:**
-//! Same posture as `postgres_engine.rs`.  Accepted at Gate A.
+//! See `postgres_engine.rs` module-level doc for the full analysis. Same
+//! posture here: SIGKILL bypasses the shared-engine fixture's `atexit`
+//! teardown, which can leave orphaned postmaster processes / temp data dirs.
+//! Accepted at Gate A.
 
 mod common;
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 
-use mnemra_host::storage::postgres::PostgresStorage;
-use std::sync::Mutex;
+use mnemra_host::storage::postgres::engine::EmbeddedEngine;
+use mnemra_host::storage::postgres::{self, PostgresStorage};
+use std::sync::Arc;
 
-/// Serialises engine startup across concurrent test threads.
-///
-/// `postgresql_embedded` archive extraction and `postgresql_extensions` package
-/// download are not safe to run concurrently from the same process.  Holding
-/// this lock during `start_embedded()` makes startups sequential while still
-/// allowing data-path operations to run fully in parallel once started.
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh `PostgresStorage` with serialised engine startup.
+/// Start a fresh `PostgresStorage` against a freshly-provisioned, isolated
+/// test database on the binary-wide shared engine.
 async fn start() -> PostgresStorage {
-    let _guard = STARTUP_LOCK.lock().expect("startup lock poisoned");
-    PostgresStorage::start_embedded()
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
         .await
-        .expect("failed to start embedded Postgres")
-    // _guard released here: startup finished, next test may now start its engine.
+        .expect("provision_test_database should succeed");
+    postgres::bootstrap_records_table(&db.pool)
+        .await
+        .expect("bootstrap_records_table should succeed");
+    PostgresStorage::new(Arc::new(db.pool))
 }
 
 // ---------------------------------------------------------------------------

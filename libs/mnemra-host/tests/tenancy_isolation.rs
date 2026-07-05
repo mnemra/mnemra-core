@@ -65,33 +65,26 @@
 //! sufficient — no `workspaces::create` prerequisite, so a failure here is a
 //! tenancy failure, never a wrong-reason FK violation.
 //!
-//! # Startup serialization (A-11)
+//! # Engine acquisition
 //!
-//! A `std::sync::Mutex` serializes engine startup within this binary, matching
-//! `tests/identity_builtins.rs`.
+//! Acquisition-migrated onto the shared-engine fixture (T4, R-0037/R-0030/
+//! R-0029): each test acquires the binary-wide shared engine via
+//! `shared_engine::shared_engine()` and provisions its own fresh, isolated
+//! database via `EmbeddedEngine::provision_test_database()` (which runs the
+//! same schema-init sequence the old per-file `init(&engine, "vector")` call
+//! did) — no per-file boot-serialization mutex needed. The fixture's own
+//! get-or-init semantics guarantee exactly-once boot; the per-file
+//! boot-serialization mutex previously here is retired as vestigial
+//! (R-0029). Assertions below are unchanged from the pre-migration version.
+
+#[path = "common/shared_engine.rs"]
+mod shared_engine;
 
 use mnemra_host::auth::role::Role;
 use mnemra_host::auth::workspace_ctx::WorkspaceCtx;
 use mnemra_host::builtins;
-use mnemra_host::schema::init::init;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
 use uuid::Uuid;
-
-/// Serializes engine startup across concurrent test threads (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
-
-/// Start a fresh engine with startup serialized, then run schema init.
-async fn start_initialized_engine() -> EmbeddedEngine {
-    let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    let engine = EmbeddedEngine::start()
-        .await
-        .expect("failed to start embedded Postgres");
-    init(&engine, "vector")
-        .await
-        .expect("schema init must succeed before tenancy isolation tests");
-    engine
-}
 
 /// Construct an Admin `WorkspaceCtx` scoped to `workspace_id` for tests.
 ///
@@ -116,8 +109,12 @@ fn ctx_for(workspace_id: Uuid) -> WorkspaceCtx {
 /// (or a raw cross-tenant query) would leak B's row into A's view.
 #[tokio::test]
 async fn agents_list_by_workspace_excludes_other_workspace_rows() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     // Two distinct tenants.
     let ws_a = Uuid::new_v4();
@@ -164,8 +161,12 @@ async fn agents_list_by_workspace_excludes_other_workspace_rows() {
 /// (e.g. a hard-coded constant) cannot pass.
 #[tokio::test]
 async fn agents_list_by_workspace_is_symmetric_isolation() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -209,8 +210,12 @@ async fn agents_list_by_workspace_is_symmetric_isolation() {
 /// only A.
 #[tokio::test]
 async fn agents_register_scopes_write_to_ctx_workspace() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -248,8 +253,12 @@ async fn agents_register_scopes_write_to_ctx_workspace() {
 /// THEN the result contains A's session and DOES NOT contain B's session.
 #[tokio::test]
 async fn sessions_list_active_excludes_other_workspace_rows() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -294,8 +303,12 @@ async fn sessions_list_active_excludes_other_workspace_rows() {
 ///   workspace B's active list.
 #[tokio::test]
 async fn sessions_open_scopes_write_to_ctx_workspace() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -342,8 +355,12 @@ async fn sessions_open_scopes_write_to_ctx_workspace() {
 /// the row in the wrong tenant.
 #[tokio::test]
 async fn projects_create_scopes_write_to_ctx_workspace() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -379,8 +396,12 @@ async fn projects_create_scopes_write_to_ctx_workspace() {
 /// A ctx-ignoring (or raw cross-tenant) query would leak B's row into A's view.
 #[tokio::test]
 async fn projects_list_by_workspace_excludes_other_workspace_rows() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -425,8 +446,12 @@ async fn projects_list_by_workspace_excludes_other_workspace_rows() {
 /// existence of A's project to a foreign tenant.
 #[tokio::test]
 async fn projects_exists_is_false_cross_tenant() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -473,8 +498,12 @@ async fn projects_exists_is_false_cross_tenant() {
 /// success, so a predicate-less signature swap fails here.
 #[tokio::test]
 async fn workspace_b_cannot_delete_workspace_a_project() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
@@ -544,8 +573,12 @@ async fn workspace_b_cannot_delete_workspace_a_project() {
 /// swap fails here.
 #[tokio::test]
 async fn workspace_b_cannot_close_workspace_a_session() {
-    let engine = start_initialized_engine().await;
-    let pool = engine.pool.as_ref();
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool = &db.pool;
 
     let ws_a = Uuid::new_v4();
     let ws_b = Uuid::new_v4();
