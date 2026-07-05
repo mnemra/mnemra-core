@@ -49,5 +49,5 @@ applicable = true
 # re-check and fires the D4 re-derivation before implementation proceeds.
 [consumed_contracts.retrieval-cluster]
 ref = "docs/specs/2026-07-02-retrieval-cluster.md"
-version = "0b948ea22ef77ffd122a9aec3700b5bdeb2098a5"
+version = "c2d196f715ccd4c1b0a27058d6e416b3764cd4f1"  # re-pinned 2026-07-05 at the A1 amendment lock (#2104): mechanical — the A1 diff verified byte-untouched on R-0025/R-0026/R-0025-g across 4 review rounds; no D4 re-derivation
 scope = "R-0025 + R-0026 + R-0025-g"
