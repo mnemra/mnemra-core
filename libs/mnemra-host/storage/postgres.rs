@@ -41,7 +41,6 @@ pub mod engine;
 
 use super::{Record, Storage, Transaction, WorkspaceId};
 use async_trait::async_trait;
-use engine::EmbeddedEngine;
 use sqlx::PgPool;
 use std::{collections::HashMap, error::Error, sync::Arc};
 
@@ -49,20 +48,32 @@ use std::{collections::HashMap, error::Error, sync::Arc};
 // PostgresStorage
 // ---------------------------------------------------------------------------
 
-/// Postgres-backed storage backend using the embedded engine.
+/// Postgres-backed storage backend, injected with an already-provisioned pool.
 ///
-/// The `pool` is authenticated as the `mnemra_app` ordinary role.
-/// The engine is wrapped in an `Arc` so `PostgresStorage` is cheaply
-/// `Clone` — sharing the engine and pool across the clone boundary.
-/// The embedded Postgres server stays alive as long as any clone exists.
+/// `PostgresStorage` is a pure adapter over `pool` — it owns no engine
+/// lifecycle (Tier-2 T4 refactor, R-0037). The composition root (production:
+/// `mnemra_host::run_with`; tests: `tests/storage_contract_postgres.rs`) boots
+/// the embedded engine, runs schema init, bootstraps the `records` table via
+/// [`bootstrap_records_table`], and only then injects the resulting pool here
+/// — production and tests build a `PostgresStorage` the same way. `pool` is
+/// wrapped in `Arc` so `PostgresStorage` is cheaply `Clone`, sharing the same
+/// pool across the clone boundary.
 #[derive(Clone)]
 pub struct PostgresStorage {
-    /// Embedded engine wrapped in Arc — kept alive and shared across clones.
-    _engine: Arc<EmbeddedEngine>,
     pool: Arc<PgPool>,
 }
 
 impl PostgresStorage {
+    /// Construct a `PostgresStorage` over an already-provisioned pool.
+    ///
+    /// The SOLE public constructor. The caller is responsible for having
+    /// already booted the engine, run schema init, and bootstrapped the
+    /// `records` table (via [`bootstrap_records_table`]) on `pool` — this
+    /// constructor performs no bring-up of its own.
+    pub fn new(pool: Arc<PgPool>) -> Self {
+        PostgresStorage { pool }
+    }
+
     /// Return a reference to the underlying connection pool.
     ///
     /// Primarily used by tests that need to run raw SQL against the
@@ -70,50 +81,36 @@ impl PostgresStorage {
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
+}
 
-    /// Return a reference to the embedded engine.
-    ///
-    /// Needed by production `run()` (T5, R-0022-d) to run
-    /// `schema::init::init(engine, "vector")`, which requires the
-    /// superuser path (`ensure_extension` / `create_least_privilege_roles`)
-    /// that `PostgresStorage` does not otherwise expose.
-    pub fn engine(&self) -> &EmbeddedEngine {
-        self._engine.as_ref()
-    }
-
-    /// Start the embedded Postgres engine and return a ready `PostgresStorage`.
-    ///
-    /// First invocation downloads Postgres binaries (~cold, several seconds).
-    /// Subsequent runs reuse the cached installation (~warm, sub-second startup).
-    ///
-    /// # Errors
-    ///
-    /// Propagates engine bring-up, extension-install, or connection errors.
-    pub async fn start_embedded() -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let engine = EmbeddedEngine::start().await?;
-        let pool = Arc::clone(&engine.pool);
-
-        // Bootstrap the records table (idempotent).
-        // A-16: workspace_id widened from BIGINT to UUID.
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS records (
-                workspace_id UUID    NOT NULL,
-                key          TEXT    NOT NULL,
-                value        BYTEA   NOT NULL,
-                PRIMARY KEY (workspace_id, key)
-            )
-            "#,
+/// Bootstrap the `records` table (idempotent) on `pool`.
+///
+/// The single place the ad-hoc `CREATE TABLE IF NOT EXISTS records` DDL
+/// lives — shared by the production composition root (`mnemra_host.rs`) and
+/// the test fixture path (`tests/storage_contract_postgres.rs`), so both
+/// callers stay in sync. Deliberately NOT folded into `V0_MIGRATIONS`
+/// (`schema::init::init`) — `records` is `PostgresStorage`'s own K/V staging
+/// table, not a V0 substrate table.
+///
+/// # A-16
+///
+/// `workspace_id` is UUID (widened from BIGINT at Task 7).
+pub async fn bootstrap_records_table(pool: &PgPool) -> Result<(), Box<dyn Error + Send + Sync>> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS records (
+            workspace_id UUID    NOT NULL,
+            key          TEXT    NOT NULL,
+            value        BYTEA   NOT NULL,
+            PRIMARY KEY (workspace_id, key)
         )
-        .execute(pool.as_ref())
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
-        Ok(PostgresStorage {
-            _engine: Arc::new(engine),
-            pool,
-        })
-    }
+    Ok(())
 }
 
 #[async_trait]

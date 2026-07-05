@@ -34,6 +34,7 @@ pub mod plugin;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // T5 (R-0022-a/-e) — production startup assembly surface.
@@ -72,8 +73,8 @@ pub const PLUGIN_LOAD_LOG_LINE: &str = "plugin load";
 /// default/production build (`tests/no_test_seams.rs` enforces this via a
 /// trybuild fixture). GREEN's injection-point contract:
 ///
-/// - `StorageInit`: at the storage-init step, *in place of* calling
-///   `PostgresStorage::start_embedded()` + schema init, fail with
+/// - `StorageInit`: at the storage-init step, *in place of* booting the
+///   embedded engine + schema init + `records` bootstrap, fail with
 ///   `RunError::Storage(..)`. `/health` is already bound (5a) and its
 ///   listener stays up answering not-ready after `run_with` returns `Err`.
 /// - `BuiltinInit`: after real storage init succeeds, at the builtin step,
@@ -157,20 +158,61 @@ impl RunConfig {
 /// Handle returned by a successful [`run_with`] (accept-last boundary).
 ///
 /// Owns whatever must stay alive for the constructed-but-not-serving host:
-/// the embedded storage engine, the verified pool, and the `/health`
-/// listener's liveness are all tied to this value (GREEN chooses the exact
-/// private representation — it must remain `Send`; the tests move it across
-/// a thread boundary). No serve-loop runs while it is held: T6 owns serving.
+/// the embedded storage engine, the pool adapter, the verified pool, and the
+/// `/health` listener's liveness are all tied to this value (GREEN chooses
+/// the exact private representation — it must remain `Send`; the tests move
+/// it across a thread boundary). No serve-loop runs while it is held: T6 owns
+/// serving.
+///
+/// # Field drop order (Tier-2 T4 refactor, R-0037)
+///
+/// `_storage` and `_server` each hold a clone of `_engine`'s pool. `_engine`
+/// owns the embedded Postgres process (moved out of `PostgresStorage`, which
+/// is a pure pool adapter as of this refactor); the process must outlive
+/// every pool-holding value that might still touch it during teardown. The
+/// order is enforced by the explicit `impl Drop` below (`take()`-before-
+/// `_engine`), not by field declaration order — reordering the fields listed
+/// above can no longer silently regress teardown. A newly added pool-holding
+/// field must join the `take()` list to get this guarantee — see the
+/// maintenance note on `impl Drop` below.
 pub struct RunHandle {
     /// The address the `/health` listener bound (may be OS-assigned).
     health_addr: SocketAddr,
-    /// Keeps the embedded Postgres engine — and the server process it
-    /// owns — alive for the handle's lifetime. The constructed server's
-    /// `PgPool` and `/health`'s detail body both depend on it staying up.
-    _storage: storage::postgres::PostgresStorage,
+    /// The pool adapter — holds a clone of `_engine.pool`. `Option` so
+    /// `impl Drop` can `take()` and drop it explicitly BEFORE `_engine` (see
+    /// field-order note above); `Some` from construction until drop.
+    _storage: Option<storage::postgres::PostgresStorage>,
     /// The constructed MCP server (accept-last: not yet served — T6 owns
-    /// the stdio serve-loop and extends this handle to reach it).
-    _server: mcp::server::MnemraMcpServer,
+    /// the stdio serve-loop and extends this handle to reach it). Also holds
+    /// a pool clone; `Option` for the same reason as `_storage` — dropped
+    /// explicitly BEFORE `_engine`. `serve_stdio` also `take()`s this to move
+    /// the server out for serving.
+    _server: Option<mcp::server::MnemraMcpServer>,
+    /// Keeps the embedded Postgres engine — and the server process it
+    /// owns — alive for the handle's lifetime. Composition-root-owned as of
+    /// the Tier-2 T4 refactor: `PostgresStorage` no longer boots or owns an
+    /// engine. Dropped last by `impl Drop`'s explicit ordering.
+    _engine: storage::postgres::engine::EmbeddedEngine,
+}
+
+/// Enforces the R-0037 teardown order structurally: `_storage` and `_server`
+/// are dropped explicitly, before `self`'s remaining fields (`_engine`) drop
+/// via the normal end-of-`drop` field teardown. `Option::take` makes the
+/// order independent of field declaration order.
+///
+/// Maintenance obligation: any new field that holds a clone of `_engine`'s
+/// pool must be added to this `take()` list. Leave it out and, if the field
+/// is declared after `_engine`, it drops too late — after the postmaster has
+/// already been torn down.
+impl Drop for RunHandle {
+    fn drop(&mut self) {
+        // Drop the pool-holding fields before `_engine` tears down the
+        // embedded postmaster they clone (R-0037). Explicit `take()` makes
+        // the order independent of field declaration order — a future
+        // reorder can no longer silently regress teardown.
+        drop(self._storage.take());
+        drop(self._server.take());
+    }
 }
 
 impl RunHandle {
@@ -184,11 +226,15 @@ impl RunHandle {
     /// MCP transport (R-0022-c).
     ///
     /// Consumes the handle: the `/health` listener thread and the embedded
-    /// storage engine this handle was keeping alive (`self._storage`) are no
-    /// longer owned by anyone once this returns. Only `self._server` is
-    /// moved out for serving; the remaining fields (notably `_storage`) stay
-    /// owned by `self` — and therefore alive — for this call's whole
-    /// duration, including across the `.await` below.
+    /// storage engine this handle was keeping alive (`self._engine`, and the
+    /// pool adapter `self._storage`) are no longer owned by anyone once this
+    /// returns. Only `self._server` is moved out for serving (via
+    /// `Option::take` — `RunHandle` implements `Drop`, so a field can no
+    /// longer be moved out of `self` by value); the remaining fields
+    /// (notably `_storage` and `_engine`) stay owned by `self` — and
+    /// therefore alive — for this call's whole duration, including across the
+    /// `.await` below. `self`'s `impl Drop` runs at the end of this method
+    /// (or on early return via `?`), after the `.await`s complete.
     ///
     /// Wires `self._server` to `rmcp::transport::io::stdio()` — the
     /// `(tokio::io::Stdin, tokio::io::Stdout)` pair that satisfies the
@@ -213,8 +259,12 @@ impl RunHandle {
     /// aborted (`tokio::task::JoinError`) — a per-request protocol error
     /// inside a handler is caught and returned to the peer by `rmcp`
     /// internals and never surfaces here.
-    pub async fn serve_stdio(self) -> Result<(), ServeError> {
-        let running = rmcp::service::serve_server(self._server, rmcp::transport::io::stdio())
+    pub async fn serve_stdio(mut self) -> Result<(), ServeError> {
+        let server = self
+            ._server
+            .take()
+            .expect("_server is Some from construction until drop");
+        let running = rmcp::service::serve_server(server, rmcp::transport::io::stdio())
             .await
             .map_err(|e| ServeError::Mcp(Box::new(e)))?;
         running
@@ -265,9 +315,9 @@ pub enum RunError {
     FileMode(startup::file_mode_check::FileModeError),
     /// 5a: the `/health` loopback listener could not be bound.
     HealthBind(health::HealthBindError),
-    /// 5c: storage init (`start_embedded()` + schema init) failed — the
-    /// server is never constructed; `/health` (already bound) reports
-    /// not-ready.
+    /// 5c: storage init (embedded-engine boot + `records` bootstrap + schema
+    /// init) failed — the server is never constructed; `/health` (already
+    /// bound) reports not-ready.
     Storage(Box<dyn std::error::Error + Send + Sync>),
     /// 5b-i: a builtin failed to initialize — no plugin load is attempted,
     /// no `PluginPool` is constructed.
@@ -336,24 +386,31 @@ pub async fn run_with(config: RunConfig) -> Result<RunHandle, RunError> {
         }
     });
 
-    // 5c (R-0022-d): storage pool sourced from `PostgresStorage::start_embedded()`,
-    // then schema init — both before builtins and before the server is
-    // constructed. Schema init needs `&EmbeddedEngine` (the superuser path
-    // for `ensure_extension` / `create_least_privilege_roles`), which
-    // `PostgresStorage::engine()` exposes.
+    // 5c (R-0022-d): boot the embedded engine, bootstrap the `records`
+    // table, then run schema init — all before builtins and before the
+    // server is constructed. Composition-root-owned as of the Tier-2 T4
+    // refactor (R-0037): `PostgresStorage` is a pure pool adapter and no
+    // longer boots or owns an engine, so the engine is booted directly HERE
+    // and the resulting pool is injected into `PostgresStorage::new`. Schema
+    // init needs `&EmbeddedEngine` directly (the superuser path for
+    // `ensure_extension` / `create_least_privilege_roles`).
     #[cfg(feature = "test-hooks")]
     if config.inject_failure == Some(InjectedFailure::StorageInit) {
         let injected: Box<dyn std::error::Error + Send + Sync> =
             "test-hooks: injected storage-init failure (InjectedFailure::StorageInit)".into();
         return Err(RunError::Storage(injected));
     }
-    let storage = storage::postgres::PostgresStorage::start_embedded()
+    let engine = storage::postgres::engine::EmbeddedEngine::start()
         .await
         .map_err(RunError::Storage)?;
-    schema::init::init(storage.engine(), "vector")
+    storage::postgres::bootstrap_records_table(engine.pool.as_ref())
+        .await
+        .map_err(RunError::Storage)?;
+    schema::init::init(&engine, "vector")
         .await
         .map_err(|e| RunError::Storage(Box::new(e)))?;
-    let pg_pool = storage.engine().pool.as_ref().clone();
+    let pg_pool = engine.pool.as_ref().clone();
+    let storage = storage::postgres::PostgresStorage::new(Arc::clone(&engine.pool));
 
     // 5b-i (R-0002-c): all seven builtins before any plugin load.
     #[cfg(feature = "test-hooks")]
@@ -413,8 +470,9 @@ pub async fn run_with(config: RunConfig) -> Result<RunHandle, RunError> {
 
     Ok(RunHandle {
         health_addr,
-        _storage: storage,
-        _server: server,
+        _storage: Some(storage),
+        _server: Some(server),
+        _engine: engine,
     })
 }
 
