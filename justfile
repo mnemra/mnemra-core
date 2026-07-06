@@ -103,7 +103,7 @@ sign-ceremony key wasm manifest:
 # verify-test / verify-coverage, meaningfully active under verify-test-hooks.
 PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
-# Non-PG integration test binaries (16 members).
+# Non-PG integration test binaries (17 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
 # health_listener (T4, #1991, R-0022-b/R-0004-g): uses sqlx::connect_lazy against an
 # unreachable address to get a deterministic overall:"down" body — no embedded Postgres
@@ -112,7 +112,11 @@ PG_TEST_FLAGS := "--test admin_token --test admin_token_behavior --test artifact
 # or runs entirely without — real embedded Postgres (5-pre refusal, injected
 # storage failure replacing start_embedded(), keystone load-path pair), so it
 # belongs here, not in PG_TEST_FLAGS.
-NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test content_hash_binding --test health_listener --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
+# ci_reap_baseline (R-9 baseline-reap mechanism, #2119): drives
+# scripts/ci-reap.sh against synthetic marker processes (argv0-renamed real
+# `sleep` invocations, never a real embedded-PG engine), so it belongs here,
+# not in PG_TEST_FLAGS.
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test content_hash_binding --test health_listener --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
@@ -271,10 +275,55 @@ verify-smoke: build
         exit 1
     fi
 
-# CI entry point — runs every verify-* recipe in order.
-# First failure stops and exits non-zero.
-# This is the sole CI entry point (R-0018-c, R-0018-f).
-ci: verify-type verify-lint verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-signing-root
+# Internal: the full verify-* prerequisite chain, unchanged in order and
+# semantics from before the baseline-reap wiring below. Kept as its own
+# recipe (rather than inlined into `ci`'s shell body) so `just ci` still
+# resolves this as a SINGLE nested `just` invocation — `plugin`/`build`
+# prerequisites shared across verify-test / verify-test-hooks /
+# verify-coverage are deduped exactly as they were when `ci` itself listed
+# these as direct prerequisites; invoking each verify-* recipe as its own
+# separate `just` process from inside `ci`'s script body would lose that
+# dedup and rebuild the plugin/host binary redundantly per step.
+_ci-verify-chain: verify-type verify-lint verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-signing-root
+
+# CI entry point (R-0018-c, R-0018-f) — runs `_ci-verify-chain` (the exact
+# prior `ci` dependency list) wrapped in a baseline-PID self-reap safety net
+# (R-9, self-verify-long-jobs spec, baseline-reap mechanism amendment
+# 2026-07-06, #2119; see scripts/ci-reap.sh for the mechanics AND its
+# "ACTUAL GUARANTEE" note — read that before relying on this for concurrent
+# ci safety; also exercised directly by tests/ci_reap_baseline.rs).
+#
+# Captures the set of live embedded-PG postmasters BEFORE the verify chain
+# starts (baseline = everything alive at that moment — a concurrent agent's
+# already-running engine, or a pre-existing instance, is protected). On a
+# NORMAL (all-gates-pass) completion no reap runs at all — the engine
+# already self-cleans on drop; the reap fires ONLY on failure or interrupt,
+# and even then reaps ONLY postmasters that are BOTH absent from the
+# baseline snapshot AND running against a data directory under the
+# embedded-PG temp root (M1 hardening, #2119 fix round) — the latter keeps a
+# developer's system Postgres or another project's engine (started after
+# this run's baseline) out of the kill-set, since those normally run against
+# a persistent, non-temp data directory. Baseline-absence is still a proxy
+# for "this run's own leaked spawn," not a direct ownership check: a
+# concurrent ci ON THIS CODEBASE whose postmaster starts AFTER this
+# baseline is captured has its data dir under the temp root too, and is
+# reaped if this run fails (see scripts/ci-reap.sh's ACTUAL GUARANTEE).
+ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/ci-reap.sh
+    ci_reap_capture_baseline
+    trap 'ci_reap_own_postmasters; exit 130' INT TERM
+    if just _ci-verify-chain; then
+        rc=0
+    else
+        rc=$?
+    fi
+    trap - INT TERM
+    if [ "$rc" -ne 0 ]; then
+        ci_reap_own_postmasters
+    fi
+    exit "$rc"
 
 # ---------------------------------------------------------------------------
 # Signing-root pin gate (R-0005-d / R-0018-f) — wired into `ci`.
