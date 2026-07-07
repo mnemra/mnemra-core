@@ -448,21 +448,24 @@ references them as build-time dependencies, does not absorb them into its regist
 ### Designed
 
 A locked frame + locked spec exists — **with maintainer-ratified Frame-park exceptions the
-`designed` tier admits on a locked Frame alone, in two kinds: spec-*deferred* (the
-coordination wedge — its Stage-3 spec a later maintainer pickup) and spec-*terminal* (the
-strangler migration program — no Stage-3 spec will ever follow; the per-function bundles
-carry the code-destined specs) (see the V0 subsection below).** Four tenants: the
-retrieval cluster — its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked
-2026-07-02, promoting its four constituent entries below from `proposed`; the extensible
-reporting engine — its spec (`docs/specs/2026-07-03-reporting-engine.md`) locked
-2026-07-04, promoting the `1.3.0`+ (candidate) entry below from `proposed`; the
-coordination wedge cluster — its Frame (`docs/intent/coordination-wedge-frame.md`) locked
-2026-07-07 as a Frame-park designed-tier artifact of record, with no spec (Stage-3 deferred
-to a later maintainer pickup); and the strangler migration program — its Frame
-(`docs/intent/strangler-program-frame.md`) locked 2026-07-07 as a **terminal** Frame-park
-designed-tier artifact of record, with no spec and none to follow. Stated explicitly: the
-register does not infer design completion beyond what a locked spec — or, for a ratified
-Frame-park entry, a locked Frame — actually covers.
+`designed` tier admits on a locked Frame alone, in two kinds: spec-*deferred* (a Frame-park
+whose Stage-3 spec is a later maintainer pickup — the coordination wedge was admitted this
+way and has since discharged its deferral, its spec now locked, so it stands as a completed
+pickup rather than a live example of the kind) and spec-*terminal* (the strangler migration
+program — no Stage-3 spec will ever follow; the per-function bundles carry the code-destined
+specs) (see the V0 subsection below).** Four tenants: the retrieval cluster — its spec
+(`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four
+constituent entries below from `proposed`; the extensible reporting engine — its spec
+(`docs/specs/2026-07-03-reporting-engine.md`) locked 2026-07-04, promoting the `1.3.0`+
+(candidate) entry below from `proposed`; the coordination wedge cluster — its Frame
+(`docs/intent/coordination-wedge-frame.md`) locked 2026-07-07 and its spec
+(`docs/specs/2026-07-06-coordination-wedge.md`) locked 2026-07-07 (companion ADR P-0022
+accepted), a completed Frame-park pickup — the deferred Stage-3 spec has landed, so it is now
+a full spec-locked designed tenant, no longer a Frame-park; and the strangler migration
+program — its Frame (`docs/intent/strangler-program-frame.md`) locked 2026-07-07 as a
+**terminal** Frame-park designed-tier artifact of record, with no spec and none to follow.
+Stated explicitly: the register does not infer design completion beyond what a locked spec —
+or, for a ratified Frame-park entry, a locked Frame — actually covers.
 
 #### V0 (pre-`1.0.0` cutover substrate)
 
@@ -485,17 +488,23 @@ Frame-park entry, a locked Frame — actually covers.
   is fail-closed (no local write queue, no split-brain). It runs over **zero migrated
   content** by design — the system's first live workload, defining what "the workspace starts
   using mnemra" means. *Order: migration step 1 (ratified 2026-07-06), sequenced ahead of all
-  content bundles; the first usage.* Tier: `designed` (**Frame-park** — a locked Frame is the
-  designed-tier artifact of record; the Stage-3 spec is a later maintainer pickup, per the
-  Designed preamble's exception). Provenance: coordination-wedge intake
+  content bundles; the first usage.* Tier: `designed` (full spec-locked — a locked
+  Frame **and** a locked Stage-3 spec; the Frame-park deferral that admitted this entry on a
+  locked Frame alone is now discharged, per the Designed preamble's completed-pickup framing).
+  Provenance: coordination-wedge intake
   (`docs/intent/coordination-wedge.md`, locked 2026-07-06, blob
   `a4931ef85789639f4a5e451a945f43901be17343`) + coordination-wedge Frame
   (`docs/intent/coordination-wedge-frame.md`, locked 2026-07-07, blob
-  `4d1a8c211b11b984406249beef9e1156c0d7773d`); NO spec (Frame-park, Stage-3 deferred). Born
+  `4d1a8c211b11b984406249beef9e1156c0d7773d`) + coordination-wedge spec
+  (`docs/specs/2026-07-06-coordination-wedge.md`, locked 2026-07-07, blob
+  `81dc71953c9bb0de2b269b4da15ab394aed20f9c`), with companion ADR **P-0022**
+  (`docs/src/adrs/P-0022-coordination-cluster.md`, accepted) — the Stage-3 spec landing
+  discharges the Frame-park deferral, so the entry now satisfies the full `designed`
+  validator (a locked frame **plus** a locked spec). Born
   net-new at `designed` — the intake deferred the whole register entry to Frame-merge
   (open-item 4), so it was never at `proposed`: no Proposed pointer-stub is retained (nothing
   references it there; it is not a SemVer increment) and no Idea-section pointer is retargeted
-  (not promoted from a Deferred D-item). *(ADDED 2026-07-07.)*
+  (not promoted from a Deferred D-item). *(ADDED 2026-07-07; spec-promoted 2026-07-07.)*
 
 - **Strangler migration program — the standing mechanics governing every brain→mnemra
   cutover (the coordination wedge is migration step 1).** The program that scopes the
@@ -713,6 +722,28 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-07** — Coordination-wedge Stage-3 spec locked
+  (`docs/specs/2026-07-06-coordination-wedge.md`, blob
+  `81dc71953c9bb0de2b269b4da15ab394aed20f9c`; spec-exit gate accepted 2026-07-07) over the
+  locked Frame (`docs/intent/coordination-wedge-frame.md`, blob
+  `4d1a8c211b11b984406249beef9e1156c0d7773d`, locked 2026-07-07), with companion ADR
+  **P-0022** (`docs/src/adrs/P-0022-coordination-cluster.md`) status **accepted**. Register:
+  **Frame-park deferral discharged** — the coordination-wedge V0 tenant, admitted at
+  `designed` on a locked Frame alone with its Stage-3 spec deliberately deferred to a later
+  maintainer pickup, now carries the spec that deferral promised, so it satisfies the full
+  `designed` validator (locked frame **plus** locked spec) and reads as a completed
+  Frame-park pickup — no longer a Frame-park. The V0 tenant entry is rewritten from the
+  Frame-park framing ("NO spec, Stage-3 deferred") to the full spec-locked record (spec path
+  + blob, companion ADR P-0022 accepted; the intake + Frame chain retained), and its trailing
+  marker records the spec-promotion. The Designed preamble is reworded so the two-kinds
+  Frame-park taxonomy (spec-*deferred* / spec-*terminal*) is unchanged, the strangler
+  migration program remains the sole live Frame-park exemplar (terminal), and the coordination
+  wedge reads as a completed pickup of the spec-*deferred* kind rather than its live example —
+  no third category introduced. In-place within-tier promotion: no new register entry, no
+  Proposed pointer-stub or Idea-section retarget (there were none — the entry was born net-new
+  at `designed`), and the tier stays `designed`. The Layer-2 tier validator ("locked frame +
+  locked spec") is untouched: the entry now meets it directly, so the named-instance
+  Frame-park exception no longer applies to the wedge.
 - **2026-07-07** — Strangler-program Frame locked
   (`docs/intent/strangler-program-frame.md`, blob
   `805756411db1bca920c0a87889ec5ce8edf6eb3e`; Frame-exit gate accepted 2026-07-07) over the
