@@ -154,12 +154,19 @@
       "source_sha256": "c408951119c0b092b40f5e09b5f6aa54fec0a2ecb6e6b4e5a412096855bd6f92",
       "translated_at": "2026-07-04T20:42:14Z"
     },
+    "adrs/P-0022-coordination-cluster.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "a89e567b7d5a5587ff567ec4e8dcb01e1191992087fabe3fd8c199f5a1b62a7a",
+      "translated_at": "2026-07-07T21:19:33Z"
+    },
     "adrs/README.md": {
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "e4491beb1e7062590fa9e8430cf676722a17857b49e8b73f150959f12d3fbf4b",
-      "translated_at": "2026-07-05T01:45:07Z"
+      "source_sha256": "7e25295cae705eaf223d947aa07ea07b7287167e8587a30253197f7a3deb35d0",
+      "translated_at": "2026-07-07T21:19:33Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
@@ -193,8 +200,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "9f16f59eb3e8c47f46c22f184232ab6a4e20dd1a4a65f1fdbe57c73255ebc565",
-      "translated_at": "2026-07-07T17:37:09Z"
+      "source_sha256": "1e3f646b07b49d5b4f8fd7775d7cedd6afb91be4ebf552ceae7cd9a7d525bd1e",
+      "translated_at": "2026-07-07T21:19:33Z"
     },
     "intro.md": {
       "primary_audience": "human",
