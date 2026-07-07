@@ -13,3 +13,32 @@ locked_at = 2026-07-07T12:29:12Z
 
 [audit_chain.frame.generated_against]
 intent_version = "a4931ef85789639f4a5e451a945f43901be17343"
+
+[audit_chain.spec]
+ref = "docs/specs/2026-07-06-coordination-wedge.md"
+version = "81dc71953c9bb0de2b269b4da15ab394aed20f9c"
+internal_conformance = "pass"
+locked_at = 2026-07-07T20:01:00Z
+
+[audit_chain.spec.generated_against]
+intent_version = "a4931ef85789639f4a5e451a945f43901be17343"
+frame_version = "4d1a8c211b11b984406249beef9e1156c0d7773d"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true
