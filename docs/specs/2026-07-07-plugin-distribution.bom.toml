@@ -1,0 +1,6 @@
+spec_type = "code"
+
+[audit_chain.intent]
+ref = "docs/intent/plugin-distribution.md"
+version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
+locked_at = 2026-07-07T22:42:46Z
