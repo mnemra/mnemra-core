@@ -1,0 +1,15 @@
+spec_type = "architecture"
+
+[audit_chain.intent]
+ref = "docs/intent/strangler-program.md"
+version = "6d58cd29b7e80e595e4492ab396975cbdf7f1de0"
+locked_at = 2026-07-07T13:25:53Z
+
+[audit_chain.frame]
+ref = "docs/intent/strangler-program-frame.md"
+version = "805756411db1bca920c0a87889ec5ce8edf6eb3e"
+internal_conformance = "pass"
+locked_at = 2026-07-07T14:27:24Z
+
+[audit_chain.frame.generated_against]
+intent_version = "6d58cd29b7e80e595e4492ab396975cbdf7f1de0"
