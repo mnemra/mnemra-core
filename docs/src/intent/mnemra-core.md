@@ -447,12 +447,51 @@ references them as build-time dependencies, does not absorb them into its regist
 
 ### Designed
 
-A locked frame + locked spec exists. Two tenants: the retrieval cluster — its spec
-(`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four
-constituent entries below from `proposed` — and the extensible reporting engine — its
-spec (`docs/specs/2026-07-03-reporting-engine.md`) locked 2026-07-04, promoting the
-`1.3.0`+ (candidate) entry below from `proposed`. Stated explicitly: the register does not
-infer design completion beyond what a locked spec actually covers.
+A locked frame + locked spec exists — **with one maintainer-ratified exception: the
+coordination wedge, a Frame-park entry the `designed` tier admits on a locked Frame alone,
+its Stage-3 spec deliberately deferred (see the V0 subsection below).** Three tenants: the
+retrieval cluster — its spec (`docs/specs/2026-07-02-retrieval-cluster.md`) locked
+2026-07-02, promoting its four constituent entries below from `proposed`; the extensible
+reporting engine — its spec (`docs/specs/2026-07-03-reporting-engine.md`) locked
+2026-07-04, promoting the `1.3.0`+ (candidate) entry below from `proposed`; and the
+coordination wedge cluster — its Frame (`docs/intent/coordination-wedge-frame.md`) locked
+2026-07-07 as a Frame-park designed-tier artifact of record, with no spec (Stage-3 deferred
+to a later maintainer pickup). Stated explicitly: the register does not infer design
+completion beyond what a locked spec — or, for the ratified Frame-park entry, a locked
+Frame — actually covers.
+
+#### V0 (pre-`1.0.0` cutover substrate)
+
+- **Coordination wedge cluster — actors + claims-as-leases + messaging (the workspace's
+  first live workload).** The coordination plane inside the mnemra-core host: durable actor
+  identity (each role-instance is one durable `actors` row at the P-0018 grain — the
+  core-entity manifest; sessions are ephemeral attachments that resolve-or-create the row at
+  start, never minting a duplicate); mutual-exclusion claims on the duration line as
+  first-class **leases** (holder, structured resource identifier, TTL, stale/takeover/release
+  semantics; acquisition substrate-enforced atomic, so exactly one live lease per resource
+  can exist, and the loser gets a structured refusal); and addressed **messaging** as rows
+  with queue semantics and a closed disposition state machine (delivered → acknowledged →
+  dispositioned, immutable after send, every consumption recorded). Two agent-visible MCP
+  tools carry the surface — `claim` and `message`, actions as closed-enum parameters —
+  inside the single-digit verb budget; the founding message type is `merge-request` (the
+  merger-lane input contract rendered as schema fields), with a minimal generic `handoff`
+  (subject + body + artifact refs) as a second type. Residence is core host subsystem (the
+  P-0002 core-vs-plugin walk); observability is one unified target-tagged tracing stream with
+  the privileged subset also emitting to the P-0018 audit surface; the availability contract
+  is fail-closed (no local write queue, no split-brain). It runs over **zero migrated
+  content** by design — the system's first live workload, defining what "the workspace starts
+  using mnemra" means. *Order: migration step 1 (ratified 2026-07-06), sequenced ahead of all
+  content bundles; the first usage.* Tier: `designed` (**Frame-park** — a locked Frame is the
+  designed-tier artifact of record; the Stage-3 spec is a later maintainer pickup, per the
+  Designed preamble's exception). Provenance: coordination-wedge intake
+  (`docs/intent/coordination-wedge.md`, locked 2026-07-06, blob
+  `a4931ef85789639f4a5e451a945f43901be17343`) + coordination-wedge Frame
+  (`docs/intent/coordination-wedge-frame.md`, locked 2026-07-07, blob
+  `4d1a8c211b11b984406249beef9e1156c0d7773d`); NO spec (Frame-park, Stage-3 deferred). Born
+  net-new at `designed` — the intake deferred the whole register entry to Frame-merge
+  (open-item 4), so it was never at `proposed`: no Proposed pointer-stub is retained (nothing
+  references it there; it is not a SemVer increment) and no Idea-section pointer is retargeted
+  (not promoted from a Deferred D-item). *(ADDED 2026-07-07.)*
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
@@ -612,6 +651,28 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-07** — Coordination-wedge Frame locked
+  (`docs/intent/coordination-wedge-frame.md`, blob
+  `4d1a8c211b11b984406249beef9e1156c0d7773d`; Frame-exit gate accepted 2026-07-07) over the
+  locked intake (`docs/intent/coordination-wedge.md`, blob
+  `a4931ef85789639f4a5e451a945f43901be17343`, locked 2026-07-06). Register: **net-new
+  `designed`-tier entry** for the coordination wedge cluster (durable actor identity,
+  claims-as-leases with TTL/takeover, addressed messaging with a closed disposition state
+  machine, two agent-visible MCP tools, the `merge-request` founding type; the workspace's
+  first live workload over zero migrated content, migration step 1 ahead of all content
+  bundles) — added under a new Designed §V0 (pre-`1.0.0` cutover substrate) subsection, the
+  tier's third tenant after the retrieval cluster and the reporting engine. **Frame-park
+  promotion:** the entry lands at `designed` on a locked Frame **alone**, its Stage-3 spec
+  deliberately deferred to a later maintainer pickup — a maintainer-ratified exception to the
+  `designed` validator's "locked frame + locked spec", named in the Designed preamble and the
+  entry's provenance rather than papered. Born net-new at `designed` (the intake deferred the
+  whole register entry to Frame-merge per open-item 4, so it was never at `proposed`): no
+  Proposed pointer-stub is retained (nothing in Proposed references it and it is not a SemVer
+  increment) and no Idea-section pointer is retargeted (not promoted from a Deferred D-item).
+  Register-promotion performed at Frame-merge time per the register-promotion convention
+  (intake open-item 4; Frame §14.7), riding the docs PR orchestrator-side. The Layer-2 tier
+  validator ("locked frame + locked spec") is left unamended: this is a named instance
+  exception, not a register-model change (the model-level question is APPARATUS-1's).
 - **2026-07-04** — Reporting-engine spec locked
   (`docs/specs/2026-07-03-reporting-engine.md`; verify verdict passed_with_concerns).
   Register: `proposed → designed` promotion for the `1.3.0`+ (candidate) extensible
