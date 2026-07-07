@@ -1,0 +1,15 @@
+spec_type = "code"
+
+[audit_chain.intent]
+ref = "docs/intent/coordination-wedge.md"
+version = "a4931ef85789639f4a5e451a945f43901be17343"
+locked_at = 2026-07-07T01:43:39Z
+
+[audit_chain.frame]
+ref = "docs/intent/coordination-wedge-frame.md"
+version = "4d1a8c211b11b984406249beef9e1156c0d7773d"
+internal_conformance = "pass"
+locked_at = 2026-07-07T12:29:12Z
+
+[audit_chain.frame.generated_against]
+intent_version = "a4931ef85789639f4a5e451a945f43901be17343"

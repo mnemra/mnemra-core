@@ -193,8 +193,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "ea3062638f957245a05d85bab5fce2bd902a4e6947856d2c353ece31ac8c229d",
-      "translated_at": "2026-07-04T20:42:14Z"
+      "source_sha256": "1ae9402f0a61dfa70fc6df6c009b80c996bfb907f6522649745cb9ac2b5ae149",
+      "translated_at": "2026-07-07T13:34:15Z"
     },
     "intro.md": {
       "primary_audience": "human",
