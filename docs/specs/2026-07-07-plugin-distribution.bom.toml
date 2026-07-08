@@ -4,3 +4,12 @@ spec_type = "code"
 ref = "docs/intent/plugin-distribution.md"
 version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
 locked_at = 2026-07-07T22:42:46Z
+
+[audit_chain.frame]
+ref = "docs/intent/plugin-distribution-frame.md"
+version = "60c437c5e569eacbf00329e92cae2e7c42cebba6"
+internal_conformance = "pass"
+locked_at = 2026-07-08T01:35:55Z
+
+[audit_chain.frame.generated_against]
+intent_version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
