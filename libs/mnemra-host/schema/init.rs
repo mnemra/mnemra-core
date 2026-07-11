@@ -299,6 +299,42 @@ pub(crate) const V0_MIGRATIONS: &[Migration] = &[
                 ON projects (workspace_id)
         ",
     },
+    // P-0018 D-ENT / D-ACTOR (Task 1, coordination-wedge): the `actors` core
+    // entity. Landed here as a minimal STANDALONE entity, minted directly by
+    // role-instance name — NO FK linkage to the existing `users`/`agents`/
+    // `sessions` builtins in this landing. The fuller P-0018 unification
+    // (rewiring those builtins to populate `actors`) is deferred to P-0018's
+    // own landing (Gap A, decided 2026-07-11).
+    // actor_type is a closed set {human, agent, system} (P-0018 D-ACTOR): a
+    // value outside the set is rejected AT WRITE by the CHECK constraint
+    // below, mirroring the `operation IN (...)` precedent in
+    // `schema/history_trigger.rs`.
+    // name is the per-workspace-unique role-instance identifier that
+    // `builtins::actors::resolve_or_create` mints/resolves against.
+    Migration {
+        version: 17,
+        name: "create_actors",
+        sql: "
+            CREATE TABLE IF NOT EXISTS actors (
+                id           UUID        NOT NULL DEFAULT gen_random_uuid(),
+                workspace_id UUID        NOT NULL,
+                actor_type   TEXT        NOT NULL,
+                name         TEXT        NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT actors_pkey           PRIMARY KEY (id),
+                CONSTRAINT actors_ws_name_uq     UNIQUE      (workspace_id, name),
+                CONSTRAINT actors_actor_type_chk CHECK       (actor_type IN ('human', 'agent', 'system'))
+            )
+        ",
+    },
+    Migration {
+        version: 18,
+        name: "actors_workspace_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS actors_workspace_idx
+                ON actors (workspace_id)
+        ",
+    },
 ];
 
 // ---------------------------------------------------------------------------
