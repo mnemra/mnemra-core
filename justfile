@@ -325,6 +325,9 @@ ci:
     fi
     exit "$rc"
 
+# Complete local gate — mirrors GitHub CI (Rust verify chain + docs drift). Run this to prove CI-green.
+ci-full: ci docs-check
+
 # ---------------------------------------------------------------------------
 # Signing-root pin gate (R-0005-d / R-0018-f) — wired into `ci`.
 #
