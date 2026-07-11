@@ -38,6 +38,14 @@
 //! | 6 | permissions    | 14   | R-0015-f |
 //! | 7 | projects       | 15   | R-0015-g |
 
+// P-0018 D-ENT / D-ACTOR (Task 1, coordination-wedge): the `actors` core
+// entity. Landed as a standalone entity with no FK linkage to the seven
+// identity/session builtins below — it does not participate in their
+// `init_all()` ordering (no runtime bootstrap dependency exists between
+// them at this landing). The fuller P-0018 unification is deferred to
+// P-0018's own landing.
+pub mod actors;
+
 pub mod agents;
 pub mod authentication;
 pub mod permissions;
