@@ -212,6 +212,27 @@ The "Schema evolution" section above states: *"`schema_version: 1` locks the V0 
 
 This amendment adds **only** the `[component]` content-hash section to the signed body. It does **not** change `schema_version`, the host-fn ABI, the `[verbs]` / `[content_types]` / `[state_scopes]` / `[host_fns]` sections, the `[signature]` section, or any structural invariant in the table above. The custody / signing mechanism is unchanged ([P-0005](P-0005-v0-signing-chain.md)). The Tier-C signing-key custody hardening (`{{P-SigningKeyCustodyHardening}}`) remains deferred behind the R-0005-e multi-deployment trip-wire — out of scope here.
 
+## Amendment 2026-07-07 — `[[artifacts]]` N≥1 binding (plugin distribution; supersedes the `[component]` section)
+
+The plugin-distribution design (W2-1: [P-0023](P-0023-plugin-distribution.md); spec [`docs/specs/2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md), R-0086) extends this manifest's supply-chain binding from the single component hash to **all N≥1 bundle artifacts**, per the maintainer's Decision A (2026-07-01, locked): the inner signed manifest binds every blob via an `[[artifacts]]`-style N≥1 list, each verified with R-0021's single-read / complete-mediation / fail-closed discipline at the provenance anchor. As with the 2026-06-30 amendment, this amendment governs the **schema**; the runtime behavior (the complete-mediation loop, dual-digest single-read, designed rejections) is governed by the distribution spec (R-0086/R-0087).
+
+### Schema change — `[[artifacts]]` replaces `[component]` in the signed canonical body
+
+The signed canonical body (the bytes before the `\n[signature]` marker — the slice produced by the canonical-body splitter in `libs/mnemra-host/signing/verify.rs`) gains an **`[[artifacts]]` array of tables, N≥1, entry #1 = the component `.wasm`**, and **loses the `[component]` section**, which this amendment **supersedes**. Field-by-field schema, the `id` grammar (`^[a-z0-9][a-z0-9._-]{0,63}$` — path traversal unconstructible by construction), the `hash_alg` constraint (**`blake3` is the only value accepted at V0** — `sha256`/`sha384`/`sha512` are reserved vocabulary for a future amendment and rejected on sight, `hash_alg_unsupported`, alongside the banned-weak `md5`/`sha1`; no non-blake3 verification path is reachable at V0), the mandatory lowercase-hex `hash`, and the `media_type` cross-anchor consistency rule are locked in spec **R-0086-a/-b** — single-sourced there, not restated here.
+
+Two 2026-06-30 rules are explicitly superseded or carried:
+
+1. **"Binds bytes, not a path" — scope-out superseded.** The 2026-06-30 amendment carried no per-artifact identifier because the single `[component]` section needed none. Under an N≥1 binding, a per-artifact **`id`** becomes necessary for unambiguous, collision-free entry↔blob resolution (the outer OCI layer joins on the `vnd.mnemra.artifact.id` annotation; ratified 2026-07-07). Per **R-0005-h (core-by-provenance)**, every per-artifact identifier lives **in the signed canonical body** — an identifier in the unsigned region would let an attacker swap both an artifact and its declared identity. The binding still binds *bytes* (via `hash`); the `id` names the binding, it does not weaken it to a path reference.
+2. **Read only from the signed slice — carried unchanged.** The `[[artifacts]]` array SHALL be parsed only from the signed canonical body; an array in the unsigned `[signature]`-adjacent region SHALL NOT satisfy presence and SHALL cause rejection (spec R-0086-d).
+
+### `schema_version` stays `1` — the same one-decision rule, re-applied
+
+The 2026-06-30 reasoning applies verbatim: V0 is still being *defined* (the `core: true` set is re-signed with `[[artifacts]]` in the same hard-cutover change — [P-0023](P-0023-plugin-distribution.md) D5; no older population exists to branch on), so the version does not increment, **and therefore the parser enforces presence directly**: a signed body lacking `[[artifacts]]` (or with zero entries) is rejected fail-closed (spec R-0086-d). **Strict supersession (maintainer-ratified 2026-07-07):** post-cutover, a signed body carrying a `[component]` section is **rejected** (`legacy_manifest_rejected`, spec R-0086-e) — not ignored — so no manifest can carry two binding representations that could disagree. Holding the version at `1` is only safe because the parser enforces both the presence of the new table and the absence of the old one.
+
+### Scope of this amendment
+
+This amendment changes **only** the supply-chain binding section of the signed body (`[component]` → `[[artifacts]]`). The host-fn ABI, `[verbs]` / `[content_types]` / `[state_scopes]` / `[host_fns]`, `[signature]`, `schema_version`, and every structural invariant in the V0 table above are unchanged. The custody / signing mechanism is unchanged ([P-0005](P-0005-v0-signing-chain.md)); the distribution-layer packaging, package signature, and fetch pipeline are [P-0023](P-0023-plugin-distribution.md)'s domain, not this schema's. The 2026-06-30 amendment text above is preserved as the historical record of the single-component binding it defined (amend-don't-erase); its schema is superseded by this section as of the hard cutover.
+
 ## More Information
 
 - Frame open ADR slot: `{{P-PluginManifest}}` ([Frame](../intent/mnemra-core-frame.md), Tier A table). This ADR resolves that slot.

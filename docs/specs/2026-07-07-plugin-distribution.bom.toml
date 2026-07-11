@@ -13,3 +13,32 @@ locked_at = 2026-07-08T01:35:55Z
 
 [audit_chain.frame.generated_against]
 intent_version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
+
+[audit_chain.spec]
+ref = "docs/specs/2026-07-07-plugin-distribution.md"
+version = "10554ccdd6ae91731086b6fa6cba3de281a4fd49"
+internal_conformance = "pass"
+locked_at = 2026-07-11T12:19:38Z
+
+[audit_chain.spec.generated_against]
+intent_version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
+frame_version = "60c437c5e569eacbf00329e92cae2e7c42cebba6"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true
