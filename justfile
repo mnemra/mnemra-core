@@ -101,7 +101,7 @@ sign-ceremony key wasm manifest:
 # shared, feature-agnostic list rather than a feature-scoped side list (a
 # side list would break R-0033): structurally zero-test (green) under
 # verify-test / verify-coverage, meaningfully active under verify-test-hooks.
-PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
+PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
 # Non-PG integration test binaries (17 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).

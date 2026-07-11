@@ -335,6 +335,126 @@ pub(crate) const V0_MIGRATIONS: &[Migration] = &[
                 ON actors (workspace_id)
         ",
     },
+    // Coordination wedge (Task 2, R-0076 / R-0077): the `leases` and `messages`
+    // operational tables. Additive, forward-only, idempotent (R-0076-e).
+    //
+    // leases (R-0065): held intent on a resource. One live lease per
+    // (workspace_id, resource) is enforced by the PARTIAL UNIQUE index at v21
+    // (the QA-1 mechanism; that index doubles as the R-0076-a live-lease hot
+    // lookup, so no redundant non-unique twin is added). terminal_state is a
+    // closed set {released, taken_over}, nullable (NULL = non-terminal); the
+    // bare `IN` CHECK passes on NULL, mirroring actors_actor_type_chk. Hard FKs
+    // are single-column to core entities only (holder_actor_id -> actors,
+    // project_id -> projects); cross-workspace tenant consistency is
+    // application-layer at V0 (R-0076-b, WorkspaceCtx), so there is NO composite
+    // (workspace_id, actor_id) FK. superseded_by is a SOFT self-ref (plain uuid,
+    // no FK) set on a taken-over row. session_id is the attachment-as-lease
+    // realization's session home (R-0064-f baseline). duration is BIGINT seconds
+    // (the spec allows interval OR a seconds count; seconds is the simple
+    // idiomatic form and keeps the ≤ policy-max bound a plain integer compare).
+    Migration {
+        version: 19,
+        name: "create_leases",
+        sql: "
+            CREATE TABLE IF NOT EXISTS leases (
+                id              UUID        NOT NULL DEFAULT gen_random_uuid(),
+                workspace_id    UUID        NOT NULL,
+                resource        TEXT        NOT NULL,
+                holder_actor_id UUID        NOT NULL,
+                project_id      UUID,
+                acquired_at     TIMESTAMPTZ NOT NULL,
+                duration        BIGINT      NOT NULL,
+                expires_at      TIMESTAMPTZ NOT NULL,
+                terminal_state  TEXT,
+                terminated_at   TIMESTAMPTZ,
+                superseded_by   UUID,
+                session_id      UUID,
+                CONSTRAINT leases_pkey               PRIMARY KEY (id),
+                CONSTRAINT leases_holder_actor_fk    FOREIGN KEY (holder_actor_id) REFERENCES actors (id),
+                CONSTRAINT leases_project_fk         FOREIGN KEY (project_id)       REFERENCES projects (id),
+                CONSTRAINT leases_terminal_state_chk CHECK       (terminal_state IN ('released', 'taken_over'))
+            )
+        ",
+    },
+    Migration {
+        version: 20,
+        name: "leases_workspace_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS leases_workspace_idx
+                ON leases (workspace_id)
+        ",
+    },
+    // v21: exactly-one-live-lease (R-0065-b; the QA-1 mechanism). PARTIAL on
+    // WHERE terminal_state IS NULL so a terminal row (released / taken_over) does
+    // not block re-acquisition, while two live rows on one resource collide with
+    // 23505. Predicate is non-terminated, NOT expiry-based (a partial index
+    // cannot reference now(); expiry is evaluated at operation time, R-0065-e).
+    Migration {
+        version: 21,
+        name: "leases_live_resource_unique_index",
+        sql: "
+            CREATE UNIQUE INDEX IF NOT EXISTS leases_live_resource_uq
+                ON leases (workspace_id, resource)
+                WHERE terminal_state IS NULL
+        ",
+    },
+    // messages (R-0068 / R-0069): addressed, append-once message rows. state is
+    // a closed, host-enforced-monotonic set {sent, delivered, acknowledged,
+    // dispositioned}; disposition a closed set {completed, declined, obsolete},
+    // nullable. Both addressing FKs are single-column -> actors (sender /
+    // addressee); there is NO FK between leases and messages, so the two tables
+    // stay independently flippable (R-0077) over the shared actors spine.
+    // schema_version is INTEGER; payload is JSONB, schema-validated at send in
+    // host code (R-0070-b) — not a schema CHECK. The append-once consumption
+    // timestamps and immutability of the post-send fields are enforced by the
+    // host write path, not the schema.
+    Migration {
+        version: 22,
+        name: "create_messages",
+        sql: "
+            CREATE TABLE IF NOT EXISTS messages (
+                id                 UUID        NOT NULL DEFAULT gen_random_uuid(),
+                workspace_id       UUID        NOT NULL,
+                sender_actor_id    UUID        NOT NULL,
+                addressee_actor_id UUID        NOT NULL,
+                message_type       TEXT        NOT NULL,
+                schema_version     INTEGER     NOT NULL,
+                payload            JSONB       NOT NULL,
+                state              TEXT        NOT NULL,
+                sent_at            TIMESTAMPTZ NOT NULL,
+                delivered_at       TIMESTAMPTZ,
+                acknowledged_at    TIMESTAMPTZ,
+                dispositioned_at   TIMESTAMPTZ,
+                disposition        TEXT,
+                disposition_note   TEXT,
+                CONSTRAINT messages_pkey            PRIMARY KEY (id),
+                CONSTRAINT messages_sender_fk       FOREIGN KEY (sender_actor_id)    REFERENCES actors (id),
+                CONSTRAINT messages_addressee_fk    FOREIGN KEY (addressee_actor_id) REFERENCES actors (id),
+                CONSTRAINT messages_state_chk       CHECK       (state IN ('sent', 'delivered', 'acknowledged', 'dispositioned')),
+                CONSTRAINT messages_disposition_chk CHECK       (disposition IN ('completed', 'declined', 'obsolete'))
+            )
+        ",
+    },
+    Migration {
+        version: 23,
+        name: "messages_workspace_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS messages_workspace_idx
+                ON messages (workspace_id)
+        ",
+    },
+    // v24: undispositioned-per-addressee poll hot predicate (R-0076-a). PARTIAL
+    // on WHERE dispositioned_at IS NULL so the poll path scans only the
+    // still-open queue for an addressee.
+    Migration {
+        version: 24,
+        name: "messages_undispositioned_index",
+        sql: "
+            CREATE INDEX IF NOT EXISTS messages_undispositioned_idx
+                ON messages (workspace_id, addressee_actor_id)
+                WHERE dispositioned_at IS NULL
+        ",
+    },
 ];
 
 // ---------------------------------------------------------------------------
