@@ -622,8 +622,12 @@ external sink is operator-chosen and *deferred* behind the generation⊥storage 
 It is modeled as the telemetry-egress surface (where emission leaves the host), not as a
 present V0 storage dependency — the binary does not require a sink to run. The V0 storage
 dependency set stays at the nine core boundaries; `TB-obs-sink` materializes as a present
-dependency only when the operator wires a sink (the L4 tripwire). When the Frame's TB
-table and this one disagree, this one wins.
+dependency only when the operator wires a sink (the L4 tripwire). **An eleventh row,
+`TB-plugin-store`, is added 2026-07-07 by the plugin-distribution extension
+([P-0023](../adrs/P-0023-plugin-distribution.md); see the dated subsection after the
+boundary notes):** the bundle store zone between `TB-build-pipeline` and
+`TB-mnemra-host` — untrusted by design; both crossings are verification surfaces. When
+the Frame's TB table and this one disagree, this one wins.
 
 | Trust boundary | Crosses | Direction | Authentication | Authorization | Threats at crossing |
 |---|---|---|---|---|---|
@@ -653,6 +657,32 @@ inline:
   now locked at Tier A (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`); the production hardening is Tier C
   (`{{P-SigningKeyCustodyHardening}}`), activated by the multi-deployment trip-wire.
 
+### Distribution extension (2026-07-07 — plugin distribution, [P-0023](../adrs/P-0023-plugin-distribution.md))
+
+The plugin-distribution design ([P-0023](../adrs/P-0023-plugin-distribution.md); spec
+[`2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md))
+adds a store zone and its crossings. The `TB-plugin-store` boundary row:
+
+| Trust boundary | Crosses | Direction | Authentication | Authorization | Threats at crossing |
+|---|---|---|---|---|---|
+| `TB-build-pipeline` / `TB-mnemra-host` ↔ `TB-plugin-store` | `DF-publish` (builder → store); `DF-fetch` + `DF-referrers` (store → host fetch-verify pipeline) | outbound at publish; inbound at fetch | **None at the store — the store is untrusted by design.** Trust derives entirely from the package signature (P-0005 root, signer-key-pinned, domain-separated) and content-address digests recomputed over received bytes; store-supplied metadata (headers, declared sizes, tags) is never trusted. | Fetch-side: the bounds-first pipeline (`fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds`, fail-closed — [P-0023](../adrs/P-0023-plugin-distribution.md) D4) is the sole path to load-eligibility; digest-pinned resolution only. Publish-side: signing occurs on the build host only (key custody unchanged, [P-0005](../adrs/P-0005-v0-signing-chain.md)). | New typed elements below; STRIDE-per-element rows land at this cluster's pre-implementation security review (the P-0014 typed-DFD-extension precedent) |
+
+Typed elements added by the extension (consumed by [P-0023](../adrs/P-0023-plugin-distribution.md)'s
+Threat-references; the drawn DFD and per-element threat rows re-draw against these at the
+cluster's pre-implementation security review — same follow-up shape as the retrieval
+cluster's P-0014 extension):
+
+| ID | Type | Element |
+|---|---|---|
+| `EE-plugin-store` | external entity / zone | the store (self-hosted registry or removable-media `oci-layout`) — untrusted by design; trust derives from signatures + digests, never from the store |
+| `P-bundle-builder` | process | build-host assemble/sign/publish tool (spec R-0090); inside `TB-build-pipeline` |
+| `P-fetch-verify` | process | the bounds-first fetch-verify pipeline behind the `PackageVerifier` seam (spec R-0083); inside `TB-mnemra-host` |
+| `DS-oci-store` | data store | bundle content (outer manifest, blobs, signature referrer) at rest in the store zone |
+| `DS-bundle-cache` | data store | the local fetched-layout cache the load path reads (load-path invariant #5's re-validation surface) |
+| `DF-publish` | data flow | builder → store (crosses `TB-build-pipeline` → `TB-plugin-store`) |
+| `DF-fetch` | data flow | store → host pipeline (crosses `TB-plugin-store` → `TB-mnemra-host`; the bounds-first surface) |
+| `DF-referrers` | data flow | signature-referrer enumeration (count- and size-bounded, spec R-0084) |
+
 ## Accepted risks
 
 Populated by the Stage 2 terminal security review (2026-05-22). Each entry is a risk
@@ -675,6 +705,9 @@ threat rows above by Risk ID.
 | `R-0005` | External-LLM embedding calls (`DF-embed-call`/I) and the brief's "no in-host LLM" Hard constraint together mean **artifact bodies leave the deployment trust boundary** at every embedding call. Telemetry no-leak is a dogfood acceptance criterion (audit script against a known-content corpus), not a structural barrier. | maintainer | First deployment that is not single-operator-only (any deployment with telemetry-sensitive content beyond the maintainer's), OR Bring-Your-Own-Model (BYOM) is not configured and a hosted provider sees production content. | The brief explicitly carves "no in-host LLM" and "calls out to an external model" as Hard constraints. The compensating control is BYOM deployment posture — the LLM-API-key configuration surface is in `0.1.0`. The risk is acknowledged, structurally bounded by deployment posture, not mitigated by code. |
 | `R-0006` | Operator-action repudiation at V0 is partially mitigated. CLI destructive ops (`drop-workspace`, force-restore-overwrite) tie to the OS UID; there is no second factor and no admin-action audit log that survives a substrate restore. Repudiation threats on `EE-operator`/R, `DS-admin-token`/R rely on OS-side audit. | maintainer | First deployment with more than one operator on the host, OR the activity-log capability (`0.5.0`) lands and admin actions can be tied to a durable audit event independent of the substrate. | Solo dogfood: the maintainer is sole operator; repudiation is not a meaningful threat in that topology. Activity log lands at `0.5.0`, after the substrate; the dependency is correct, the trip-wire fires on multi-operator topology, not on time. |
 | `R-0007` | Plugin sampling (`DF-sampling-up`) at V0 is unrestricted because all plugins at V0 are `core: true` and signed by the mnemra root. The plugin-to-orchestrator prompt-injection surface (`DF-sampling-up`/T, `P-plugin-instance`/I) is High at V0 and **becomes Critical at V0.1+ when third-party plugin install activates** (brief idea-tier D11). | maintainer | Third-party plugin install activates (brief D11), OR `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` locks the sampling capability shape without typed-prompt restrictions. | At V0 the plugin set is trusted by build provenance; signed artifacts are the only execution surface. The mitigation cost is high relative to V0 value; the trip-wire is structural (third-party install), not temporal. |
+| `R-0008` | **Rollback/downgrade on the distribution surface** (`EE-plugin-store`, `DF-fetch`): OCI + the keyed package signature cannot prevent the store (or a MITM on the LAN path) from serving an **older, validly-signed** bundle. High severity on the distribution surface; no freshness/monotonicity mechanism exists at this tier — deliberately, per `[P-0023](../adrs/P-0023-plugin-distribution.md)` (a bespoke version-monotonicity check is explicitly not built; TUF is the designed answer). | maintainer | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`'s R-0005-e condition fires (deployment beyond the single dogfood instance, or third-party publishers) — the TUF adapter (timestamp/snapshot freshness) lands behind the locked `PackageVerifier` seam, co-requiring the Tier-C offline root for its rotation half. Entry retires when the TUF layer locks. | Single-publisher single-deployment dogfood: the operator controls both store and host, so a stale-serve requires compromising infrastructure the operator owns. The seam is pre-positioned so the mitigation arrives as an adapter, not rework (`P-Defer`, decision content in the Frame's deferral table). |
+| `R-0009` | **Single-root compromise-independence** (`DS-mnemra-root-key`/I reach, extended by distribution): the package signature (distribution anchor) and the inner manifest signature (provenance anchor) are both made by the one P-0005 root at this tier (`[P-0023](../adrs/P-0023-plugin-distribution.md)` D6, maintainer-ratified Q5 2026-07-07) — the layers are scope-independent, **not compromise-independent**; one root theft forges both, and detecting a stolen-key forgery needs a transparency-log/TUF witness that is deferred. Critical severity under key theft (as `R-0004`). | maintainer | The same R-0005-e condition — split to a distinct **distribution key** (or TUF delegated roles), restoring compromise-independence; the anchor-independence of the dual load-time checks becomes fully load-bearing at the split. Entry retires when the distribution key splits. | One custody story at single-publisher `core: true` scope (Security ↔ Simplicity, maintainer-resolved); the exposure is recorded in the ADR and here rather than silently accepted. Compensating: the R-0004 custody posture (key never on the deployment node) bounds the theft surface to the build host. |
+| `R-0010` | **Build-time dependency confusion** (`P-bundle-builder` reach): `wkg`-pulled WIT/component dependencies are composed into the component **before** signing, so a malicious same-named dependency resolved at build time changes the component bytes and every downstream gate then faithfully binds the poisoned artifact (bytes-run == bytes-signed — integrity, not provenance-of-inputs). | maintainer | Reproducible `wasm32-wasip2` builds land (the reproducible-builds work item, #1942) — SLSA provenance attestations attached as OCI referrers become assertable and are the designed answer. Interim: the lockfile-hash-pin weighing is a named spec-gate item on the distribution spec. Entry retires when provenance attestations land. | The residual is upstream of every signing gate by construction — no load-path mechanism can close it (the gates bind what was built). Named honestly rather than over-claimed; the distribution design neither widens nor narrows it. |
 
 **Cross-reference.** Each accepted risk maps to one or more threat rows in the threats-
 by-element table. A future risk-register file (workspace canon names `RISK-REGISTER.md`
@@ -703,6 +736,18 @@ resolution. Empty at port-time — Frame work did not surface a brief-level tens
 
 ## Session log
 
+- **2026-07-07** — Plugin-distribution extension (rider on the W2-1 Stage-3 docs change;
+  [P-0023](../adrs/P-0023-plugin-distribution.md) + spec
+  [`2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md)).
+  Added the `TB-plugin-store` boundary row + eleventh-row note in the canonical TB
+  enumeration, the distribution extension's typed elements (`EE-plugin-store`,
+  `P-bundle-builder`, `P-fetch-verify`, `DS-oci-store`, `DS-bundle-cache`, `DF-publish`,
+  `DF-fetch`, `DF-referrers`), and accepted risks `R-0008` (rollback/downgrade residual,
+  retires at R-0005-e via TUF), `R-0009` (single-root compromise-independence, retires at
+  the R-0005-e distribution-key split), `R-0010` (build-time dependency confusion,
+  retires at reproducible-builds/SLSA). The drawn DFD and STRIDE-per-element rows
+  re-draw against the typed extension at the cluster's pre-implementation security
+  review (the P-0014 precedent; named follow-up).
 - **2026-07-02** — RC-1 reconciliation (rider on the retrieval-cluster Stage-3 docs
   change; this overview's ELT external-embedding framing was the named lagging copy of
   the brief's model-hosting amendment). Updated the hard-locked constraint-inventory
