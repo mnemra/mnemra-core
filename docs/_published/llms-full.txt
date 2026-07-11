@@ -482,7 +482,7 @@ whose Stage-3 spec is a later maintainer pickup — the coordination wedge was a
 way and has since discharged its deferral, its spec now locked, so it stands as a completed
 pickup rather than a live example of the kind) and spec-*terminal* (the strangler migration
 program — no Stage-3 spec will ever follow; the per-function bundles carry the code-destined
-specs) (see the V0 subsection below).** Four tenants: the retrieval cluster — its spec
+specs) (see the V0 subsection below).** Five tenants: the retrieval cluster — its spec
 (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four
 constituent entries below from `proposed`; the extensible reporting engine — its spec
 (`docs/specs/2026-07-03-reporting-engine.md`) locked 2026-07-04, promoting the `1.3.0`+
@@ -490,7 +490,9 @@ constituent entries below from `proposed`; the extensible reporting engine — i
 (`docs/intent/coordination-wedge-frame.md`) locked 2026-07-07 and its spec
 (`docs/specs/2026-07-06-coordination-wedge.md`) locked 2026-07-07 (companion ADR P-0022
 accepted), a completed Frame-park pickup — the deferred Stage-3 spec has landed, so it is now
-a full spec-locked designed tenant, no longer a Frame-park; and the strangler migration
+a full spec-locked designed tenant, no longer a Frame-park; the plugin-distribution layer —
+its spec (`docs/specs/2026-07-07-plugin-distribution.md`) locked 2026-07-11 (companion ADR
+P-0023 accepted), born net-new at `designed`; and the strangler migration
 program — its Frame (`docs/intent/strangler-program-frame.md`) locked 2026-07-07 as a
 **terminal** Frame-park designed-tier artifact of record, with no spec and none to follow.
 Stated explicitly: the register does not infer design completion beyond what a locked spec —
@@ -592,6 +594,45 @@ or, for a ratified Frame-park entry, a locked Frame — actually covers.
   a terminal Frame-park mints none: there is no downstream spec-authoring step to fill a program
   slot, and the Frame is itself the reference every per-function bundle cites; the ADR-slot
   ledger is left untouched). *(ADDED 2026-07-07.)*
+
+- **Plugin distribution + package signing — the distribution layer (W2-1).** The layer that
+  makes a plugin a distributable unit whose whole-bundle provenance and integrity are
+  established **before unpacking**: every plugin ships as one uniform multi-artifact OCI
+  bundle (N≥1 digest-addressed blobs, the component `.wasm` always artifact #1, the signed
+  inner TOML manifest as the config descriptor, uncompressed-only at V0); the package
+  signature is the P-0005 Ed25519 root over the domain-separated outer-manifest digest,
+  attached as an OCI 1.1 referrer and verified on fetch under signer-key-pinning (never
+  trust-on-first-use, no unsigned fall-through); two R-NoExternalHost transports (OCI
+  image-layout filesystem for true air-gap; self-hosted distribution-API registry for
+  restricted-egress LAN) behind one store contract with digest-pinned resolution recomputed
+  over received bytes; the bounds-first verified-fetch pipeline (fetch-within-bounds →
+  verify-package-signature → verify-blob-digests → unpack-within-bounds, fail-closed at every
+  stage) behind the locked `PackageVerifier` seam (the TUF adapter's slot, fires at
+  R-0005-e); the inner `[[artifacts]]` N≥1 binding complete-mediating every blob at the
+  provenance anchor (P-0003 §Amendment 2026-07-07, strictly superseding the single
+  `[component]` hash); a hard cutover that retires the bare load path with no legacy accept
+  window; and install as a **working-state → working-state** transition — no failure, crash,
+  or kill point leaves the host's serving or load-eligible state indeterminate, residue from
+  a failed attempt inert (R-0092, the maintainer's 2026-07-11 spec-exit-gate ruling; update
+  is forward-bound by the same invariant, its flow deferred). Single-root custody exposure
+  recorded, never silent (accepted risks R-0008 rollback residual / R-0009 single-root /
+  R-0010 build-time dependency confusion; all tripwired). *Order: Wave-2 design-lane bundle
+  W2-1 (board order); implementation is a committed-tier pickup, gated by base-pin
+  freshness.* Tier: `designed` (full spec-locked). Provenance: plugin-distribution intake
+  (`docs/intent/plugin-distribution.md`, locked 2026-07-07, blob
+  `9c8e1577ed345cbcef546ba51d252a0df4db1144`) + plugin-distribution Frame
+  (`docs/intent/plugin-distribution-frame.md`, locked 2026-07-08Z, blob
+  `60c437c5e569eacbf00329e92cae2e7c42cebba6`) + plugin-distribution spec
+  (`docs/specs/2026-07-07-plugin-distribution.md`, locked 2026-07-11, blob
+  `10554ccdd6ae91731086b6fa6cba3de281a4fd49`, R-0078–R-0092 with the R-0082 tombstone), with
+  companion ADR **P-0023** (`docs/src/adrs/P-0023-plugin-distribution.md`, accepted) + the
+  P-0003 `[[artifacts]]` amendment + the P-0019 DEF-2 disposition (that deferral pulled
+  deliberately ahead of its third-party tripwire, at single-publisher `core: true` scope).
+  Born net-new at `designed` — no Proposed pointer-stub is retained and no Idea-section
+  pointer is retargeted: the Idea-tier "plugin registry/marketplace + signing/distribution
+  as a product surface" umbrella is a distinct, unvalidated product surface and stays where
+  it is; this layer is substrate infrastructure at single-publisher scope, not that product.
+  *(ADDED 2026-07-11.)*
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
@@ -751,6 +792,23 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-11** — Plugin-distribution Stage-3 spec locked
+  (`docs/specs/2026-07-07-plugin-distribution.md`, blob
+  `10554ccdd6ae91731086b6fa6cba3de281a4fd49`; spec-exit gate accepted 2026-07-11) over the
+  locked Frame (`docs/intent/plugin-distribution-frame.md`, blob
+  `60c437c5e569eacbf00329e92cae2e7c42cebba6`, locked 2026-07-08Z) and intake
+  (`docs/intent/plugin-distribution.md`, blob `9c8e1577ed345cbcef546ba51d252a0df4db1144`,
+  locked 2026-07-07), with companion ADR **P-0023**
+  (`docs/src/adrs/P-0023-plugin-distribution.md`) status **accepted**, the P-0003
+  `[[artifacts]]` §Amendment 2026-07-07, and the P-0019 DEF-2 disposition. Register: a new
+  V0 tenant **added, born net-new at `designed`** (full spec-locked — locked frame + locked
+  spec + accepted companion ADR): the plugin-distribution layer (uniform multi-artifact OCI
+  bundle; keyed-in-tree package signature verified on fetch; two R-NoExternalHost transports
+  behind one store contract; the bounds-first `PackageVerifier` pipeline; the `[[artifacts]]`
+  complete-mediation binding; hard cutover retiring the bare load path; install atomicity
+  R-0092 per the maintainer's 2026-07-11 gate ruling, with update forward-bound). Designed
+  preamble updated four → five tenants. No Proposed pointer-stub and no Idea retarget (the
+  registry/marketplace product-surface idea is distinct and unmoved).
 - **2026-07-07** — Coordination-wedge Stage-3 spec locked
   (`docs/specs/2026-07-06-coordination-wedge.md`, blob
   `81dc71953c9bb0de2b269b4da15ab394aed20f9c`; spec-exit gate accepted 2026-07-07) over the
@@ -2228,8 +2286,12 @@ external sink is operator-chosen and *deferred* behind the generation⊥storage 
 It is modeled as the telemetry-egress surface (where emission leaves the host), not as a
 present V0 storage dependency — the binary does not require a sink to run. The V0 storage
 dependency set stays at the nine core boundaries; `TB-obs-sink` materializes as a present
-dependency only when the operator wires a sink (the L4 tripwire). When the Frame's TB
-table and this one disagree, this one wins.
+dependency only when the operator wires a sink (the L4 tripwire). **An eleventh row,
+`TB-plugin-store`, is added 2026-07-07 by the plugin-distribution extension
+([P-0023](../adrs/P-0023-plugin-distribution.md); see the dated subsection after the
+boundary notes):** the bundle store zone between `TB-build-pipeline` and
+`TB-mnemra-host` — untrusted by design; both crossings are verification surfaces. When
+the Frame's TB table and this one disagree, this one wins.
 
 | Trust boundary | Crosses | Direction | Authentication | Authorization | Threats at crossing |
 |---|---|---|---|---|---|
@@ -2259,6 +2321,32 @@ inline:
   now locked at Tier A (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`); the production hardening is Tier C
   (`{{P-SigningKeyCustodyHardening}}`), activated by the multi-deployment trip-wire.
 
+### Distribution extension (2026-07-07 — plugin distribution, [P-0023](../adrs/P-0023-plugin-distribution.md))
+
+The plugin-distribution design ([P-0023](../adrs/P-0023-plugin-distribution.md); spec
+[`2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md))
+adds a store zone and its crossings. The `TB-plugin-store` boundary row:
+
+| Trust boundary | Crosses | Direction | Authentication | Authorization | Threats at crossing |
+|---|---|---|---|---|---|
+| `TB-build-pipeline` / `TB-mnemra-host` ↔ `TB-plugin-store` | `DF-publish` (builder → store); `DF-fetch` + `DF-referrers` (store → host fetch-verify pipeline) | outbound at publish; inbound at fetch | **None at the store — the store is untrusted by design.** Trust derives entirely from the package signature (P-0005 root, signer-key-pinned, domain-separated) and content-address digests recomputed over received bytes; store-supplied metadata (headers, declared sizes, tags) is never trusted. | Fetch-side: the bounds-first pipeline (`fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds`, fail-closed — [P-0023](../adrs/P-0023-plugin-distribution.md) D4) is the sole path to load-eligibility; digest-pinned resolution only. Publish-side: signing occurs on the build host only (key custody unchanged, [P-0005](../adrs/P-0005-v0-signing-chain.md)). | New typed elements below; STRIDE-per-element rows land at this cluster's pre-implementation security review (the P-0014 typed-DFD-extension precedent) |
+
+Typed elements added by the extension (consumed by [P-0023](../adrs/P-0023-plugin-distribution.md)'s
+Threat-references; the drawn DFD and per-element threat rows re-draw against these at the
+cluster's pre-implementation security review — same follow-up shape as the retrieval
+cluster's P-0014 extension):
+
+| ID | Type | Element |
+|---|---|---|
+| `EE-plugin-store` | external entity / zone | the store (self-hosted registry or removable-media `oci-layout`) — untrusted by design; trust derives from signatures + digests, never from the store |
+| `P-bundle-builder` | process | build-host assemble/sign/publish tool (spec R-0090); inside `TB-build-pipeline` |
+| `P-fetch-verify` | process | the bounds-first fetch-verify pipeline behind the `PackageVerifier` seam (spec R-0083); inside `TB-mnemra-host` |
+| `DS-oci-store` | data store | bundle content (outer manifest, blobs, signature referrer) at rest in the store zone |
+| `DS-bundle-cache` | data store | the local fetched-layout cache the load path reads (load-path invariant #5's re-validation surface) |
+| `DF-publish` | data flow | builder → store (crosses `TB-build-pipeline` → `TB-plugin-store`) |
+| `DF-fetch` | data flow | store → host pipeline (crosses `TB-plugin-store` → `TB-mnemra-host`; the bounds-first surface) |
+| `DF-referrers` | data flow | signature-referrer enumeration (count- and size-bounded, spec R-0084) |
+
 ## Accepted risks
 
 Populated by the Stage 2 terminal security review (2026-05-22). Each entry is a risk
@@ -2281,6 +2369,9 @@ threat rows above by Risk ID.
 | `R-0005` | External-LLM embedding calls (`DF-embed-call`/I) and the brief's "no in-host LLM" Hard constraint together mean **artifact bodies leave the deployment trust boundary** at every embedding call. Telemetry no-leak is a dogfood acceptance criterion (audit script against a known-content corpus), not a structural barrier. | maintainer | First deployment that is not single-operator-only (any deployment with telemetry-sensitive content beyond the maintainer's), OR Bring-Your-Own-Model (BYOM) is not configured and a hosted provider sees production content. | The brief explicitly carves "no in-host LLM" and "calls out to an external model" as Hard constraints. The compensating control is BYOM deployment posture — the LLM-API-key configuration surface is in `0.1.0`. The risk is acknowledged, structurally bounded by deployment posture, not mitigated by code. |
 | `R-0006` | Operator-action repudiation at V0 is partially mitigated. CLI destructive ops (`drop-workspace`, force-restore-overwrite) tie to the OS UID; there is no second factor and no admin-action audit log that survives a substrate restore. Repudiation threats on `EE-operator`/R, `DS-admin-token`/R rely on OS-side audit. | maintainer | First deployment with more than one operator on the host, OR the activity-log capability (`0.5.0`) lands and admin actions can be tied to a durable audit event independent of the substrate. | Solo dogfood: the maintainer is sole operator; repudiation is not a meaningful threat in that topology. Activity log lands at `0.5.0`, after the substrate; the dependency is correct, the trip-wire fires on multi-operator topology, not on time. |
 | `R-0007` | Plugin sampling (`DF-sampling-up`) at V0 is unrestricted because all plugins at V0 are `core: true` and signed by the mnemra root. The plugin-to-orchestrator prompt-injection surface (`DF-sampling-up`/T, `P-plugin-instance`/I) is High at V0 and **becomes Critical at V0.1+ when third-party plugin install activates** (brief idea-tier D11). | maintainer | Third-party plugin install activates (brief D11), OR `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` locks the sampling capability shape without typed-prompt restrictions. | At V0 the plugin set is trusted by build provenance; signed artifacts are the only execution surface. The mitigation cost is high relative to V0 value; the trip-wire is structural (third-party install), not temporal. |
+| `R-0008` | **Rollback/downgrade on the distribution surface** (`EE-plugin-store`, `DF-fetch`): OCI + the keyed package signature cannot prevent the store (or a MITM on the LAN path) from serving an **older, validly-signed** bundle. High severity on the distribution surface; no freshness/monotonicity mechanism exists at this tier — deliberately, per `[P-0023](../adrs/P-0023-plugin-distribution.md)` (a bespoke version-monotonicity check is explicitly not built; TUF is the designed answer). | maintainer | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`'s R-0005-e condition fires (deployment beyond the single dogfood instance, or third-party publishers) — the TUF adapter (timestamp/snapshot freshness) lands behind the locked `PackageVerifier` seam, co-requiring the Tier-C offline root for its rotation half. Entry retires when the TUF layer locks. | Single-publisher single-deployment dogfood: the operator controls both store and host, so a stale-serve requires compromising infrastructure the operator owns. The seam is pre-positioned so the mitigation arrives as an adapter, not rework (`P-Defer`, decision content in the Frame's deferral table). |
+| `R-0009` | **Single-root compromise-independence** (`DS-mnemra-root-key`/I reach, extended by distribution): the package signature (distribution anchor) and the inner manifest signature (provenance anchor) are both made by the one P-0005 root at this tier (`[P-0023](../adrs/P-0023-plugin-distribution.md)` D6, maintainer-ratified Q5 2026-07-07) — the layers are scope-independent, **not compromise-independent**; one root theft forges both, and detecting a stolen-key forgery needs a transparency-log/TUF witness that is deferred. Critical severity under key theft (as `R-0004`). | maintainer | The same R-0005-e condition — split to a distinct **distribution key** (or TUF delegated roles), restoring compromise-independence; the anchor-independence of the dual load-time checks becomes fully load-bearing at the split. Entry retires when the distribution key splits. | One custody story at single-publisher `core: true` scope (Security ↔ Simplicity, maintainer-resolved); the exposure is recorded in the ADR and here rather than silently accepted. Compensating: the R-0004 custody posture (key never on the deployment node) bounds the theft surface to the build host. |
+| `R-0010` | **Build-time dependency confusion** (`P-bundle-builder` reach): `wkg`-pulled WIT/component dependencies are composed into the component **before** signing, so a malicious same-named dependency resolved at build time changes the component bytes and every downstream gate then faithfully binds the poisoned artifact (bytes-run == bytes-signed — integrity, not provenance-of-inputs). | maintainer | Reproducible `wasm32-wasip2` builds land (the reproducible-builds work item, #1942) — SLSA provenance attestations attached as OCI referrers become assertable and are the designed answer. Interim: the lockfile-hash-pin weighing is a named spec-gate item on the distribution spec. Entry retires when provenance attestations land. | The residual is upstream of every signing gate by construction — no load-path mechanism can close it (the gates bind what was built). Named honestly rather than over-claimed; the distribution design neither widens nor narrows it. |
 
 **Cross-reference.** Each accepted risk maps to one or more threat rows in the threats-
 by-element table. A future risk-register file (workspace canon names `RISK-REGISTER.md`
@@ -2309,6 +2400,18 @@ resolution. Empty at port-time — Frame work did not surface a brief-level tens
 
 ## Session log
 
+- **2026-07-07** — Plugin-distribution extension (rider on the W2-1 Stage-3 docs change;
+  [P-0023](../adrs/P-0023-plugin-distribution.md) + spec
+  [`2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md)).
+  Added the `TB-plugin-store` boundary row + eleventh-row note in the canonical TB
+  enumeration, the distribution extension's typed elements (`EE-plugin-store`,
+  `P-bundle-builder`, `P-fetch-verify`, `DS-oci-store`, `DS-bundle-cache`, `DF-publish`,
+  `DF-fetch`, `DF-referrers`), and accepted risks `R-0008` (rollback/downgrade residual,
+  retires at R-0005-e via TUF), `R-0009` (single-root compromise-independence, retires at
+  the R-0005-e distribution-key split), `R-0010` (build-time dependency confusion,
+  retires at reproducible-builds/SLSA). The drawn DFD and STRIDE-per-element rows
+  re-draw against the typed extension at the cluster's pre-implementation security
+  review (the P-0014 precedent; named follow-up).
 - **2026-07-02** — RC-1 reconciliation (rider on the retrieval-cluster Stage-3 docs
   change; this overview's ELT external-embedding framing was the named lagging copy of
   the brief's model-hosting amendment). Updated the hard-locked constraint-inventory
@@ -2456,11 +2559,11 @@ primary-audience: human
 
 # Architecture Decision Records
 
-mnemra-core's architecture decisions, in [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
+Architectural decisions in mnemra-core use the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
 
 ## What is an ADR?
 
-An ADR captures a single architectural decision with its context and rationale. ADRs are immutable once accepted: never edited to reflect changing opinions, superseded by newer ADRs when decisions evolve.
+An ADR captures a single architectural decision, its context, and its rationale. Immutable once accepted — not edited to reflect changing opinions; superseded by newer ADRs when decisions evolve.
 
 ## ADR Lifecycle
 
@@ -2476,22 +2579,22 @@ ADR statuses:
 
 ## G/P Prefix Projection Pattern
 
-Two-tier identifier convention encoding where a decision originates and how it propagates.
+Two-tier identifier convention reflecting where a decision originates and how it propagates:
 
-- **G-NNNN (general)** — workspace-wide architecture decisions. Not individual files in this directory; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot recording each general standard as a concise entry without the full rationale chain. DEFAULTS.md is frozen at projection time; upstream changes to a G-* decision do not auto-sync into this file.
+- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files here; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot recording each general standard as a concise entry without the full rationale chain. Frozen at projection time — upstream changes to a G-* decision do not auto-sync into this file.
 - **P-NNNN (project)** — project-specific architecture decisions, stored as individual `P-NNNN-*.md` files in this directory. Two sub-categories:
-  - *Project-specific:* a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
-  - *Override:* a deviation from a `DEFAULTS.md` baseline entry; the Status field names the overridden default explicitly (e.g., `Status: accepted, Overrides G-0017`).
+  - *Project-specific:* no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
+  - *Override:* a deviation from a `DEFAULTS.md` baseline entry, named explicitly in the Status field (e.g., `Status: accepted, Overrides G-0017`).
 
 *The default is the starting point; any deviation is a new P-ADR.*
 
 ## Using the Template
 
-New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, write the body sections. If the decision overrides a `DEFAULTS.md` entry, state that in the Status section.
+New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, write the body sections. Overrides of a `DEFAULTS.md` entry are stated explicitly in the Status section.
 
 ## Current ADRs
 
-Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine ADR (P-0010), folded in 2026-06-08 from a post-spec-lock storage-engine evaluation; the logging-facade ADR (P-0011), recording the `tracing` facade-from-binary choice, merged 2026-06-17; and the plugin-runtime + MCP-SDK ADR (P-0012), recording the raw-Wasmtime-over-Extism runtime choice (retroactive; shipped Tasks 20–22) and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice (forward; implemented by Task 23) — correcting both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed on both halves without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR, so its decisions live in the [observability baseline](../architecture/overview.md#observability); the original observability ADR P-0004 is `deprecated` (no successor ADR). P-0011 is *not* an observability-shape ADR — it is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract), the plumbing foundation under that baseline. All Tier-A placeholder slots resolved ([`placeholder-resolution.md`](placeholder-resolution.md) for full status). The three retrieval-cluster ADRs (P-0014/P-0015/P-0016, authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster's Frame slots; `accepted` 2026-07-02 at the retrieval-cluster spec-exit gate. The two reporting-engine ADRs (P-0020/P-0021, authored 2026-07-04 at the reporting-engine Stage 3) resolve that cluster's Frame slots; `accepted` 2026-07-04 at the reporting-engine spec-exit gate. The single coordination-cluster ADR (P-0022, authored 2026-07-07 at the coordination-wedge Stage 3) resolves that cluster's one Frame slot (`{{P-CoordinationCluster}}` — a single slot, not a split); `proposed`, moving to `accepted` at the coordination-wedge spec-exit gate as part of the Stage-3 package the gate reviews alongside [the cluster spec](../../specs/2026-07-06-coordination-wedge.md).
+Nine Tier-A ADRs authored in WS-E-2 Stage 3; the storage substrate/engine ADR ([P-0010](P-0010-storage-substrate-engine.md)), folded in 2026-06-08 from a post-spec-lock storage-engine evaluation; the logging-facade ADR ([P-0011](P-0011-logging-facade.md)), recording the `tracing` facade-from-binary choice merged 2026-06-17; the plugin-runtime + MCP-SDK ADR ([P-0012](P-0012-plugin-runtime-and-mcp-sdk.md)), recording the raw-Wasmtime-over-Extism runtime choice (retroactive; shipped Tasks 20–22) and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice (forward; implemented by Task 23) — correcting both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR. Its decisions live in the [observability baseline](../architecture/overview.md#observability); the original observability ADR [P-0004](P-0004-observability-shape.md) is `deprecated` (no successor ADR). P-0011 is not an observability-shape ADR — a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract), and the plumbing foundation under that baseline. All Tier-A placeholder slots resolved (see [`placeholder-resolution.md`](placeholder-resolution.md) for full status). The three retrieval-cluster ADRs ([P-0014](P-0014-retrieval-architecture.md)/[P-0015](P-0015-provenance-envelope-source-roles.md)/[P-0016](P-0016-edge-schema.md), authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster's Frame slots; `accepted` 2026-07-02, at the retrieval-cluster spec-exit gate. The two reporting-engine ADRs ([P-0020](P-0020-report-execution-context.md)/[P-0021](P-0021-report-definition-type.md), authored 2026-07-04 at the reporting-engine Stage 3) resolve that cluster's Frame slots; `accepted` 2026-07-04, at the reporting-engine spec-exit gate. The single coordination-cluster ADR ([P-0022](P-0022-coordination-cluster.md), authored 2026-07-07 at the coordination-wedge Stage 3) resolves that cluster's one Frame slot (`{{P-CoordinationCluster}}` — a single slot, not a split); `accepted` 2026-07-07, at the coordination-wedge spec-exit gate, part of the Stage-3 package reviewed alongside [the cluster spec](../../specs/2026-07-06-coordination-wedge.md). The distribution ADR ([P-0023](P-0023-plugin-distribution.md), authored 2026-07-07 at the plugin-distribution Stage 3) resolves that Frame's `{{P-PluginDistribution}}` slot; `accepted` 2026-07-11, at the plugin-distribution spec-exit gate, part of the Stage-3 package reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md).
 
 | ADR | Summary |
 |-----|---------|
@@ -2517,6 +2620,7 @@ Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine A
 | [P-0020-report-execution-context](P-0020-report-execution-context.md) | The reporting engine's dedicated read-only Postgres execution context: a SELECT-only report role + `READ ONLY` transaction (two independent write-blocks), table + function-EXECUTE allow-lists with default-deny exclusions (`admin_tokens`, policy-audit stores), a scoped RLS exception keyed on per-execution `SET LOCAL` session settings with session-key tamper-resistance via GUC-setter revocation (chosen over `SET ROLE`/`current_user` keying), the ownership/`BYPASSRLS`/`FORCE ROW LEVEL SECURITY` model as a correctness precondition, timeout/row-cap/bounded-pool cost containment, and the OC-10 reconciliation check. Scoped exception to the P-0006/P-0009 deferred-RLS posture on exactly the caller-authored-SQL path; converges with the general R-0001 activation. Resolves the reporting-engine Frame `{{P-ReportExecutionContext}}` slot. |
 | [P-0021-report-definition-type](P-0021-report-definition-type.md) | The report-definition content type: a host-core-owned `reference`-cluster content artifact written through the existing content-write machinery — argued deliberately OFF the P-0018 core-entity short list (referenced by name at lookup, never a hard FK target; a third host-owned-content category). Locks the definition schema, write-time validation (including rejection of data-modifying CTEs so an invalid definition never registers), full P-0015 policy-record inheritance (`visibility` not-found / `dont_use` stub dispositions), reserved-built-in-name reservation, and `(workspace_id, name)` uniqueness. Resolves the reporting-engine Frame `{{P-ReportDefinitionType}}` slot. |
 | [P-0022-coordination-cluster](P-0022-coordination-cluster.md) | The coordination cluster's one-slot contract record: a **core host subsystem** (the P-0002 verb-on-content walk — not a plugin, mints no signed artifact, does not fire the P-0013 domain-verb tripwire) with actors as durable role-instance identity (sessions are ephemeral host-derived attachments; one-live-attachment, agent-type-only, audited succession), leases as the mutual-exclusion primitive on the duration line (substrate-atomic acquisition, TTL, expired-only always-audited takeover, a registered resource-identifier scheme), and addressed messages as rows with post-send immutability, a monotonic `sent→delivered→acknowledged→dispositioned` lifecycle, a closed `{completed, declined, obsolete}` disposition vocabulary, and code-registered types (`merge-request` v1 + `handoff` v1). Two agent-visible MCP tools (`claim` + `message`, actions as closed enums) inside the 8-of-≤9 verb budget; reads default-visible in-workspace / writes strictly authority-scoped with a multi-team + trust-differentiated-actor tripwire; own storage placement outside the P-0017 four-shape content taxonomy, hard-FK to core entities only, standalone over zero content. Merger stays instance-shaped (re-arm on push transport). Log topology, audit-store detail, and the auth-bundle policy composition are explicitly out of slot. Resolves the coordination-wedge Frame `{{P-CoordinationCluster}}` slot. |
+| [P-0023-plugin-distribution](P-0023-plugin-distribution.md) | The distribution layer's contract record (W2-1): uniform multi-artifact OCI bundle (N≥1, wasm = `layers[0]`, signed inner manifest as config descriptor, one flat manifest, uncompressed-only at V0); keyed-in-tree package signature (P-0005 root over the domain-separated outer-manifest digest, OCI 1.1 referrer, signer-key-pinned, never TOFU); two R-NoExternalHost transports (image-layout fs, self-hosted distribution API) behind one store contract; the bounds-first pre-phase (`fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds`) behind the locked `PackageVerifier` seam (TUF slots behind it at R-0005-e); hard cutover, no bare/legacy load path; single-root custody exposure recorded (register R-0009). Pulls P-0019 DEF-2's single-publisher scope ahead of its tripwire and supersedes its cosign-on-`wkg` shape; the `[[artifacts]]` schema lands as P-0003 §Amendment 2026-07-07. Resolves the plugin-distribution Frame `{{P-PluginDistribution}}` slot. |
 
 <!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
 
@@ -3445,6 +3549,27 @@ The "Schema evolution" section above states: *"`schema_version: 1` locks the V0 
 ### Scope of this amendment
 
 This amendment adds **only** the `[component]` content-hash section to the signed body. It does **not** change `schema_version`, the host-fn ABI, the `[verbs]` / `[content_types]` / `[state_scopes]` / `[host_fns]` sections, the `[signature]` section, or any structural invariant in the table above. The custody / signing mechanism is unchanged ([P-0005](P-0005-v0-signing-chain.md)). The Tier-C signing-key custody hardening (`{{P-SigningKeyCustodyHardening}}`) remains deferred behind the R-0005-e multi-deployment trip-wire — out of scope here.
+
+## Amendment 2026-07-07 — `[[artifacts]]` N≥1 binding (plugin distribution; supersedes the `[component]` section)
+
+The plugin-distribution design (W2-1: [P-0023](P-0023-plugin-distribution.md); spec [`docs/specs/2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md), R-0086) extends this manifest's supply-chain binding from the single component hash to **all N≥1 bundle artifacts**, per the maintainer's Decision A (2026-07-01, locked): the inner signed manifest binds every blob via an `[[artifacts]]`-style N≥1 list, each verified with R-0021's single-read / complete-mediation / fail-closed discipline at the provenance anchor. As with the 2026-06-30 amendment, this amendment governs the **schema**; the runtime behavior (the complete-mediation loop, dual-digest single-read, designed rejections) is governed by the distribution spec (R-0086/R-0087).
+
+### Schema change — `[[artifacts]]` replaces `[component]` in the signed canonical body
+
+The signed canonical body (the bytes before the `\n[signature]` marker — the slice produced by the canonical-body splitter in `libs/mnemra-host/signing/verify.rs`) gains an **`[[artifacts]]` array of tables, N≥1, entry #1 = the component `.wasm`**, and **loses the `[component]` section**, which this amendment **supersedes**. Field-by-field schema, the `id` grammar (`^[a-z0-9][a-z0-9._-]{0,63}$` — path traversal unconstructible by construction), the `hash_alg` constraint (**`blake3` is the only value accepted at V0** — `sha256`/`sha384`/`sha512` are reserved vocabulary for a future amendment and rejected on sight, `hash_alg_unsupported`, alongside the banned-weak `md5`/`sha1`; no non-blake3 verification path is reachable at V0), the mandatory lowercase-hex `hash`, and the `media_type` cross-anchor consistency rule are locked in spec **R-0086-a/-b** — single-sourced there, not restated here.
+
+Two 2026-06-30 rules are explicitly superseded or carried:
+
+1. **"Binds bytes, not a path" — scope-out superseded.** The 2026-06-30 amendment carried no per-artifact identifier because the single `[component]` section needed none. Under an N≥1 binding, a per-artifact **`id`** becomes necessary for unambiguous, collision-free entry↔blob resolution (the outer OCI layer joins on the `vnd.mnemra.artifact.id` annotation; ratified 2026-07-07). Per **R-0005-h (core-by-provenance)**, every per-artifact identifier lives **in the signed canonical body** — an identifier in the unsigned region would let an attacker swap both an artifact and its declared identity. The binding still binds *bytes* (via `hash`); the `id` names the binding, it does not weaken it to a path reference.
+2. **Read only from the signed slice — carried unchanged.** The `[[artifacts]]` array SHALL be parsed only from the signed canonical body; an array in the unsigned `[signature]`-adjacent region SHALL NOT satisfy presence and SHALL cause rejection (spec R-0086-d).
+
+### `schema_version` stays `1` — the same one-decision rule, re-applied
+
+The 2026-06-30 reasoning applies verbatim: V0 is still being *defined* (the `core: true` set is re-signed with `[[artifacts]]` in the same hard-cutover change — [P-0023](P-0023-plugin-distribution.md) D5; no older population exists to branch on), so the version does not increment, **and therefore the parser enforces presence directly**: a signed body lacking `[[artifacts]]` (or with zero entries) is rejected fail-closed (spec R-0086-d). **Strict supersession (maintainer-ratified 2026-07-07):** post-cutover, a signed body carrying a `[component]` section is **rejected** (`legacy_manifest_rejected`, spec R-0086-e) — not ignored — so no manifest can carry two binding representations that could disagree. Holding the version at `1` is only safe because the parser enforces both the presence of the new table and the absence of the old one.
+
+### Scope of this amendment
+
+This amendment changes **only** the supply-chain binding section of the signed body (`[component]` → `[[artifacts]]`). The host-fn ABI, `[verbs]` / `[content_types]` / `[state_scopes]` / `[host_fns]`, `[signature]`, `schema_version`, and every structural invariant in the V0 table above are unchanged. The custody / signing mechanism is unchanged ([P-0005](P-0005-v0-signing-chain.md)); the distribution-layer packaging, package signature, and fetch pipeline are [P-0023](P-0023-plugin-distribution.md)'s domain, not this schema's. The 2026-06-30 amendment text above is preserved as the historical record of the single-component binding it defined (amend-don't-erase); its schema is superseded by this section as of the hard cutover.
 
 ## More Information
 
@@ -6080,9 +6205,11 @@ This close is **conditional on the retreat trigger (DEF-4) not firing.** If a ha
 
 The sequence (state → the gate that must pass to advance → the owning ADR for the mechanics):
 
+> *Cross-reference (2026-07-07): for bundle-delivered plugins, a **distribution pre-phase** (verified fetch/unpack) precedes state 1 — its canonical bounds-first ordering and mechanics are owned by [P-0023-plugin-distribution](P-0023-plugin-distribution.md) D4; it is a pre-phase, not a tenth state here.*
+
 1. **Discovered** — the component `.wasm` and its signed manifest are located (single `core: true` plugin at V0).
 2. **Signature-verified** → the manifest signature chains to the mnemra root key; **synchronous, fail-closed** — no instance exists until `verify()` returns `Ok`; `core` status is honored only by signature provenance. *Owner: [P-0005](P-0005-v0-signing-chain.md) (+ its 2026-05-24 amendment).*
-3. **Content-hash-verified** → the component bytes match the manifest's signed `[component].hash` (BLAKE3), recomputed on every load, fail-closed on mismatch or absence. *Owner: [P-0003](P-0003-plugin-manifest.md) §Amendment 2026-06-30.*
+3. **Content-hash-verified** → the component bytes match the manifest's signed content-hash binding (BLAKE3), recomputed on every load, fail-closed on mismatch or absence. *(Post-cutover 2026-07-07 the binding source is `[[artifacts]]` entry #1 per [P-0003](P-0003-plugin-manifest.md) §Amendment 2026-07-07, which supersedes `[component]` — a `[component]`-carrying body is itself rejected; primitive unchanged.)* *Owner: [P-0003](P-0003-plugin-manifest.md) §Amendment 2026-07-07 (historical single-component form: §Amendment 2026-06-30).*
 4. **Manifest-parsed + allowlist-compiled** → the manifest's declared host-fn surface is compiled into a per-instance allowlist; calls outside it fail at the WIT boundary. *Owner: [P-0003](P-0003-plugin-manifest.md).*
 5. **Instantiated into the pool** → the component is instantiated (Component Model, not core module) with its per-instance resource limits attached (fuel, epoch deadline, memory ceiling) into a 3–5-instance host-managed pool. *Owner: [P-0007](P-0007-plugin-resource-limits.md).*
 6. **Ready** — the instance is pooled and awaiting invocation; state persists across invocations on the same instance (long-running stateful in-process model).
@@ -6106,6 +6233,8 @@ Each deferral states what it would decide, the canon that supports deferring now
 #### DEF-2 — Third-party plugin distribution + signature verification (cosign-on-`wkg`)
 
 **Deferred:** The distribution-and-verification story for **third-party** (non-`core`) plugins — publishing components to an OCI/`wkg` registry and verifying a per-artifact signature (cosign/sigstore-style, a `application/vnd.mnemra.plugin.v1` artifact type) before instantiation. *Deferral anchor: `P-Defer` — V0 ships only `core: true` plugins embedded in the binary; there is nothing to distribute, so the distribution-verification mechanism has no V0 forcing function.* This is distinct from and does **not** weaken the V0 signing chain: [P-0005](P-0005-v0-signing-chain.md) already locks synchronous fail-closed ed25519 verification of `core: true` plugins at load. The survey §4 finding is that `wkg` (the BA-canonical CM distribution path) does **not** bake in cosign the way `hyper-mcp` does — so this is real work mnemra builds at V0.1+, not a substrate freebie. **Tripwire:** the first third-party (non-`core`) plugin distribution surface opening — i.e., V0.1+ third-party plugin install. The recommended shape when it fires (a sigstore-compatible verifier over `wkg`'s OCI fetch, applied before instantiation) is recorded as the survey's recommendation, not locked here.
+
+**Disposition (2026-07-07 — W2-1 plugin distribution, [P-0023](P-0023-plugin-distribution.md)):** two moves, one partial — this deferral is *not* fully retired. **(a) The recorded shape is superseded:** the locked 2026-07-01 distribution research replaces cosign-on-`wkg` with **keyed-in-tree signing** (the P-0005 root over the OCI manifest digest, domain-separated, as an OCI 1.1 referrer — `cosign` signs only as a Go CLI, a stack-discipline cost) and **direct-OCI bundle authoring** over `wkg`'s one-component-per-package convention; the `application/vnd.mnemra.plugin.v1` artifact type and the verify-before-instantiate ordering recorded above are **retained** as designed. **(b) The single-publisher scope was pulled deliberately ahead of the tripwire** (maintainer board placement, 2026-07-05): the `core: true` distribution story is designed now ([P-0023](P-0023-plugin-distribution.md); spec R-0078–R-0091). **What remains deferred, unchanged in force:** the **third-party-publisher** half — non-`core` distribution, key splitting for external publishers, delegated roles — behind this same tripwire, now co-expressed as [P-0005](P-0005-v0-signing-chain.md)'s R-0005-e condition.
 
 #### DEF-3 — V0.1+ language-support matrix
 
@@ -6636,6 +6765,155 @@ These **five** residuals are the Frame §5 set, verbatim in its order, each acce
 - **Depends on / cites:** [P-0002](P-0002-core-plugin-partition.md) (the core/plugin verb-on-content walk — the D-RESIDENCE criterion; the identity builtins that populate actors); [P-0018](P-0018-core-entity-manifest.md) (D-ACTOR one-`actors`-table grain, D-ENT the closed four-entity hard-FK set, D-SURFACE the audit emit-target, D-BOUNDARY workflow-primitives-not-core); [P-0017](P-0017-storage-cluster-model.md) (D-SoT hard-FK-to-core-only; the closed four-shape content taxonomy coordination sits outside); [P-0010](P-0010-storage-substrate-engine.md) (the engine-agnostic `Storage` trait); [P-0006](P-0006-v0-tenant-enforcement.md) (`WorkspaceCtx` tenancy); [P-0008](P-0008-admin-token-shape.md)/[P-0009](P-0009-rls-admin-token.md) (the V0 admin-token enforcement point + verb-category gating); [P-0019](P-0019-plugin-contract.md) (the host-derived-context rule generalized to the acting principal); [P-0013](P-0013-plugin-invocation-model.md) (the deferred-domain-verb tripwire scoping); [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) (the `rmcp` handler contract); [P-0005](P-0005-v0-signing-chain.md) (satisfied vacuously-by-residence); [P-0011](P-0011-logging-facade.md) (the `tracing` facade the out-of-slot log topology composes behind).
 - **Explicitly not owned here:** the operational-log topology (Frame C10 — subscriber composition behind [P-0011](P-0011-logging-facade.md), no slot needed); the audit-store durability/delivery detail (the forthcoming event-bus ADR [P-0018](P-0018-core-entity-manifest.md) D-SURFACE names); the auth-bundle policy composition (Frame TB-5 name-and-defer — the write-authority matrix is shaped to become its policy rows, but no policy-engine integration lands with this cluster).
 - **Companion:** authored with the [coordination-wedge spec](../../specs/2026-07-06-coordination-wedge.md) as the Stage-3 package the spec-exit gate reviews together (security/correctness, operational-completeness, and testability review); this ADR and the spec move in lockstep — the spec is authored self-contained (every contract this ADR records is normative in the spec first), so the spec does not dangle on the ADR landing.
+
+<!-- ===== docs/src/adrs/P-0023-plugin-distribution.md ===== -->
+
+---
+title: "P-0023: Plugin Distribution — OCI bundle store, keyed-in-tree package signing, verified-fetch pipeline"
+summary: "The distribution layer's contract decisions (W2-1): every plugin is a uniform multi-artifact OCI bundle (N≥1, wasm = layers[0], signed inner manifest as config descriptor, one flat manifest); the package signature is the P-0005 Ed25519 root over the domain-separated outer-manifest digest, attached as an OCI 1.1 referrer, verified under signer-key-pinning; two R-NoExternalHost transports (image-layout filesystem, self-hosted distribution API) behind one store contract; the bounds-first pre-phase ordering (fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds) as a distribution pre-phase ahead of P-0019 D6 state 1; the PackageVerifier seam locked now with the TUF adapter deferred behind it (R-0005-e); hard cutover with no legacy accept path; single-root custody exposure recorded (split at R-0005-e). Resolves the plugin-distribution Frame {{P-PluginDistribution}} slot; pulls P-0019 DEF-2's single-publisher scope ahead of its tripwire and supersedes its cosign-on-wkg shape."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-07-07"
+decision-makers: ["the maintainer"]
+consulted: ["the orchestrator", "the researcher", "the security reviewer"]
+informed: []
+supersedes: null
+superseded_by: null
+---
+
+# P-0023: Plugin Distribution — OCI bundle store, keyed-in-tree package signing, verified-fetch pipeline
+
+**Project:** mnemra-core
+
+## Status
+
+`accepted` (2026-07-11, at the plugin-distribution spec-exit gate, as part of the Stage-3 package the gate reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md) — the P-0022 precedent). The decisions it records (H1, R-NoExternalHost, Decision A, Q2/Q3/Q5/Q7, the 2026-07-07 pre-gate ratifications) were maintainer-locked before this record; the gate ratified the *record*, not the decisions.
+
+**A note on numbering.** P-0022 (coordination cluster) landed on `main` 2026-07-07 (commit `8f27cc5`), after this ADR's authoring branch had cut from its original merge-base (`451f53b`); the branch has since rebased onto it, so both records are present in this listing. P-0023 was definitively the next free number; no renumber was needed at the rebase.
+
+## Context and Problem Statement
+
+Until this decision, a mnemra plugin existed only as files loaded from known local paths, gated by the inner Ed25519 manifest signature ([P-0005](P-0005-v0-signing-chain.md)) and the R-0021 BLAKE3 content-hash over the `.wasm` component ([signing-to-runnable spec](../../specs/2026-06-30-signing-to-runnable.md)). The **distributable unit did not exist**: no packaging shape, an unsigned package as a whole, and non-wasm artifacts (data, assets, schemas, secondary components) individually uncovered — a live per-artifact substitution/tamper hole (the 2026-07-01 V0 signing ceremony's named gap; tasks #1943/#1944).
+
+The job: a consumer establishes provenance and integrity of the **whole bundle before unpacking** — from a filesystem or a self-hosted registry, with zero required round-trip to a host we do not control — and every blob is re-verified at the provenance anchor at load. The governing designed-tier chain: locked intake ([`docs/intent/plugin-distribution.md`](../../intent/plugin-distribution.md), blob `9c8e1577`), locked Frame ([`docs/intent/plugin-distribution-frame.md`](../../intent/plugin-distribution-frame.md), blob `60c437c5`), locked research survey (2026-07-01, r3), and the Stage-3 spec ([`docs/specs/2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md), R-0078–R-0092). This ADR records the distribution layer's **contract decisions** at ADR precision and **cites the spec for requirement-level detail** (the P-0019 capstone-that-cites division-of-authority pattern); it does not restate R-IDs.
+
+Three maintainer decisions were locked 2026-07-01 and are the fixed frame, not options weighed here: **H1** (uniform multi-artifact OCI bundle, N≥1, wasm = artifact #1, no bare load path — the *path* is banned, not N=1 content), **R-NoExternalHost** (filesystem AND self-hosted-server self-hostability, zero uncontrolled-host round-trip), and **Decision A** (the inner signed manifest binds every blob via an `[[artifacts]]` N≥1 list, each verified with R-0021's single-read / complete-mediation / fail-closed discipline at the provenance anchor). Four shape questions were maintainer-ratified 2026-07-07 (Q7 hard cutover; Q5 single-root custody; Q2 one flat manifest; Q3 seam-now/TUF-later), and five spec-tier mechanism choices were ratified at the 2026-07-07 pre-gate ruling (bound floors, uncompressed-only, config-descriptor placement, the `vnd.mnemra.artifact.id` join key, strict `[component]` rejection).
+
+## Decision Drivers
+
+- **`P-SecurityLayered`.** The distribution anchor adds a layer over the existing provenance-at-load gates; the layers are scope-independent (the compromise-independence caveat under single-root reuse is recorded, not hidden — D6 below). Fail-closed is structural at every stage; the fetch/unpack availability surface (bounds) is part of the layer, not an afterthought.
+- **`P-StackDiscipline` / Simplicity.** Keyed-in-tree signing reuses the in-tree `ed25519-dalek` root — zero new signing dependency, no Go-CLI (`cosign`) foreign-ecosystem cost — the same reuse logic R-0021 applied to in-tree BLAKE3. OCI's image-layout ≡ registry-structure identity serves both transports from one abstraction.
+- **`P-LockContract` (+ the when-to-lock discipline).** The `PackageVerifier` seam is intrinsic to the layer's identity and locks now; the TUF adapter is a separable future option deferred behind it — the P-0010 D5 engine-agnostic-seam precedent.
+- **`P-Defer` (fireable tripwires).** TUF mechanism, distribution-key split, sigstore keyless, and SLSA attestations are deferred behind **R-0005-e** ([P-0005](P-0005-v0-signing-chain.md)'s multi-deployment condition, co-fired by third-party publishers) and the reproducible-builds work item respectively — each with decision content recorded in the Frame's deferral table, all self-announcing.
+- **`P-PreserveDecisionSpace`.** The rejected store and signing options are recorded below with reasons; the image-index forward shape and the compression amendment path are named, not erased.
+- **R-0005-h (core-by-provenance).** Every per-artifact identifier lives in the signed canonical body — the residence constraint that shaped the `[[artifacts]]` schema ([P-0003](P-0003-plugin-manifest.md) §Amendment 2026-07-07).
+
+## Considered Options
+
+**Store standard** (research-locked 2026-07-01; recorded per `P-PreserveDecisionSpace`):
+
+1. **OCI artifacts, authored directly (chosen)** — image-spec 1.1 manifest + distribution API + image-layout; the ORAS-style arbitrary-artifact path.
+2. **warg / wasm-pkg registry (rejected)** — maintenance-death (ecosystem converged on OCI; crates stale since 2025-07) and an intrinsic uniform-bundle mismatch (unit is a component-package; no home for non-wasm artifacts). Its signed-append-log concept is obtainable via TUF later.
+3. **Bespoke CAS / zip-over-HTTP (rejected)** — reinvents fs+web abstraction, signature attachment, caching, and tooling that OCI standardizes with Green in-stack crates; kept only as documented fallback-of-last-resort.
+
+**Signing mechanism** (research-locked; Q5 ratified):
+
+4. **Keyed-in-tree: P-0005 root signs the manifest digest, verified in-Rust (chosen).**
+5. **cosign/sigstore keyless (rejected at this tier)** — public keyless fails R-NoExternalHost as-shipped; `sigstore-rs` is verify-only/pre-1.0 and signing is a Go CLI (`P-StackDiscipline` S2). Self-hosted keyless is the recorded heavy-lift forward-allowance on R-0005-e.
+
+**Seam posture** (Q3): **6. lock the `PackageVerifier` seam now, defer TUF (chosen)** vs **7. defer the seam too (rejected** — TUF would then arrive as rework instead of an adapter).
+
+**Cutover posture** (Q7): **8. hard cutover (chosen)** vs **9. bounded dual-accept window (rejected** — a legacy accept path is the bare path reborn by deployment, defeating H1 through migration compatibility).
+
+## Decision Outcome
+
+Six locked decisions. Requirement-level acceptance criteria live in the spec (R-IDs cited per decision); this ADR does not duplicate them.
+
+### D1 — Packaging shape: uniform OCI bundle, one flat manifest, config-descriptor inner manifest
+
+Every plugin ships as one **OCI image manifest** with `artifactType = application/vnd.mnemra.plugin.v1`; the **config descriptor** carries the **signed inner TOML manifest** (`application/vnd.mnemra.plugin.manifest.v1+toml`); the **layers** are the N≥1 artifacts with **`layers[0]` = the component `.wasm`** (`application/wasm`); each layer carries the `vnd.mnemra.artifact.id` annotation joining it to its inner `[[artifacts]]` entry. One flat manifest — an image index is rejected at this tier (the index is the recorded forward shape if secondary components ever need independent addressing/signing). Blobs are **uncompressed at V0** (compression suffixes rejected; admitting compression is a spec amendment carrying decompression caps). There is **no bare load path**. *Anchors: H1; Q2; pre-gate ratifications 2026-07-07; Simplicity.* *(Spec: R-0078, R-0079.)*
+
+### D2 — Package signing: domain-separated keyed-in-tree signature as an OCI 1.1 referrer, signer-key-pinned
+
+The package signature is the **P-0005 Ed25519 root** over `"mnemra-oci-manifest-v1:" || <alg>:<hex>` (the outer-manifest digest, domain-separated — the root never signs a bare digest in this domain), attached as an **OCI 1.1 referrer** (`application/vnd.mnemra.signature.v1`, subject = the bundle manifest). Verification is in-Rust on fetch under **signer-key-pinning**: enumerate referrers (bounded), accept only the pinned root, require ≥1 valid, fail closed on zero — never trust-on-first-use, never an unsigned fall-through. Key custody is unchanged from P-0005 (build-host, mode 600; the deployment binary carries verification material only). *Anchors: research §5; P-StackDiscipline S2; Simplicity; P-0005.* *(Spec: R-0080.)*
+
+**Domain-separation hygiene note (one-sided prefix — recorded rationale).** The prefix protects the *new* message domain (the OCI-manifest digest); the *existing* inner domain (the canonical TOML body P-0005 already signs) stays unprefixed. Cross-domain confusion is closed in one direction by the prefix and in the other by format structure — a canonical TOML body cannot begin with the prefix-then-digest byte sequence. That second leg rests on format shape rather than an explicit tag; it is accepted at this tier and recorded here so it is a known asymmetry, not an oversight. Adding an inner-domain prefix at the next natural re-sign boundary is the clean-up path if the asymmetry ever becomes load-bearing.
+
+### D3 — Store: one contract, two R-NoExternalHost transports
+
+A single store contract fronts the **OCI image-layout filesystem** transport (true air-gap: removable media, local directory) and the **self-hosted OCI distribution-API registry** transport (restricted-egress LAN). Resolution for load is **digest-pinned** (never a mutable tag); every digest is recomputed over **received bytes** (store-supplied digest claims are never trusted). No code path or test requires an uncontrolled external host. `wkg` is not the bundle path — it remains confined to WIT/component build-time dependency pulls. *Anchors: R-NoExternalHost; P-LockContract; research §2(a)/§5.* *(Spec: R-0081, R-0090.)*
+
+### D4 — The verified-fetch pipeline: bounds-first canonical ordering behind the `PackageVerifier` seam
+
+The distribution pre-phase's **canonical ordering** — single-sourced here; [P-0019](P-0019-plugin-contract.md) D6 cross-references it — is:
+
+> **fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds**
+
+with **every read gated by its bound before the read feeds a verifier** (metadata caps ahead of the outer-manifest/referrers reads; size/N caps ahead of blob reads), fail-closed at every stage, no later stage reachable without its predecessor. The pre-phase completes ahead of D6 state 1 ("Discovered"); D6 states 2–9 run unchanged — the existing inner gates change in *coverage* (all blobs, per Decision A and the [P-0003 `[[artifacts]]` amendment](P-0003-plugin-manifest.md)), never in *primitive*. The pipeline sits behind the **`PackageVerifier` seam** — the single chokepoint by which a bundle becomes load-eligible, and the locked slot behind which the TUF adapter composes when R-0005-e fires. Fetch/unpack resource bounds exist on the metadata and blob dimensions with conservative, config-tunable floors (ratified as-set 2026-07-07). *Anchors: Q3; P-LockContract + the P-0010 D5 seam precedent; P-SecurityLayered; P-0019 D6.* *(Spec: R-0083, R-0084, R-0087, R-0088.)*
+
+**Mediated-access rule (recorded).** Consumers obtain artifact bytes **only** through the load-time mediation gate (single-read, dual-digest: inner BLAKE3 at the provenance anchor — primary; outer sha256 content-address — the complementary distribution-anchor check, retained on algorithm/implementation-diversity grounds). Direct reads of the unpacked layout or blob cache are **out of contract**. *(Spec: R-0087-b.)*
+
+### D5 — Hard cutover: one atomic flip, no legacy accept path
+
+The uniform-packaging invariant lands as **one change**: the existing `core: true` plugin set is re-packaged and re-signed (with `[[artifacts]]` manifests) in the same change that activates the bundle-only loader. No commit range accepts both shapes; no flag, feature, or code path re-enables a pre-OCI load; pre-OCI load tests are retired or converted to rejection tests in the same change. A signed manifest carrying the legacy `[component]` table is rejected post-cutover (one binding schema in force — ratified 2026-07-07). *Anchors: Q7; H1.* *(Spec: R-0086-e, R-0089.)*
+
+### D6 — Single-root custody at this tier: the recorded exposure
+
+The package signature (distribution anchor) and the inner manifest signature (provenance anchor) are both made by the **one P-0005 root** at this tier. The layers are therefore **scope-independent but NOT compromise-independent**: a single root-key theft forges both simultaneously, and detecting a stolen-key forgery requires a transparency-log / TUF witness that is deferred. This is a deliberate, maintainer-ratified trade (Q5 — one custody story at single-publisher `core: true` scope, on the Security ↔ Simplicity axis), recorded here **so it is never silent**: the accepted-risk register carries it as `R-0009` with the R-0005-e retirement condition (split to a distinct distribution key or TUF delegated roles). *Anchors: Q5; P-SecurityLayered (honest accounting); P-LeastAuthority (the concentration is the named exposure); P-0005 R-0005-e.*
+
+### Deferrals
+
+All four deferrals ride tripwires recorded with full decision content in the Frame's deferral table (blob `60c437c5`) and the spec's Out-of-scope section — cited, not restated: **TUF mechanism** (R-0005-e; the seam is its slot), **distribution-key split** (R-0005-e; restores compromise-independence), **sigstore keyless** (R-0005-e; self-hosted variant for R-NoExternalHost), **SLSA/in-toto attestations** (reproducible-builds landing; the build-time dependency-confusion residual's answer — register `R-0010`). The Tier-C custody hardening slot `{{P-SigningKeyCustodyHardening}}` stays unauthored and untouched.
+
+### Consequences
+
+**Good:**
+
+- The per-artifact substitution hole closes at **both** anchors: the signed OCI manifest digest-pins every blob at the distribution anchor, and the inner `[[artifacts]]` gate complete-mediates every blob at the provenance anchor — with the fetch↔load TOCTOU closed for non-wasm blobs for the first time.
+- Both R-NoExternalHost cases (air-gap filesystem; restricted-egress LAN registry) are first-class from one abstraction, with zero new signing dependencies.
+- The bounds-first ordering makes the availability surface (oversized metadata/blobs, bomb-shaped inputs) fail closed **before** the integrity gates can be size-attacked — and it is single-sourced here, so a future refactor reordering bounds after digests visibly violates this ADR.
+- The seam-now/TUF-later split means rollback protection arrives as an adapter, not rework.
+- Install is a **working-state → working-state** transition: no failure, crash, or kill point leaves the host's serving or load-eligible state indeterminate, and a partial/killed attempt's residue is inert — delivered by the single verification chokepoint (D4) + load-time re-verification, not a bespoke transaction. *(Spec: R-0092.)* The system-wide principle is routed to canon separately (#2248).
+
+**Bad / Trade-offs:**
+
+- **Rollback/downgrade is an accepted residual** until R-0005-e (register `R-0008`): a stale-but-validly-signed bundle verifies. Named, trip-wired, not silent.
+- **Single-root compromise-independence** (D6, register `R-0009`): honest accounting is the mitigation at this tier; the split is deferred.
+- **Build-time dependency confusion** (register `R-0010`): R-0021 binds bytes-run == bytes-signed — integrity, not provenance-of-inputs; the SLSA answer waits on reproducible builds.
+- The hard cutover makes the flip change larger (re-package + re-sign + test retirement in one change) — accepted to keep the bare path from surviving as a migration window.
+
+## Pros and Cons of the Options
+
+### OCI artifacts, authored directly (chosen)
+
+- Pro: native N-blob-per-manifest bundle; image-layout == registry structure (one abstraction, both R-NoExternalHost transports); referrer-attached signatures; mature Green Rust clients (`oci-client`, `oci-spec`).
+- Con: genuinely weak on rollback/rotation (the TUF deferral exists for exactly this); `ocidir`'s thinner maturity requires the L3 layout-write-path audit before adoption (spec acceptance gate).
+
+### warg / wasm-pkg registry (rejected)
+
+- Pro: signed append-only per-package log (strong rollback/transparency).
+- Con: no longer actively developed (ecosystem converged on OCI); unit is a component-package with no home for non-wasm artifacts — intrinsic mismatch with the uniform-bundle contract.
+
+### Bespoke CAS / zip (rejected)
+
+- Pro: zero new concepts; reuses in-tree BLAKE3.
+- Con: reinvents everything OCI standardizes (per Simplicity's least-standing-mechanism reading, more surface, not less); fallback-of-last-resort only.
+
+### Keyed-in-tree signing (chosen) vs cosign/sigstore keyless (rejected at this tier)
+
+- Pro (keyed): zero new dependency; no external host (R-NoExternalHost-clean); Rust-native verify; one custody story at single-publisher scope.
+- Con (keyed): no public transparency; compromise-independence deferred (D6). Pro (keyless): short-lived identities + public auditability. Con (keyless): public infrastructure fails R-NoExternalHost as-shipped; Rust signing does not exist (Go CLI, S2 cost); self-hosted Fulcio/Rekor is a heavy operational lift — the recorded forward-allowance.
+
+## More Information
+
+- **Resolves** the plugin-distribution Frame's `{{P-PluginDistribution}}` slot ([Frame](../../intent/plugin-distribution-frame.md), blob `60c437c5`, ADR landing map).
+- **Spec:** [`docs/specs/2026-07-07-plugin-distribution.md`](../../specs/2026-07-07-plugin-distribution.md) — R-0078–R-0092 (R-0082 skipped; see the spec's numbering note), the `[[artifacts]]` schema detail, the error grammar, and the numeric floors.
+- **Sibling authority:** [P-0003](P-0003-plugin-manifest.md) owns the manifest schema (§Amendment 2026-07-07 — the `[[artifacts]]` binding); [P-0019](P-0019-plugin-contract.md) owns the lifecycle capstone (DEF-2 dispositioned 2026-07-07; D6 cross-references this ADR's pre-phase); [P-0005](P-0005-v0-signing-chain.md) owns the root key, custody, and the R-0005-e trip-wire; [P-0007](P-0007-plugin-resource-limits.md) owns execution-time limits (this ADR's bounds are the fetch/unpack-time sibling, distinct by design).
+- **Threat references:** typed elements per the [architecture overview's distribution extension](../architecture/overview.md#trust-boundaries) (2026-07-07) — `EE-plugin-store`, `P-bundle-builder`, `P-fetch-verify`, `DS-oci-store`, `DS-bundle-cache`, `DF-publish`, `DF-fetch`, `DF-referrers`, and the `TB-plugin-store` boundary row; STRIDE-per-element rows land at this cluster's pre-implementation security review (the P-0014 typed-DFD-extension precedent). Accepted risks: `R-0008` (rollback residual), `R-0009` (single-root exposure), `R-0010` (build-time dependency confusion) — overview §Accepted risks.
+- **Research:** the plugin artifact-repository + package-signing standards survey (locked 2026-07-01, r3) — the store/signing landscape and the ten load-path invariants this design carries.
 
 <!-- ===== docs/src/adrs/placeholder-resolution.md ===== -->
 

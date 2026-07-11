@@ -22,7 +22,7 @@ superseded_by: null
 
 `accepted` (2026-07-11, at the plugin-distribution spec-exit gate, as part of the Stage-3 package the gate reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md) — the P-0022 precedent). The decisions it records (H1, R-NoExternalHost, Decision A, Q2/Q3/Q5/Q7, the 2026-07-07 pre-gate ratifications) were maintainer-locked before this record; the gate ratified the *record*, not the decisions.
 
-**A note on numbering.** P-0022 (coordination cluster) landed on `main` 2026-07-07 (commit `8f27cc5`), after this branch's merge-base (`451f53b`) — it is committed canon but not visible in this working tree's `docs/src/adrs/` listing. P-0023 is definitively the next free number; no renumber is needed at rebase.
+**A note on numbering.** P-0022 (coordination cluster) landed on `main` 2026-07-07 (commit `8f27cc5`), after this ADR's authoring branch had cut from its original merge-base (`451f53b`); the branch has since rebased onto it, so both records are present in this listing. P-0023 was definitively the next free number; no renumber was needed at the rebase.
 
 ## Context and Problem Statement
 

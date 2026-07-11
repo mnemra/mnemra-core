@@ -453,7 +453,7 @@ whose Stage-3 spec is a later maintainer pickup — the coordination wedge was a
 way and has since discharged its deferral, its spec now locked, so it stands as a completed
 pickup rather than a live example of the kind) and spec-*terminal* (the strangler migration
 program — no Stage-3 spec will ever follow; the per-function bundles carry the code-destined
-specs) (see the V0 subsection below).** Four tenants: the retrieval cluster — its spec
+specs) (see the V0 subsection below).** Five tenants: the retrieval cluster — its spec
 (`docs/specs/2026-07-02-retrieval-cluster.md`) locked 2026-07-02, promoting its four
 constituent entries below from `proposed`; the extensible reporting engine — its spec
 (`docs/specs/2026-07-03-reporting-engine.md`) locked 2026-07-04, promoting the `1.3.0`+
@@ -461,7 +461,9 @@ constituent entries below from `proposed`; the extensible reporting engine — i
 (`docs/intent/coordination-wedge-frame.md`) locked 2026-07-07 and its spec
 (`docs/specs/2026-07-06-coordination-wedge.md`) locked 2026-07-07 (companion ADR P-0022
 accepted), a completed Frame-park pickup — the deferred Stage-3 spec has landed, so it is now
-a full spec-locked designed tenant, no longer a Frame-park; and the strangler migration
+a full spec-locked designed tenant, no longer a Frame-park; the plugin-distribution layer —
+its spec (`docs/specs/2026-07-07-plugin-distribution.md`) locked 2026-07-11 (companion ADR
+P-0023 accepted), born net-new at `designed`; and the strangler migration
 program — its Frame (`docs/intent/strangler-program-frame.md`) locked 2026-07-07 as a
 **terminal** Frame-park designed-tier artifact of record, with no spec and none to follow.
 Stated explicitly: the register does not infer design completion beyond what a locked spec —
@@ -563,6 +565,45 @@ or, for a ratified Frame-park entry, a locked Frame — actually covers.
   a terminal Frame-park mints none: there is no downstream spec-authoring step to fill a program
   slot, and the Frame is itself the reference every per-function bundle cites; the ADR-slot
   ledger is left untouched). *(ADDED 2026-07-07.)*
+
+- **Plugin distribution + package signing — the distribution layer (W2-1).** The layer that
+  makes a plugin a distributable unit whose whole-bundle provenance and integrity are
+  established **before unpacking**: every plugin ships as one uniform multi-artifact OCI
+  bundle (N≥1 digest-addressed blobs, the component `.wasm` always artifact #1, the signed
+  inner TOML manifest as the config descriptor, uncompressed-only at V0); the package
+  signature is the P-0005 Ed25519 root over the domain-separated outer-manifest digest,
+  attached as an OCI 1.1 referrer and verified on fetch under signer-key-pinning (never
+  trust-on-first-use, no unsigned fall-through); two R-NoExternalHost transports (OCI
+  image-layout filesystem for true air-gap; self-hosted distribution-API registry for
+  restricted-egress LAN) behind one store contract with digest-pinned resolution recomputed
+  over received bytes; the bounds-first verified-fetch pipeline (fetch-within-bounds →
+  verify-package-signature → verify-blob-digests → unpack-within-bounds, fail-closed at every
+  stage) behind the locked `PackageVerifier` seam (the TUF adapter's slot, fires at
+  R-0005-e); the inner `[[artifacts]]` N≥1 binding complete-mediating every blob at the
+  provenance anchor (P-0003 §Amendment 2026-07-07, strictly superseding the single
+  `[component]` hash); a hard cutover that retires the bare load path with no legacy accept
+  window; and install as a **working-state → working-state** transition — no failure, crash,
+  or kill point leaves the host's serving or load-eligible state indeterminate, residue from
+  a failed attempt inert (R-0092, the maintainer's 2026-07-11 spec-exit-gate ruling; update
+  is forward-bound by the same invariant, its flow deferred). Single-root custody exposure
+  recorded, never silent (accepted risks R-0008 rollback residual / R-0009 single-root /
+  R-0010 build-time dependency confusion; all tripwired). *Order: Wave-2 design-lane bundle
+  W2-1 (board order); implementation is a committed-tier pickup, gated by base-pin
+  freshness.* Tier: `designed` (full spec-locked). Provenance: plugin-distribution intake
+  (`docs/intent/plugin-distribution.md`, locked 2026-07-07, blob
+  `9c8e1577ed345cbcef546ba51d252a0df4db1144`) + plugin-distribution Frame
+  (`docs/intent/plugin-distribution-frame.md`, locked 2026-07-08Z, blob
+  `60c437c5e569eacbf00329e92cae2e7c42cebba6`) + plugin-distribution spec
+  (`docs/specs/2026-07-07-plugin-distribution.md`, locked 2026-07-11, blob
+  `10554ccdd6ae91731086b6fa6cba3de281a4fd49`, R-0078–R-0092 with the R-0082 tombstone), with
+  companion ADR **P-0023** (`docs/src/adrs/P-0023-plugin-distribution.md`, accepted) + the
+  P-0003 `[[artifacts]]` amendment + the P-0019 DEF-2 disposition (that deferral pulled
+  deliberately ahead of its third-party tripwire, at single-publisher `core: true` scope).
+  Born net-new at `designed` — no Proposed pointer-stub is retained and no Idea-section
+  pointer is retargeted: the Idea-tier "plugin registry/marketplace + signing/distribution
+  as a product surface" umbrella is a distinct, unvalidated product surface and stays where
+  it is; this layer is substrate infrastructure at single-publisher scope, not that product.
+  *(ADDED 2026-07-11.)*
 
 #### V0.1 (post-`1.0.0` immediate roadmap)
 
@@ -722,6 +763,23 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-07-11** — Plugin-distribution Stage-3 spec locked
+  (`docs/specs/2026-07-07-plugin-distribution.md`, blob
+  `10554ccdd6ae91731086b6fa6cba3de281a4fd49`; spec-exit gate accepted 2026-07-11) over the
+  locked Frame (`docs/intent/plugin-distribution-frame.md`, blob
+  `60c437c5e569eacbf00329e92cae2e7c42cebba6`, locked 2026-07-08Z) and intake
+  (`docs/intent/plugin-distribution.md`, blob `9c8e1577ed345cbcef546ba51d252a0df4db1144`,
+  locked 2026-07-07), with companion ADR **P-0023**
+  (`docs/src/adrs/P-0023-plugin-distribution.md`) status **accepted**, the P-0003
+  `[[artifacts]]` §Amendment 2026-07-07, and the P-0019 DEF-2 disposition. Register: a new
+  V0 tenant **added, born net-new at `designed`** (full spec-locked — locked frame + locked
+  spec + accepted companion ADR): the plugin-distribution layer (uniform multi-artifact OCI
+  bundle; keyed-in-tree package signature verified on fetch; two R-NoExternalHost transports
+  behind one store contract; the bounds-first `PackageVerifier` pipeline; the `[[artifacts]]`
+  complete-mediation binding; hard cutover retiring the bare load path; install atomicity
+  R-0092 per the maintainer's 2026-07-11 gate ruling, with update forward-bound). Designed
+  preamble updated four → five tenants. No Proposed pointer-stub and no Idea retarget (the
+  registry/marketplace product-surface idea is distinct and unmoved).
 - **2026-07-07** — Coordination-wedge Stage-3 spec locked
   (`docs/specs/2026-07-06-coordination-wedge.md`, blob
   `81dc71953c9bb0de2b269b4da15ab394aed20f9c`; spec-exit gate accepted 2026-07-07) over the
