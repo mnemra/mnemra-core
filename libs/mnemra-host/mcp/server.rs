@@ -40,7 +40,12 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use sqlx::PgPool;
 
-use crate::mcp::dispatch::{auth_and_authorize, resolve_content_call};
+use crate::coordination::CoordinationConfig;
+use crate::coordination::session_plane;
+use crate::coordination::write_path::PgCoordinationStore;
+use crate::mcp::dispatch::{
+    auth_and_authorize, authorize_coordination_action, resolve_content_call, resolve_ctx_from_token,
+};
 use crate::mcp::errors::{SUPERVISOR_DEGRADED_CODE, VERB_NOT_EXPOSED_CODE};
 use crate::plugin::manifest::parse_manifest;
 use crate::plugin::pool::PluginPool;
@@ -92,6 +97,14 @@ pub struct MnemraMcpServer {
     plugin_pool: Arc<PluginPool>,
     /// Plugin verbs parsed from the echo manifest at construction time.
     echo_verbs: Vec<String>,
+    /// The host-served coordination write path (`message`/`claim`), constructed
+    /// with `coordination_config.write_timeout`. The `message poll` bind body
+    /// (`handle_coordination`) drives `run_write` through this store.
+    coordination_store: PgCoordinationStore,
+    /// Coordination runtime config (attachment TTL + write timeout), threaded
+    /// from [`crate::RunConfig`]. `attachment_ttl` is read by the `poll` bind
+    /// body to compute the attachment lease `expires_at`.
+    coordination_config: CoordinationConfig,
 }
 
 impl MnemraMcpServer {
@@ -109,10 +122,95 @@ impl MnemraMcpServer {
         let manifest =
             parse_manifest(ECHO_MANIFEST_TOML).expect("embedded echo manifest must be valid TOML");
         let echo_verbs = manifest.verbs.exposed;
+        // Coordination config defaults to the §Numeric-calibrations dogfood
+        // values; `run_with` overrides them from `RunConfig` via
+        // `with_coordination_config`. The default keeps the many test
+        // constructors (`MnemraMcpServer::new(pool, plugin_pool)`) working
+        // without threading config through every call site.
+        let coordination_config = CoordinationConfig::default();
+        let coordination_store =
+            PgCoordinationStore::new(Arc::new(pool.clone()), coordination_config.write_timeout);
         Self {
             pool,
             plugin_pool,
             echo_verbs,
+            coordination_store,
+            coordination_config,
+        }
+    }
+
+    /// Override the coordination runtime config (write timeout + attachment
+    /// TTL). `MnemraMcpServer::new` seeds the §Numeric-calibrations defaults for
+    /// the test constructors; `run_with` threads the deployment/config values
+    /// here. Rebuilds the coordination store so the (possibly overridden) write
+    /// timeout is applied.
+    pub fn with_coordination_config(mut self, config: CoordinationConfig) -> Self {
+        self.coordination_store =
+            PgCoordinationStore::new(Arc::new(self.pool.clone()), config.write_timeout);
+        self.coordination_config = config;
+        self
+    }
+
+    /// Host-served coordination dispatch (`message`/`claim`) — R-0063-a/-c.
+    ///
+    /// Contract order (R-0063-c): authenticate (→ `WorkspaceCtx` via the single
+    /// construction site) → parse the closed `action` argument → per-action
+    /// token-role capability gate (R-0073-b) → route. At this foundation stage
+    /// `poll` routes to a placeholder; the real bind/attach/delivery body lands
+    /// in a later sub-run, Glitch-red-first.
+    ///
+    /// This branch deliberately does NOT gate on `PluginPool::can_invoke()`:
+    /// that health gate protects the plugin (WASM) runtime, and coordination is
+    /// host-served with no plugin dispatch (R-0063-a).
+    async fn handle_coordination(
+        &self,
+        token_str: &str,
+        request: &CallToolRequestParams,
+    ) -> Result<CallToolResult, rmcp::model::ErrorData> {
+        // Authenticate before routing (R-0063-c): resolve the token to a
+        // WorkspaceCtx through the single construction site (R-0006-b).
+        let ctx = resolve_ctx_from_token(token_str, &self.pool).await?;
+
+        // Parse the closed `action` argument (defensive — never trust the
+        // client-supplied shape, even though the advertised schema constrains
+        // it).
+        let action = session_plane::parse_action(request.arguments.as_ref())?;
+
+        // Per-action token-role capability gate (R-0073-b): a `read_observer`
+        // token is refused pre-dispatch — `poll` is write-category and every
+        // coordination action executes under an attachment (itself a write), so
+        // a read-observer cannot participate in the coordination surface at all.
+        authorize_coordination_action(&ctx, &action)?;
+
+        // Route the action to the session plane. `poll` is the bind call
+        // (R-0064-e): resolve-or-create + attach + audit through the
+        // coordination write path.
+        match action {
+            session_plane::CoordinationAction::Poll => {
+                // `poll` carries the bind `role_instance` argument (the advertised
+                // schema marks it required). An absent/non-string value is a
+                // malformed request — a protocol error (INVALID_PARAMS), distinct
+                // from a present-but-invalid identifier (which the bind body
+                // refuses `invalid_role_instance`).
+                let role_instance = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("role_instance"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `poll` requires a string `role_instance` argument"
+                            .into(),
+                        data: None,
+                    })?;
+                session_plane::poll_bind(
+                    &self.coordination_store,
+                    &self.coordination_config,
+                    &ctx,
+                    role_instance,
+                )
+                .await
+            }
         }
     }
 }
@@ -140,7 +238,7 @@ impl ServerHandler for MnemraMcpServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, rmcp::model::ErrorData> {
         let empty_schema: Arc<rmcp::model::JsonObject> = Arc::new(Default::default());
-        let tools: Vec<Tool> = self
+        let mut tools: Vec<Tool> = self
             .echo_verbs
             .iter()
             .map(|verb_name| {
@@ -151,6 +249,10 @@ impl ServerHandler for MnemraMcpServer {
                 )
             })
             .collect();
+        // Host-served coordination tools (R-0063-a), advertised in addition to
+        // the plugin (echo) verbs. Control-plane verbs stay absent (R-0010-g);
+        // `message`/`claim` are not control-plane and carry no forbidden name.
+        tools.extend(session_plane::coordination_tools());
         Ok(ListToolsResult::with_all_items(tools))
     }
 
@@ -198,6 +300,17 @@ impl ServerHandler for MnemraMcpServer {
                 message: "authentication failed".into(),
                 data: None,
             })?;
+
+        // Host-served coordination branch (R-0063-a). Taken BEFORE the
+        // echo-verb manifest membership gate below: `message`/`claim` are not
+        // echo verbs, so that gate would reject them. The coordination handler
+        // runs its own auth + per-action capability gate (R-0073-b) and routes
+        // to the session plane; it never touches `resolve_content_call` /
+        // `invoke_content` (no plugin ABI, no WIT surface — R-0063-a). The
+        // existing plugin path stays the `else`.
+        if session_plane::is_coordination_tool(request.name.as_ref()) {
+            return self.handle_coordination(&token_str_owned, &request).await;
+        }
 
         // DF-auth-check + role permission check (R-0010-c, R-0009-d/e).
         // token_str is consumed; it does not appear in any error payload.

@@ -109,7 +109,7 @@ sign-ceremony key wasm manifest:
 # via tests/common/shared_engine.rs, so it inherits the same --test-threads 1
 # serialization; it belongs in this shared list, guarded by the non-vacuity check
 # in verify-test-hooks below.
-PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
+PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
 # Non-PG integration test binaries (17 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
@@ -173,11 +173,35 @@ verify-test: plugin
         && cargo test -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
         && cargo test -p mnemra-host --lib 2>&1 \
         && cargo test --workspace --exclude mnemra-host 2>&1; then
-        echo "GATE test PASS"
+        :
     else
         echo "GATE test FAIL"
         exit 1
     fi
+    # coordination_session_plane non-vacuity check (Task 4, R-0064): unlike the
+    # test-hooks binaries guarded in verify-test-hooks, this suite is NOT
+    # cfg-gated — it drives the real MCP path under the default feature set, so it
+    # runs in the combined PG_TEST_FLAGS pass above. But a binary silently dropped
+    # from that list — or emptied by a refactor — passes vacuously (#2004, the
+    # silent-failure class). A SCOPED rerun asserts a non-zero pass count so an
+    # emptied/dropped suite FAILS this gate rather than passing on cargo's
+    # exit-0-on-empty-run. Same shape as the coordination_failclosed guard in
+    # verify-test-hooks below.
+    set +e
+    csp_output="$(cargo test -p mnemra-host --test coordination_session_plane -- --test-threads 1 2>&1)"
+    csp_code=$?
+    set -e
+    echo "$csp_output"
+    if [[ "$csp_code" -ne 0 ]]; then
+        echo "GATE test FAIL"
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$csp_output"; then
+        echo "coordination_session_plane non-vacuity check failed: no non-zero pass count found (#2004 silent-failure class)"
+        echo "GATE test FAIL"
+        exit 1
+    fi
+    echo "GATE test PASS"
 
 # Verify: test-hooks feature — runs resource_limits.rs seam tests (gated behind test-hooks).
 # This is a CI gate so untrusted-path seam coverage is always exercised.

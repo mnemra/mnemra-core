@@ -16,6 +16,7 @@
 //! | AdminSessionMgmt       | Allow  | Deny         |
 //! | PluginVerb (read_path) | Allow  | Allow        |
 //! | PluginVerb (write_path)| Allow  | Deny         |
+//! | CoordinationWriteVerb  | Allow  | Deny         |
 //!
 //! # Application-layer enforcement (R-0009-g)
 //!
@@ -96,6 +97,16 @@ pub enum Verb {
     PluginReadVerb,
     /// plugin verb at host layer before dispatch; write = deny ReadObserver
     PluginWriteVerb,
+
+    // --- Coordination host-served verb (R-0073-b) ---
+    /// A coordination action (`message`/`claim`: attach/poll, acquire, renew,
+    /// release, takeover, send, ack, disposition). Write-category — denied to
+    /// `ReadObserver` at the host-fn boundary. Every coordination action —
+    /// `list` included — is write-category (each executes under a resolved
+    /// attachment, itself a write), so a `read_observer` token cannot
+    /// participate in the coordination surface at all (R-0073-b). Not in the
+    /// `ReadObserver` allow arm below → auto-denied by the allowlist default.
+    CoordinationWriteVerb,
 }
 
 // ---------------------------------------------------------------------------

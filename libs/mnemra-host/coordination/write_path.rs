@@ -214,6 +214,36 @@ pub struct PgCoordinationStore {
     injected_fault: Option<CoordinationFault>,
 }
 
+/// One workspace-visible live lease, as surfaced in a `poll` response's
+/// `live_leases` listing (R-0072-a, spec §API Contract lease object). Read
+/// post-commit by [`PgCoordinationStore::live_leases_for_workspace`] and
+/// rendered into the documented `{ lease_id, resource, holder, acquired_at,
+/// expires_at }` shape by the session plane. The reserved `actor:`-family
+/// attachment rows are excluded at the query (R-0067-c), so this type only ever
+/// carries a genuine (non-attachment) resource lease.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiveLeaseRow {
+    /// The lease row id.
+    pub lease_id: Uuid,
+    /// The (non-`actor:`-family) resource under hold.
+    pub resource: String,
+    /// The holding actor's id.
+    pub holder_actor_id: Uuid,
+    /// The holding actor's role-instance (the `actors.name`).
+    pub holder_role_instance: String,
+    /// When the lease was acquired.
+    pub acquired_at: DateTime<Utc>,
+    /// When the lease expires (live means `now() < expires_at`).
+    pub expires_at: DateTime<Utc>,
+}
+
+/// The raw column tuple read by
+/// [`PgCoordinationStore::live_leases_for_workspace`] before mapping into a
+/// [`LiveLeaseRow`]: `(lease_id, resource, holder_actor_id,
+/// holder_role_instance, acquired_at, expires_at)`. Aliased to satisfy
+/// `clippy::type_complexity` at the query site.
+type LiveLeaseColumns = (Uuid, String, Uuid, String, DateTime<Utc>, DateTime<Utc>);
+
 impl PgCoordinationStore {
     /// Construct a store over `pool` with the end-to-end write bound
     /// `write_timeout` (default 10 s; §Numeric calibrations).
@@ -224,6 +254,63 @@ impl PgCoordinationStore {
             #[cfg(feature = "test-hooks")]
             injected_fault: None,
         }
+    }
+
+    /// Read the workspace's live, non-`actor:`-family leases for a `poll`
+    /// response's `live_leases` listing (R-0072-a / R-0067-c / R-0076-b).
+    ///
+    /// This is the delivery-half READ, run after the bind write commits — not a
+    /// privileged write, so it needs neither the outbox nor the end-to-end write
+    /// bound; it goes direct to the pool. Scope is the machinery-authoritative
+    /// `ctx.workspace_id()` (never caller input — R-0076-b, the cross-tenant
+    /// leak surface); "live" is non-terminal AND unexpired at the store clock
+    /// (`now() < expires_at`); the reserved `actor:` attachment family is
+    /// excluded so the attachment-as-lease realization stays invisible on the
+    /// tool surface (R-0067-c). A read failure surfaces as [`Unavailable::Store`]
+    /// — fail-closed, consistent with the write path (R-0074-a).
+    pub(crate) async fn live_leases_for_workspace(
+        &self,
+        ctx: &WorkspaceCtx,
+    ) -> Result<Vec<LiveLeaseRow>, Unavailable> {
+        let rows: Vec<LiveLeaseColumns> = sqlx::query_as(
+            "SELECT l.id, l.resource, l.holder_actor_id, a.name, l.acquired_at, l.expires_at
+                   FROM leases l
+                   JOIN actors a
+                     ON a.id = l.holder_actor_id
+                    AND a.workspace_id = l.workspace_id
+                  WHERE l.workspace_id = $1
+                    AND l.terminal_state IS NULL
+                    AND l.expires_at > now()
+                    AND l.resource NOT LIKE 'actor:%'
+                  ORDER BY l.acquired_at, l.id",
+        )
+        .bind(ctx.workspace_id())
+        .fetch_all(self.pool.as_ref())
+        .await
+        .map_err(|e| Unavailable::Store(Box::new(e)))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    lease_id,
+                    resource,
+                    holder_actor_id,
+                    holder_role_instance,
+                    acquired_at,
+                    expires_at,
+                )| {
+                    LiveLeaseRow {
+                        lease_id,
+                        resource,
+                        holder_actor_id,
+                        holder_role_instance,
+                        acquired_at,
+                        expires_at,
+                    }
+                },
+            )
+            .collect())
     }
 
     /// Inject a coordination fault (test seam). Mirrors
