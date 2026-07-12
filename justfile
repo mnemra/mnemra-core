@@ -85,7 +85,7 @@ sign-ceremony key wasm manifest:
 # No recipe has --fix side effects.
 # ---------------------------------------------------------------------------
 
-# PG-touching integration test binaries (17 members).
+# PG-touching integration test binaries (20 members).
 # Defined once; all three verify-* recipes reference this variable so the list
 # stays in sync (R-0022: identical serialization directive across all recipes).
 # These binaries run at --test-threads 1 to prevent concurrent embedded-Postgres
@@ -101,7 +101,15 @@ sign-ceremony key wasm manifest:
 # shared, feature-agnostic list rather than a feature-scoped side list (a
 # side list would break R-0033): structurally zero-test (green) under
 # verify-test / verify-coverage, meaningfully active under verify-test-hooks.
-PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
+# coordination_failclosed (Task 3 sub-run c, R-0074-b/R-0075-c fault-injection):
+# same posture as artifact_list_paging_whitebox — the whole file is crate-level
+# `#![cfg(feature = "test-hooks")]`-gated (it names CoordinationFault), so it is
+# structurally zero-test under verify-test / verify-coverage and meaningfully
+# active only under verify-test-hooks. AC1/AC2 acquire the shared embedded engine
+# via tests/common/shared_engine.rs, so it inherits the same --test-threads 1
+# serialization; it belongs in this shared list, guarded by the non-vacuity check
+# in verify-test-hooks below.
+PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_schema --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
 # Non-PG integration test binaries (17 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
@@ -210,6 +218,27 @@ verify-test-hooks: plugin
     fi
     if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$wb_output"; then
         echo "artifact_list_paging_whitebox non-vacuity check failed: no non-zero pass count found (R-0031 AC4)"
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+    # coordination_failclosed non-vacuity check (Task 3, R-0074-b/R-0075-c): same
+    # false-green class as artifact_list_paging_whitebox — the file is crate-level
+    # `#![cfg(feature = "test-hooks")]`-gated, so it is structurally zero-test
+    # under verify-test / verify-coverage and meaningful only here. A broken
+    # cfg-gate or an accidentally-emptied fault-injection suite must FAIL this
+    # gate, not pass silently on `cargo test`'s exit-0-on-empty-run. Scoped rerun
+    # so the pass count is unambiguously this binary's own.
+    set +e
+    cf_output="$(cargo test -p mnemra-host --features test-hooks --test coordination_failclosed -- --test-threads 1 2>&1)"
+    cf_code=$?
+    set -e
+    echo "$cf_output"
+    if [[ "$cf_code" -ne 0 ]]; then
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$cf_output"; then
+        echo "coordination_failclosed non-vacuity check failed: no non-zero pass count found (test-hooks fault-injection suite must not silently empty)"
         echo "GATE test-hooks FAIL"
         exit 1
     fi
