@@ -392,3 +392,109 @@ async fn actors_resolve_or_create_does_not_overwrite_existing_actor_type() {
         "re-resolving the same triple must not mint a second row"
     );
 }
+
+// ===========================================================================
+// actors::resolve_or_create_in_txn — the txn-scoped resolve/mint (Q3 fix)
+//
+// The coordination write path (`run_write` bodies, Tasks 4/5/7) mint the
+// actor row AND stage its registration audit atomically inside one COMMIT.
+// That requires resolve-or-create to run on a BORROWED connection inside the
+// caller's transaction, not to self-commit like the `&PgPool` entry point.
+// These prove the txn-scoped variant resolves/mints correctly on a borrowed
+// `&mut PgConnection` and leaves the commit to the caller.
+// ===========================================================================
+
+/// The txn-scoped variant resolves-or-mints on a borrowed connection: two calls
+/// with the same triple in one transaction return the SAME `actor_id` and, on
+/// commit, exactly one row exists. Mirrors the `resolve_or_create` idempotency
+/// test, but feeds a borrowed `&mut PgConnection` (the coordination-body shape)
+/// and takes `workspace_id` directly (fed `CoordinationTxn::workspace_id()` in
+/// production).
+#[tokio::test]
+async fn actors_resolve_or_create_in_txn_is_idempotent_on_borrowed_conn() {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool: &PgPool = &db.pool;
+
+    let ws = Uuid::new_v4();
+
+    let mut tx = pool.begin().await.expect("begin txn must succeed");
+
+    let first =
+        builtins::actors::resolve_or_create_in_txn(&mut tx, ws, ActorType::Agent, "txn-idempotent")
+            .await
+            .expect("first in-txn resolve_or_create must succeed");
+    let second =
+        builtins::actors::resolve_or_create_in_txn(&mut tx, ws, ActorType::Agent, "txn-idempotent")
+            .await
+            .expect("second in-txn resolve_or_create (same triple) must succeed");
+
+    assert_eq!(
+        first.id, second.id,
+        "resolving the same (workspace, name) twice on the borrowed connection \
+         must return the same actor_id — no duplicate row"
+    );
+    assert_eq!(
+        first.workspace_id, ws,
+        "the resolved row must carry the workspace_id fed directly to the txn \
+         variant (the tenant enforcement point — fed CoordinationTxn::workspace_id())"
+    );
+
+    tx.commit().await.expect("commit must succeed");
+
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM actors WHERE workspace_id = $1 AND name = $2")
+            .bind(ws)
+            .bind("txn-idempotent")
+            .fetch_one(pool)
+            .await
+            .expect("count query must succeed");
+    assert_eq!(
+        count.0, 1,
+        "two in-txn resolves of the identical triple must mint EXACTLY ONE row"
+    );
+}
+
+/// The txn-scoped variant does NOT self-commit — the caller controls the
+/// commit. Mint a row inside a transaction, ROLL BACK, and confirm the row is
+/// absent on the pool: if the function committed on its own, the row would
+/// survive the rollback. This is the clean-room proof of the Q3 property the
+/// coordination write path depends on (the actor mint and its audit share the
+/// body's single COMMIT — or share its rollback).
+#[tokio::test]
+async fn actors_resolve_or_create_in_txn_caller_controls_commit() {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool: &PgPool = &db.pool;
+
+    let ws = Uuid::new_v4();
+
+    let mut tx = pool.begin().await.expect("begin txn must succeed");
+    let minted =
+        builtins::actors::resolve_or_create_in_txn(&mut tx, ws, ActorType::Agent, "txn-rollback")
+            .await
+            .expect("in-txn resolve_or_create must succeed");
+    assert_eq!(minted.workspace_id, ws);
+
+    // Roll the transaction back — the function must not have committed.
+    tx.rollback().await.expect("rollback must succeed");
+
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM actors WHERE workspace_id = $1 AND name = $2")
+            .bind(ws)
+            .bind("txn-rollback")
+            .fetch_one(pool)
+            .await
+            .expect("count query must succeed");
+    assert_eq!(
+        count.0, 0,
+        "resolve_or_create_in_txn MUST NOT self-commit: after the caller rolls \
+         back, the minted row must be absent (the caller controls the commit)"
+    );
+}

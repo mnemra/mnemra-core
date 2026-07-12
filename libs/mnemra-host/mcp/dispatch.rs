@@ -28,11 +28,12 @@
 use rmcp::model::ErrorData;
 use sqlx::PgPool;
 
-use crate::auth::permissions::Verb;
+use crate::auth::permissions::{Verb, authorize};
 use crate::auth::resolve;
 use crate::auth::token;
 use crate::auth::workspace_ctx::WorkspaceCtx;
 use crate::builtins::permissions;
+use crate::coordination::session_plane::CoordinationAction;
 use crate::mcp::errors::{AUTH_FAILURE_CODE, NON_DISPATCHABLE_CODE, PERMISSION_DENIED_CODE};
 use crate::plugin::trap_recovery::ContentCall;
 
@@ -85,14 +86,52 @@ pub async fn auth_and_authorize(
     verb_name: &str,
     pool: &PgPool,
 ) -> Result<WorkspaceCtx, ErrorData> {
-    // Step 1 + 2: hash the presented string. Invalid base64url / wrong length = auth fail.
+    // Resolve the token to a WorkspaceCtx (hash → lookup → the single
+    // WorkspaceCtx construction site, R-0006-b).
+    let ctx = resolve_ctx_from_token(token_str, pool).await?;
+
+    // Classify the verb as read or write for the permission check.
+    let verb = if is_write_verb(verb_name) {
+        Verb::PluginWriteVerb
+    } else {
+        Verb::PluginReadVerb
+    };
+
+    // Capability check via the host-layer permission hook.
+    permissions::check_plugin_verb(&ctx, &verb).map_err(|_| ErrorData {
+        code: PERMISSION_DENIED_CODE,
+        message: "permission denied".into(),
+        data: None,
+    })?;
+
+    Ok(ctx)
+}
+
+/// Resolve a presented token string to a [`WorkspaceCtx`] — the auth half
+/// shared by the plugin dispatch path ([`auth_and_authorize`]) and the
+/// host-served coordination path ([`authorize_coordination_action`]): token
+/// hash → `admin_tokens` lookup → the single `WorkspaceCtx` construction site.
+///
+/// This is the sole caller of [`resolve::from_token`], keeping the single
+/// production `WorkspaceCtx` construction-site invariant (R-0006-b). It runs no
+/// capability check; the caller applies the per-surface authorization.
+///
+/// # Security (R-0004-h)
+///
+/// `token_str` is consumed only via `token::hash_presented` (which discards the
+/// string after hashing); it MUST NOT appear in any returned error message.
+pub(crate) async fn resolve_ctx_from_token(
+    token_str: &str,
+    pool: &PgPool,
+) -> Result<WorkspaceCtx, ErrorData> {
+    // Hash the presented string. Invalid base64url / wrong length = auth fail.
     let token_hash = token::hash_presented(token_str).ok_or_else(|| ErrorData {
         code: AUTH_FAILURE_CODE,
         message: "authentication failed".into(),
         data: None,
     })?;
 
-    // Step 3: look up the hash in admin_tokens.
+    // Look up the hash in admin_tokens.
     let row = token::lookup_by_hash(&token_hash, pool)
         .await
         .map_err(|_| ErrorData {
@@ -106,24 +145,38 @@ pub async fn auth_and_authorize(
             data: None,
         })?;
 
-    // Step 4: construct WorkspaceCtx at the single production site (R-0006-b).
-    let ctx = resolve::from_token(row.workspace_id, &row.scopes, row.id);
+    // Construct WorkspaceCtx at the single production site (R-0006-b).
+    Ok(resolve::from_token(row.workspace_id, &row.scopes, row.id))
+}
 
-    // Step 5: classify verb as read or write for the permission check.
-    let verb = if is_write_verb(verb_name) {
-        Verb::PluginWriteVerb
-    } else {
-        Verb::PluginReadVerb
+/// The per-action coordination capability gate (R-0073-b, R-0063-c).
+///
+/// Runs AFTER [`resolve_ctx_from_token`] and BEFORE any coordination routing.
+/// It maps the parsed `action` to its verb category and applies the permission
+/// matrix. Every coordination action is write-category at V0 (R-0073-b: `list`
+/// included — each executes under a resolved attachment, itself a write), so a
+/// `read_observer` token is refused `permission denied` **pre-dispatch** and
+/// cannot participate in the coordination surface at all.
+///
+/// This is the action-reading gate the host-served branch requires: it
+/// classifies the `action` argument, NOT the `message`/`claim` tool-name tail.
+/// (`is_write_verb` classifies on the tail and would mis-read a future `list`
+/// action as read; the tool-name tail `"message"` classifying as write today is
+/// a coincidence, not the mechanism.) Task 5 extends the match with `claim`'s
+/// actions — every arm maps to `CoordinationWriteVerb`.
+pub(crate) fn authorize_coordination_action(
+    ctx: &WorkspaceCtx,
+    action: &CoordinationAction,
+) -> Result<(), ErrorData> {
+    let verb = match action {
+        CoordinationAction::Poll => Verb::CoordinationWriteVerb,
     };
 
-    // Step 6: capability check via builtins.
-    permissions::check_plugin_verb(&ctx, &verb).map_err(|_| ErrorData {
+    authorize(ctx, &verb).map_err(|_| ErrorData {
         code: PERMISSION_DENIED_CODE,
         message: "permission denied".into(),
         data: None,
-    })?;
-
-    Ok(ctx)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -287,5 +340,47 @@ fn json_value_to_payload_string(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::String(s) => s.clone(),
         other => other.to_string(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests: the per-action coordination capability gate (R-0073-b).
+//
+// `authorize_coordination_action` is a pure function over `(WorkspaceCtx,
+// CoordinationAction)`, so the token-role gate is unit-testable directly — no
+// DB, no transport. This is the b0-owned coverage for the R-0073-b control the
+// host-served coordination branch lands (poll refused pre-dispatch for a
+// read_observer; admitted for admin). Attach/succession/poll-delivery behavior
+// is NOT tested here — it is authored Glitch-red-first in a later sub-run.
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::role::Role;
+    use crate::auth::workspace_ctx::WorkspaceCtx;
+    use uuid::Uuid;
+
+    #[test]
+    fn coordination_poll_refused_for_read_observer_predispatch() {
+        // R-0073-b: `poll` is write-category; a `read_observer` token is refused
+        // at the token-role gate before any attach/actor resolution.
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::Poll)
+            .expect_err("R-0073-b: a read_observer `poll` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_poll_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an Admin
+        // token passes it (the attach/actor logic runs downstream in a later
+        // sub-run). Guards against the gate degrading into a blanket refusal.
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::Poll)
+            .expect("an Admin token must pass the coordination capability gate");
     }
 }

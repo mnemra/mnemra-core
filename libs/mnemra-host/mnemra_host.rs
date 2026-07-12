@@ -40,6 +40,7 @@ pub mod coordination;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 // ---------------------------------------------------------------------------
 // T5 (R-0022-a/-e) — production startup assembly surface.
@@ -95,6 +96,104 @@ pub enum InjectedFailure {
     StorageInit,
 }
 
+/// The environment variable naming the deployment tier (§Numeric calibrations
+/// production guard). `production` (case-insensitive) tags a production deploy;
+/// any other value — including absent — is treated as development.
+pub const DEPLOYMENT_ENV_VAR: &str = "MNEMRA_ENV";
+
+/// The deployment tier tag (§Numeric calibrations production guard).
+///
+/// `Development` (the default) permits the sanctioned second-scale test
+/// calibrations — the acceptance harnesses run shortened lease/attachment TTLs.
+/// `Production` activates the startup guard on the security-load-bearing
+/// attachment-TTL knob (R-0064-d / TB-3): a second-scale value under this tag
+/// refuses to start, so a test calibration cannot silently ship to production.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DeploymentEnv {
+    /// Development / test tier — second-scale calibrations permitted.
+    #[default]
+    Development,
+    /// Production tier — the attachment-TTL production floor is enforced.
+    Production,
+}
+
+impl DeploymentEnv {
+    /// Parse the deployment tier from the [`DEPLOYMENT_ENV_VAR`] value.
+    ///
+    /// `"production"` (trimmed, case-insensitive) → [`DeploymentEnv::Production`];
+    /// every other value — including `None` (unset) — → [`DeploymentEnv::Development`].
+    /// The production tag must be set explicitly; the absence of a tag is not
+    /// production (a dev/test box without the var stays on the permissive path).
+    pub fn from_env(value: Option<&str>) -> DeploymentEnv {
+        match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            Some("production") => DeploymentEnv::Production,
+            _ => DeploymentEnv::Development,
+        }
+    }
+}
+
+/// The production floor for the attachment TTL (§Numeric calibrations production
+/// guard). A production-tagged deployment whose `attachment_ttl` falls below
+/// this refuses to start — a second-scale test calibration (the acceptance
+/// harnesses' ~1–4 s values) cannot silently ship. Impl-tier: well under the
+/// 10-minute default, comfortably above every second-scale test value; the lock
+/// is the *existence and enforcement* of the floor, not the specific number.
+const PRODUCTION_ATTACHMENT_TTL_FLOOR: Duration = Duration::from_secs(60);
+
+/// A production-calibration validation failure (§Numeric calibrations production
+/// guard): a security-load-bearing config value fell outside its production
+/// range under an explicit production deployment tag. Structured (not a bare
+/// string) so a caller can inspect the offending knob, the floor, and the actual
+/// value; surfaced as [`RunError::Config`] — fail-closed, refuse-to-start, never
+/// a silent clamp.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigValidationError {
+    /// The offending configuration parameter.
+    pub parameter: &'static str,
+    /// The production floor the value violated.
+    pub floor: Duration,
+    /// The (rejected) configured value.
+    pub actual: Duration,
+}
+
+impl std::fmt::Display for ConfigValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "production startup refused: `{}` = {:?} is below the production floor {:?} \
+             (a second-scale test calibration cannot ship to a production-tagged deploy; \
+             §Numeric calibrations production guard)",
+            self.parameter, self.actual, self.floor
+        )
+    }
+}
+
+impl std::error::Error for ConfigValidationError {}
+
+/// Validate the security-load-bearing coordination calibrations against the
+/// deployment tier (§Numeric calibrations production guard).
+///
+/// Under [`DeploymentEnv::Production`] the attachment TTL must be at least
+/// [`PRODUCTION_ATTACHMENT_TTL_FLOOR`]; a second-scale value refuses to start
+/// with a structured [`ConfigValidationError`]. Under
+/// [`DeploymentEnv::Development`] the second-scale test calibrations are the
+/// sanctioned config override, so this always passes.
+fn validate_production_calibrations(
+    deployment: DeploymentEnv,
+    coordination: &crate::coordination::CoordinationConfig,
+) -> Result<(), ConfigValidationError> {
+    if deployment == DeploymentEnv::Production
+        && coordination.attachment_ttl < PRODUCTION_ATTACHMENT_TTL_FLOOR
+    {
+        return Err(ConfigValidationError {
+            parameter: "attachment_ttl",
+            floor: PRODUCTION_ATTACHMENT_TTL_FLOOR,
+            actual: coordination.attachment_ttl,
+        });
+    }
+    Ok(())
+}
+
 /// Configuration for [`run_with`] — the production startup assembly's inputs.
 ///
 /// Injectable so the startup-ordering tests can lay out temp-dir fixtures
@@ -117,6 +216,16 @@ pub struct RunConfig {
     /// (OS-assigned) and read the bound address from
     /// [`RunHandle::health_addr`].
     pub health_addr: SocketAddr,
+    /// Coordination-cluster runtime config (attachment TTL + write timeout,
+    /// spec §Numeric calibrations). Threaded into the MCP server by `run_with`.
+    /// Defaulted in [`RunConfig::new`]; acceptance harnesses override it to the
+    /// sanctioned second-scale TTLs via [`RunConfig::with_coordination_config`].
+    pub coordination: crate::coordination::CoordinationConfig,
+    /// The deployment tier (§Numeric calibrations production guard). Defaults to
+    /// [`DeploymentEnv::Development`] in [`RunConfig::new`]; production `run()`
+    /// derives it from [`DEPLOYMENT_ENV_VAR`]. Under [`DeploymentEnv::Production`]
+    /// `run_with` validates the attachment-TTL floor before any listener binds.
+    pub deployment: DeploymentEnv,
     /// Failure injection (test seam) — absent from the default build.
     #[cfg(feature = "test-hooks")]
     pub inject_failure: Option<InjectedFailure>,
@@ -145,10 +254,34 @@ impl RunConfig {
             root_dir: root_dir.into(),
             admin_token_path: admin_token_path.into(),
             health_addr,
+            coordination: crate::coordination::CoordinationConfig::default(),
+            deployment: DeploymentEnv::Development,
             #[cfg(feature = "test-hooks")]
             inject_failure: None,
             caller_span: tracing::Span::current(),
         }
+    }
+
+    /// Override the coordination-cluster runtime config (attachment TTL + write
+    /// timeout). Production `run()` supplies deployment values; acceptance
+    /// harnesses override to the sanctioned second-scale TTLs (§Numeric
+    /// calibrations test calibration). No client-settable per-request override
+    /// exists for these — the knobs stay deployment-scoped.
+    pub fn with_coordination_config(
+        mut self,
+        coordination: crate::coordination::CoordinationConfig,
+    ) -> RunConfig {
+        self.coordination = coordination;
+        self
+    }
+
+    /// Override the deployment tier (§Numeric calibrations production guard).
+    /// Production `run()` sets [`DeploymentEnv::Production`] when
+    /// [`DEPLOYMENT_ENV_VAR`] is `production`; a caller may set it directly to
+    /// exercise the startup guard.
+    pub fn with_deployment(mut self, deployment: DeploymentEnv) -> RunConfig {
+        self.deployment = deployment;
+        self
     }
 
     /// Inject a failure at a named startup boundary (test seam; see
@@ -330,6 +463,10 @@ pub enum RunError {
     /// 5b-ii: the verified pool could not be populated (signature,
     /// content-hash, or component-load failure — R-0021).
     PluginLoad(startup::StartupError),
+    /// Config validation (§Numeric calibrations production guard): a
+    /// production-tagged startup carried a security-load-bearing calibration
+    /// outside its production range — refused before any listener binds.
+    Config(ConfigValidationError),
 }
 
 impl std::fmt::Display for RunError {
@@ -344,6 +481,7 @@ impl std::fmt::Display for RunError {
             RunError::PluginLoad(e) => {
                 write!(f, "startup failed closed (verified pool, 5b-ii): {e}")
             }
+            RunError::Config(e) => write!(f, "startup refused (config validation): {e}"),
         }
     }
 }
@@ -356,6 +494,7 @@ impl std::error::Error for RunError {
             RunError::Storage(e) => Some(e.as_ref()),
             RunError::BuiltinInit(e) => Some(e),
             RunError::PluginLoad(e) => Some(e),
+            RunError::Config(e) => Some(e),
         }
     }
 }
@@ -369,6 +508,14 @@ impl std::error::Error for RunError {
 /// `/health` listener up and answering not-ready (503 + `{"ready": false}`,
 /// the sanctioned T4 contract).
 pub async fn run_with(config: RunConfig) -> Result<RunHandle, RunError> {
+    // §Numeric calibrations production guard: reject a production-tagged startup
+    // carrying a second-scale (test-calibrated) attachment TTL BEFORE any
+    // listener binds — a test calibration cannot silently ship to production.
+    // Development (the default) permits the sanctioned second-scale calibrations,
+    // so this is a no-op off the production tag.
+    validate_production_calibrations(config.deployment, &config.coordination)
+        .map_err(RunError::Config)?;
+
     // 5-pre (R-0005-f instantiation): the admin-token file-mode invariant
     // check runs FIRST — before any listener binds.
     startup::file_mode_check::check_admin_token(&config.admin_token_path)
@@ -446,9 +593,26 @@ pub async fn run_with(config: RunConfig) -> Result<RunHandle, RunError> {
         startup::populate_verified_pool_from_dir(&config.root_dir, signing::root_material::ROOT)
             .map_err(RunError::PluginLoad)?;
 
+    // TODO(sub-run e — production startup guard, R-0064-d / spec §Numeric
+    // calibrations, "Test calibration is sanctioned"): validate
+    // `config.coordination.attachment_ttl` against an expected production range
+    // OR an explicit environment tag here, and refuse to start with a
+    // structured `RunError` on a mismatch — a test-calibrated second-scale TTL
+    // MUST NOT silently ship to a production deploy. No client-settable
+    // per-request override exists (the knob is deployment-scoped). This comment
+    // is the anchor; the guard's own refuse-to-start AC test (the spec's
+    // binary-observable) is the tripwire that fails until the guard lands. That
+    // sub-run must ALSO thread a production/env-tag INPUT into `RunConfig` — b0
+    // lands only the `attachment_ttl` + `write_timeout` values, not the tag the
+    // guard compares against.
+
     // Construct the server — 5c precedes construction; 5b-i/5b-ii precede
-    // any plugin load. Accept-last: no MCP transport is opened here (T6).
-    let server = mcp::server::MnemraMcpServer::new(pg_pool.clone(), plugin_pool);
+    // any plugin load. Accept-last: no MCP transport is opened here (T6). The
+    // coordination config (write timeout + attachment TTL) is threaded from
+    // `RunConfig` onto the server here (`with_coordination_config`); the
+    // in-process test constructors keep the §Numeric-calibrations defaults.
+    let server = mcp::server::MnemraMcpServer::new(pg_pool.clone(), plugin_pool)
+        .with_coordination_config(config.coordination);
 
     // Mark ready: supply the pool for /health's detail body, then flip the
     // readiness flag.
@@ -512,7 +676,95 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         health::resolve_port(std::env::var(health::HEALTH_PORT_ENV_VAR).ok().as_deref());
     let health_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, health_port));
 
-    let handle = run_with(RunConfig::new(root_dir, admin_token_path, health_addr)).await?;
+    // Deployment tier from the environment (§Numeric calibrations production
+    // guard): `MNEMRA_ENV=production` activates the attachment-TTL floor check in
+    // `run_with`; any other value — including unset — stays on the permissive
+    // development path. Mirrors the `health::resolve_port` env-read shape above.
+    let deployment = DeploymentEnv::from_env(std::env::var(DEPLOYMENT_ENV_VAR).ok().as_deref());
+
+    let handle = run_with(
+        RunConfig::new(root_dir, admin_token_path, health_addr).with_deployment(deployment),
+    )
+    .await?;
     handle.serve_stdio().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::coordination::CoordinationConfig;
+
+    /// The §Numeric-calibrations production guard's core AC: a production-tagged
+    /// startup carrying a second-scale (test-calibrated) attachment TTL is
+    /// refused with a STRUCTURED config error — not a panic, not a silent clamp.
+    #[test]
+    fn production_tag_with_second_scale_attachment_ttl_is_refused() {
+        let coordination = CoordinationConfig {
+            write_timeout: Duration::from_secs(10),
+            attachment_ttl: Duration::from_secs(1),
+        };
+        let err = validate_production_calibrations(DeploymentEnv::Production, &coordination)
+            .expect_err(
+                "a production-tagged second-scale attachment TTL must refuse to start \
+                 (structured config error)",
+            );
+        assert_eq!(err.parameter, "attachment_ttl");
+        assert_eq!(err.actual, Duration::from_secs(1));
+        assert_eq!(err.floor, PRODUCTION_ATTACHMENT_TTL_FLOOR);
+    }
+
+    /// The guard does not false-positive on a valid production value: the
+    /// 10-minute default attachment TTL under the production tag starts.
+    #[test]
+    fn production_tag_with_production_range_attachment_ttl_starts() {
+        let coordination = CoordinationConfig::default(); // 10-minute attachment TTL
+        assert!(
+            validate_production_calibrations(DeploymentEnv::Production, &coordination).is_ok(),
+            "the 10-minute default attachment TTL is a valid production value"
+        );
+    }
+
+    /// The development tier permits the sanctioned second-scale test
+    /// calibrations — the acceptance harnesses' shortened TTLs must not trip the
+    /// guard (it fires only under the explicit production tag).
+    #[test]
+    fn development_tag_permits_second_scale_attachment_ttl() {
+        let coordination = CoordinationConfig {
+            write_timeout: Duration::from_secs(10),
+            attachment_ttl: Duration::from_secs(1),
+        };
+        assert!(
+            validate_production_calibrations(DeploymentEnv::Development, &coordination).is_ok(),
+            "development permits the sanctioned second-scale test calibration"
+        );
+    }
+
+    /// The deployment-tag parse: `production` (trimmed, case-insensitive) is the
+    /// only value that tags production; every other value — including absent — is
+    /// development.
+    #[test]
+    fn deployment_env_parse_maps_production_tag_only() {
+        assert_eq!(
+            DeploymentEnv::from_env(Some("production")),
+            DeploymentEnv::Production
+        );
+        assert_eq!(
+            DeploymentEnv::from_env(Some("Production")),
+            DeploymentEnv::Production
+        );
+        assert_eq!(
+            DeploymentEnv::from_env(Some("  PRODUCTION  ")),
+            DeploymentEnv::Production
+        );
+        assert_eq!(
+            DeploymentEnv::from_env(Some("development")),
+            DeploymentEnv::Development
+        );
+        assert_eq!(
+            DeploymentEnv::from_env(Some("prod")),
+            DeploymentEnv::Development
+        );
+        assert_eq!(DeploymentEnv::from_env(None), DeploymentEnv::Development);
+    }
 }

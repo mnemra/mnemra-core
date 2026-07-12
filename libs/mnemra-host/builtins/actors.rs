@@ -42,7 +42,7 @@
 //! ```
 
 use crate::auth::workspace_ctx::WorkspaceCtx;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use std::fmt;
 use uuid::Uuid;
 
@@ -223,8 +223,55 @@ pub async fn resolve_or_create(
     actor_type: ActorType,
     name: &str,
 ) -> Result<Actor, ActorError> {
-    let workspace_id = ctx.workspace_id();
+    // Delegate to the txn-scoped entry point so the resolve/mint SQL has a
+    // single source of truth (there is exactly one INSERT-then-SELECT). Open a
+    // transaction, resolve-or-create on its connection, then commit —
+    // behavior-preserving over the previous two pool-acquired statements: the
+    // idempotent `INSERT … ON CONFLICT DO NOTHING` then `SELECT` is unchanged;
+    // wrapping it in one txn only tightens the two statements onto one
+    // connection (the SELECT sees the INSERT's own write; a concurrent
+    // committed insert is still visible under READ COMMITTED — race safety
+    // preserved).
+    let mut tx = pool.begin().await?;
+    let actor = resolve_or_create_in_txn(&mut tx, ctx.workspace_id(), actor_type, name).await?;
+    tx.commit().await?;
+    Ok(actor)
+}
 
+/// Resolve-or-create on a caller-provided connection, inside the caller's
+/// transaction — the txn-scoped sibling of [`resolve_or_create`].
+///
+/// Runs the same idempotent `INSERT … ON CONFLICT (workspace_id, name) DO
+/// NOTHING` + `SELECT` as [`resolve_or_create`], but on the borrowed `conn`, so
+/// the resolve/mint shares the caller's transaction and its single COMMIT. This
+/// is the entry point a coordination `run_write` body calls (fed
+/// `CoordinationTxn::conn()` and `CoordinationTxn::workspace_id()`) to mint the
+/// actor row AND stage its registration audit atomically in one COMMIT — the
+/// atomicity the audited-write path depends on. **The caller controls the
+/// commit: this function neither begins nor commits a transaction.**
+///
+/// `workspace_id` is taken directly — fed the machinery-authoritative
+/// `CoordinationTxn::workspace_id()`, never caller input. This is the tenant
+/// enforcement point (R-0076-b): the same value `flush_staged_audit`
+/// debug-asserts staged `AuditRecord`s against.
+///
+/// Resolution never changes an existing actor's type: if a row already exists
+/// for `(workspace_id, name)`, its PERSISTED `actor_type` is returned (not
+/// necessarily the `actor_type` passed on this call) — the same contract as
+/// [`resolve_or_create`].
+///
+/// # Race safety
+///
+/// Identical to [`resolve_or_create`]: `INSERT … ON CONFLICT DO NOTHING` then
+/// `SELECT` on the same connection. Two callers resolving the same triple can
+/// never mint two rows; a concurrent committed insert is visible to the in-txn
+/// `SELECT` under READ COMMITTED.
+pub async fn resolve_or_create_in_txn(
+    conn: &mut PgConnection,
+    workspace_id: Uuid,
+    actor_type: ActorType,
+    name: &str,
+) -> Result<Actor, ActorError> {
     sqlx::query(
         "INSERT INTO actors (workspace_id, actor_type, name)
          VALUES ($1, $2, $3)
@@ -233,7 +280,7 @@ pub async fn resolve_or_create(
     .bind(workspace_id)
     .bind(actor_type.as_db_str())
     .bind(name)
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
 
     let row: ActorRow = sqlx::query_as(
@@ -243,7 +290,7 @@ pub async fn resolve_or_create(
     )
     .bind(workspace_id)
     .bind(name)
-    .fetch_one(pool)
+    .fetch_one(&mut *conn)
     .await?;
 
     decode_actor_row(row)
