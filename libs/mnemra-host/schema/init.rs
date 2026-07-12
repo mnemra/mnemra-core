@@ -455,6 +455,37 @@ pub(crate) const V0_MIGRATIONS: &[Migration] = &[
                 WHERE dispositioned_at IS NULL
         ",
     },
+    // Coordination audit outbox (Task 3, R-0075-b/-c): the D-SURFACE audit
+    // landing (audit-as-DB-table pre-blessed by R-0075-c; this cluster invents
+    // no store). Additive, forward-only, append-only — no delete path.
+    // Privileged coordination writes stage rows here on the SAME txn as the
+    // state transition; the machinery flushes them inside the one COMMIT (outbox
+    // composition) so a write is not observably complete until its audit is
+    // captured (R-0074-b). Columns mirror `coordination::audit::AuditRecord`
+    // (id, workspace_id, event_type, event_version, actor_id?, payload, emitted_at).
+    // event_type is a plain TEXT column with NO CHECK constraint: `AuditEventType`
+    // is `#[non_exhaustive]` and evolves (Tasks 5/7 add classes), so a value
+    // CHECK would fight the additive-evolution contract and demand a destructive
+    // ALTER (A-18-guarded) on each new class; the closed set is enforced in host
+    // code, mirroring the messages.payload host-side validation posture.
+    // Table name is `coordination_audit` — deliberately NOT `events`/`metrics`/
+    // `observations` (R-0004-c asserts tables of those names do not exist).
+    Migration {
+        version: 25,
+        name: "create_coordination_audit",
+        sql: "
+            CREATE TABLE IF NOT EXISTS coordination_audit (
+                id            UUID        NOT NULL DEFAULT gen_random_uuid(),
+                workspace_id  UUID        NOT NULL,
+                event_type    TEXT        NOT NULL,
+                event_version INTEGER     NOT NULL,
+                actor_id      UUID,
+                payload       JSONB       NOT NULL,
+                emitted_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT coordination_audit_pkey PRIMARY KEY (id)
+            )
+        ",
+    },
 ];
 
 // ---------------------------------------------------------------------------
