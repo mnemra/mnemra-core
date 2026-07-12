@@ -59,4 +59,10 @@ fn test_epoch_seams_absent_in_default_build() {
     // T5 (R-0022-a): startup failure-injection seam — born cfg-gated in the
     // RED phase, so this fixture compile-fails from day one.
     t.compile_fail("tests/ui/no_test_seams/run_config_injected_failure_reachable.rs");
+    // Task 3 (R-0074-b / R-0075-c): coordination-write fault-injection seam
+    // (`CoordinationFault` + `PgCoordinationStore::with_injected_fault`) — born
+    // cfg-gated in the RED phase, so this fixture compile-fails from day one. A
+    // seam leaking into the production build emits no runtime signal, so the
+    // guard is structural, not review-trusted.
+    t.compile_fail("tests/ui/no_test_seams/coordination_fault_reachable.rs");
 }

@@ -1,0 +1,25 @@
+error[E0432]: unresolved import `mnemra_host::coordination::write_path::CoordinationFault`
+  --> tests/ui/no_test_seams/coordination_fault_reachable.rs:17:45
+   |
+17 | use mnemra_host::coordination::write_path::{CoordinationFault, PgCoordinationStore};
+   |                                             ^^^^^^^^^^^^^^^^^ no `CoordinationFault` in `coordination::write_path`
+   |
+note: found an item that was configured out
+  --> coordination/write_path.rs
+   |
+   | #[cfg(feature = "test-hooks")]
+   |       ---------------------- the item is gated behind the `test-hooks` feature
+   | #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+   | pub enum CoordinationFault {
+   |          ^^^^^^^^^^^^^^^^^
+help: a similar name exists in the module
+   |
+17 - use mnemra_host::coordination::write_path::{CoordinationFault, PgCoordinationStore};
+17 + use mnemra_host::coordination::write_path::{CoordinationTxn, PgCoordinationStore};
+   |
+
+error[E0599]: no associated function or constant named `with_injected_fault` found for struct `PgCoordinationStore` in the current scope
+  --> tests/ui/no_test_seams/coordination_fault_reachable.rs:25:30
+   |
+25 |         PgCoordinationStore::with_injected_fault;
+   |                              ^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `PgCoordinationStore`

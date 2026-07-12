@@ -31,6 +31,11 @@ pub mod mcp;
 // Task 21: plugin runtime — manifest load pipeline, allowlists, wasmtime limits,
 // epoch-tick supervisor, and instance pool (R-0003-b/c/f, R-0007, R-0010-d, R-0016-a/b).
 pub mod plugin;
+// Task 3 (coordination wedge, R-0074/R-0075/R-0076): shared privileged-write
+// machinery — end-to-end timeout, in-transaction audit-outbox composition,
+// fail-closed availability. SKELETON (sub-run b1): types + signatures +
+// coordination_audit migration; the guarantee behavior is green work.
+pub mod coordination;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
