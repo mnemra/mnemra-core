@@ -160,16 +160,24 @@ pub(crate) async fn resolve_ctx_from_token(
 ///
 /// This is the action-reading gate the host-served branch requires: it
 /// classifies the `action` argument, NOT the `message`/`claim` tool-name tail.
-/// (`is_write_verb` classifies on the tail and would mis-read a future `list`
-/// action as read; the tool-name tail `"message"` classifying as write today is
-/// a coincidence, not the mechanism.) Task 5 extends the match with `claim`'s
-/// actions — every arm maps to `CoordinationWriteVerb`.
+/// (`is_write_verb` classifies on the tail and would mis-read `list` as a read
+/// verb; the tool-name tail `"message"` classifying as write today is a
+/// coincidence, not the mechanism.) Task 5 (b1) added `claim`'s `acquire`
+/// action to the match; b2 added `list` — R-0073-b states explicitly that
+/// `list` is write-category too (it executes under a resolved attachment,
+/// itself a write); c added `renew`/`release`; d adds `takeover` — every arm
+/// maps to `CoordinationWriteVerb`.
 pub(crate) fn authorize_coordination_action(
     ctx: &WorkspaceCtx,
     action: &CoordinationAction,
 ) -> Result<(), ErrorData> {
     let verb = match action {
         CoordinationAction::Poll => Verb::CoordinationWriteVerb,
+        CoordinationAction::ClaimAcquire => Verb::CoordinationWriteVerb,
+        CoordinationAction::ClaimList => Verb::CoordinationWriteVerb,
+        CoordinationAction::ClaimRenew => Verb::CoordinationWriteVerb,
+        CoordinationAction::ClaimRelease => Verb::CoordinationWriteVerb,
+        CoordinationAction::ClaimTakeover => Verb::CoordinationWriteVerb,
     };
 
     authorize(ctx, &verb).map_err(|_| ErrorData {
@@ -381,6 +389,140 @@ mod tests {
         // sub-run). Guards against the gate degrading into a blanket refusal.
         let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
         authorize_coordination_action(&ctx, &CoordinationAction::Poll)
+            .expect("an Admin token must pass the coordination capability gate");
+    }
+
+    #[test]
+    fn coordination_claim_acquire_refused_for_read_observer_predispatch() {
+        // R-0073-b / Task 5 b1: `acquire` is write-category; a `read_observer`
+        // token is refused at THIS dedicated per-action gate before any
+        // attach/lease resolution — confirming the mechanism (not just the
+        // wire-level code) migrated off the generic `PluginWriteVerb`
+        // classification the acceptance suite's AC8 flags as a coincidence
+        // pre-Task-5 (see `tests/coordination_leases.rs`'s
+        // `read_observer_denied_pre_dispatch_for_claim_acquire` doc comment).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::ClaimAcquire)
+            .expect_err("R-0073-b: a read_observer `acquire` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_claim_acquire_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an
+        // Admin token passes it (the attach/lease logic runs downstream in
+        // `coordination::leases::acquire`).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::ClaimAcquire)
+            .expect("an Admin token must pass the coordination capability gate");
+    }
+
+    #[test]
+    fn coordination_claim_list_refused_for_read_observer_predispatch() {
+        // R-0073-b / Task 5 b2: `list` is write-category too — the spec's
+        // own explicit phrase is "list included" — so a `read_observer`
+        // token is refused at THIS dedicated per-action gate before any
+        // attachment resolution or lease read, confirming the mechanism
+        // (not just the wire-level code) that migrated off the generic
+        // `PluginWriteVerb` classification (see `tests/coordination_leases.
+        // rs`'s `read_observer_denied_pre_dispatch_for_claim_list` doc
+        // comment for the pre-b2 `INVALID_PARAMS` contrast).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::ClaimList)
+            .expect_err("R-0073-b: a read_observer `list` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_claim_list_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an
+        // Admin token passes it (the attachment resolution + lease read run
+        // downstream in `coordination::leases::list`).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::ClaimList)
+            .expect("an Admin token must pass the coordination capability gate");
+    }
+
+    #[test]
+    fn coordination_claim_renew_refused_for_read_observer_predispatch() {
+        // R-0073-b / Task 5 c: `renew` is write-category; a `read_observer`
+        // token is refused at THIS dedicated per-action gate before any
+        // attachment/lease resolution.
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::ClaimRenew)
+            .expect_err("R-0073-b: a read_observer `renew` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_claim_renew_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an
+        // Admin token passes it (the lease resolution/mutation logic runs
+        // downstream in `coordination::leases::renew`).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::ClaimRenew)
+            .expect("an Admin token must pass the coordination capability gate");
+    }
+
+    #[test]
+    fn coordination_claim_release_refused_for_read_observer_predispatch() {
+        // R-0073-b / Task 5 c: `release` is write-category; a `read_observer`
+        // token is refused at THIS dedicated per-action gate before any
+        // attachment/lease resolution.
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::ClaimRelease)
+            .expect_err("R-0073-b: a read_observer `release` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_claim_release_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an
+        // Admin token passes it (the lease resolution/mutation logic runs
+        // downstream in `coordination::leases::release`).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::ClaimRelease)
+            .expect("an Admin token must pass the coordination capability gate");
+    }
+
+    #[test]
+    fn coordination_claim_takeover_refused_for_read_observer_predispatch() {
+        // R-0073-b / Task 5 d: `takeover` is write-category; a
+        // `read_observer` token is refused at THIS dedicated per-action gate
+        // before any attachment/lease resolution.
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::ClaimTakeover)
+            .expect_err("R-0073-b: a read_observer `takeover` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_claim_takeover_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an
+        // Admin token passes it (the lease resolution/mutation logic runs
+        // downstream in `coordination::leases::takeover`).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::ClaimTakeover)
             .expect("an Admin token must pass the coordination capability gate");
     }
 }

@@ -40,36 +40,69 @@ use crate::coordination::write_path::{
 /// adds the sibling `claim` tool through this same host-served branch.
 pub(crate) const MESSAGE_TOOL: &str = "message";
 
+/// The host-served coordination tool name for the lease-claim surface (Task
+/// 5). Advertises `acquire` (slice b1), `list` (slice b2), `renew`/`release`
+/// (slice c), and `takeover` (slice d).
+pub(crate) const CLAIM_TOOL: &str = "claim";
+
 /// Returns `true` if `name` is a host-served coordination tool — the ones
 /// `call_tool` routes to the coordination branch *before* the echo-verb
 /// manifest membership gate (they are not echo verbs, so that gate would
 /// otherwise reject them).
 pub(crate) fn is_coordination_tool(name: &str) -> bool {
-    name == MESSAGE_TOOL
+    name == MESSAGE_TOOL || name == CLAIM_TOOL
 }
 
-/// A coordination action, parsed from a tool call's `action` argument.
+/// A coordination action, parsed from a tool call's `action` argument,
+/// disambiguated by the tool name ([`parse_action`]'s `tool` parameter) —
+/// `claim` and `message` each own their own action vocabulary (and, in later
+/// slices, their own `list` action), so the same action string under
+/// different tools resolves to different variants (Task 5 b1 Q1 decision:
+/// tool-aware `parse_action` + one flat enum with tool-prefixed variant
+/// names, rather than splitting `ClaimAction`/`MessageAction`).
 ///
-/// Closed set. At this stage `message` advertises only `poll`; Task 5 (`claim`)
-/// and Task 7 (`message send`/`list`/`ack`/`disposition`) extend the set. Every
-/// coordination action is write-category under R-0073-b — the classification
-/// lives in [`crate::mcp::dispatch::authorize_coordination_action`], which reads
-/// the *action*, never the tool-name tail.
+/// Closed set. `message` advertises only `poll`; `claim` advertises
+/// `acquire` (Task 5 slice b1), `list` (Task 5 slice b2), `renew`/`release`
+/// (Task 5 slice c), and `takeover` (Task 5 slice d); Task 7 extends
+/// `message` with `send`/`list`/`ack`/`disposition`. Every
+/// coordination action is write-category under R-0073-b — the
+/// classification lives in
+/// [`crate::mcp::dispatch::authorize_coordination_action`], which reads the
+/// *action*, never the tool-name tail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CoordinationAction {
-    /// `message poll` — the bind call (R-0064-e). The real bind/attach/delivery
-    /// body lands in a later sub-run; this stage routes it to a placeholder.
+    /// `message poll` — the bind call (R-0064-e): resolve-or-create, attach
+    /// or audited succession, then deliver ([`poll_bind`]).
     Poll,
+    /// `claim acquire` (R-0065-a/-b/-c/-d, R-0067) — routed to
+    /// [`crate::coordination::leases::acquire`].
+    ClaimAcquire,
+    /// `claim list` (R-0073-a, R-0067-c, R-0075-a) — routed to
+    /// [`crate::coordination::leases::list`]. Prefixed `Claim` to pre-empt
+    /// the Task-7 `message list` collision (Task 5 b1 Q1 decision).
+    ClaimList,
+    /// `claim renew` (R-0065-d) — routed to
+    /// [`crate::coordination::leases::renew`].
+    ClaimRenew,
+    /// `claim release` (R-0065-d) — routed to
+    /// [`crate::coordination::leases::release`].
+    ClaimRelease,
+    /// `claim takeover` (R-0066-a/-b/-c, R-0067-c) — routed to
+    /// [`crate::coordination::leases::takeover`].
+    ClaimTakeover,
 }
 
-/// Parse the closed `action` argument from a coordination tool call.
+/// Parse the closed `action` argument from a coordination tool call,
+/// disambiguated by `tool` (`MESSAGE_TOOL` or `CLAIM_TOOL`).
 ///
 /// The advertised input schema constrains `action` to the closed enum, but the
 /// host re-parses defensively — client-supplied structure is never trusted. An
-/// absent, non-string, or out-of-set `action` is a malformed request and maps
-/// to `INVALID_PARAMS`. (At this stage only `poll` is a valid `message` action;
-/// `send`/`list`/`ack`/`disposition` are added by Task 7.)
+/// absent, non-string, out-of-set, or wrong-tool `action` is a malformed
+/// request and maps to `INVALID_PARAMS`. (At this stage `message` supports
+/// only `poll`; `claim` supports `acquire`, `list`, `renew`, `release`, and
+/// `takeover`.)
 pub(crate) fn parse_action(
+    tool: &str,
     arguments: Option<&serde_json::Map<String, serde_json::Value>>,
 ) -> Result<CoordinationAction, ErrorData> {
     let action = arguments
@@ -81,11 +114,16 @@ pub(crate) fn parse_action(
             data: None,
         })?;
 
-    match action {
-        "poll" => Ok(CoordinationAction::Poll),
-        other => Err(ErrorData {
+    match (tool, action) {
+        (MESSAGE_TOOL, "poll") => Ok(CoordinationAction::Poll),
+        (CLAIM_TOOL, "acquire") => Ok(CoordinationAction::ClaimAcquire),
+        (CLAIM_TOOL, "list") => Ok(CoordinationAction::ClaimList),
+        (CLAIM_TOOL, "renew") => Ok(CoordinationAction::ClaimRenew),
+        (CLAIM_TOOL, "release") => Ok(CoordinationAction::ClaimRelease),
+        (CLAIM_TOOL, "takeover") => Ok(CoordinationAction::ClaimTakeover),
+        _ => Err(ErrorData {
             code: rmcp::model::ErrorCode::INVALID_PARAMS,
-            message: format!("unsupported coordination action '{other}'").into(),
+            message: format!("unsupported coordination action '{action}' for tool '{tool}'").into(),
             data: None,
         }),
     }
@@ -100,7 +138,7 @@ pub(crate) fn parse_action(
 /// host-derived from attachment state; a caller-supplied principal does not
 /// exist anywhere on the surface.
 pub(crate) fn coordination_tools() -> Vec<Tool> {
-    vec![message_tool()]
+    vec![message_tool(), claim_tool()]
 }
 
 /// Build the `message` tool advertisement (poll action, R-0064-b schema).
@@ -134,6 +172,74 @@ fn message_tool() -> Tool {
         Cow::Borrowed(MESSAGE_TOOL),
         Some(Cow::Borrowed(
             "Coordination messaging tool. The operation is selected by the `action` argument.",
+        )),
+        Arc::new(schema_obj),
+    )
+}
+
+/// Build the `claim` tool advertisement (`acquire`/`list`/`renew`/`release`/
+/// `takeover` actions at slice d, R-0064-b schema).
+fn claim_tool() -> Tool {
+    // `action` is the closed enum argument (`acquire`/`list`/`renew`/
+    // `release`/`takeover` at this stage); `resource` is the structured
+    // `<family>:<qualifier>` identifier (R-0067, `acquire`/`takeover`-only —
+    // takeover carries no duration argument, R-0066-a: the recovered lease
+    // always uses the configured default, matching an omitted `acquire`
+    // duration); `duration_seconds` is optional (`acquire`-only, defaults
+    // per R-0065-d); `family`/`resource_prefix` are the optional `list`
+    // filters (§API Contract `list`); `lease_id` is the target lease
+    // identifier (`renew`/`release`-only, §API Contract). Only `action` is
+    // required at the schema level — every other argument is meaningful to
+    // exactly one action, so no single argument is required across all of
+    // them. `additionalProperties: false` makes the closed shape explicit;
+    // there is deliberately NO acting-actor field (R-0064-b) — the acting
+    // principal is host-derived from attachment state.
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["acquire", "list", "renew", "release", "takeover"],
+                "description": "The coordination claim action (closed set)."
+            },
+            "resource": {
+                "type": "string",
+                "description": "The structured resource identifier `<family>:<qualifier>` \
+                                 (R-0067). Required for `acquire` and `takeover`."
+            },
+            "duration_seconds": {
+                "type": "integer",
+                "description": "Requested lease duration in seconds; omit for the configured \
+                                 default, bounded by the policy maximum (R-0065-d). `acquire` only."
+            },
+            "family": {
+                "type": "string",
+                "description": "Optional family filter for `list` (§API Contract `list`); \
+                                 `family: \"actor\"` is refused `reserved_family` (R-0067-c)."
+            },
+            "resource_prefix": {
+                "type": "string",
+                "description": "Optional resource-prefix filter for `list` (§API Contract `list`)."
+            },
+            "lease_id": {
+                "type": "string",
+                "description": "The target lease identifier (§API Contract). Required for \
+                                 `renew` and `release`."
+            }
+        },
+        "required": ["action"],
+        "additionalProperties": false
+    });
+    let schema_obj = schema
+        .as_object()
+        .expect("claim tool schema is a JSON object literal")
+        .clone();
+
+    Tool::new_with_raw(
+        Cow::Borrowed(CLAIM_TOOL),
+        Some(Cow::Borrowed(
+            "Coordination claim tool (lease acquisition + listing). The operation is selected \
+             by the `action` argument.",
         )),
         Arc::new(schema_obj),
     )
@@ -605,39 +711,108 @@ fn poll_response(
 
 /// Render a [`Refusal`] as the spec §API Contract structured refusal envelope
 /// (`{ refused: true, reason_code, detail }`). `reason_code` is the closed
-/// machine code; `detail` is human-facing and carries no store internals.
-fn refusal_result(refusal: &Refusal) -> CallToolResult {
+/// machine code; `detail` carries no store internals. `pub(crate)`: every
+/// `claim`/`message` action body (e.g. `coordination::leases::acquire`)
+/// shares this one renderer.
+pub(crate) fn refusal_result(refusal: &Refusal) -> CallToolResult {
+    refusal_result_with_detail(refusal, refusal_detail(refusal))
+}
+
+/// As [`refusal_result`], but the caller supplies `detail` directly instead
+/// of letting [`refusal_detail`]'s generic, Refusal-variant-only rendering
+/// produce it — used when the caller holds more specific information than
+/// the closed [`Refusal`] enum can carry (e.g. `claim acquire`'s
+/// `invalid_resource` detail naming the specific `resource_id::parse`
+/// failure, R-0067-a; see `coordination::leases::acquire`). `reason_code` is
+/// unaffected either way — always the closed, machine
+/// [`Refusal::reason_code`].
+pub(crate) fn refusal_result_with_detail(
+    refusal: &Refusal,
+    detail: serde_json::Value,
+) -> CallToolResult {
     CallToolResult::structured(serde_json::json!({
         "refused": true,
         "reason_code": refusal.reason_code(),
-        "detail": refusal_detail(refusal),
+        "detail": detail,
     }))
 }
 
-/// A human-facing explanation for each refusal reachable on the bind path.
-fn refusal_detail(refusal: &Refusal) -> &'static str {
+/// A refusal's `detail` (§API Contract error taxonomy). Usually a
+/// human-facing explanation string; `ResourceHeld` (R-0065-c) instead carries
+/// a structured object — the holder's `actor_id` and lease `expires_at` (the
+/// "workspace-visible facts" the spec requires the loser to receive) — so a
+/// caller can read the contended resource's holder and expiry
+/// programmatically, not just prose.
+fn refusal_detail(refusal: &Refusal) -> serde_json::Value {
     match refusal {
-        Refusal::InvalidRoleInstance => {
+        Refusal::InvalidRoleInstance => serde_json::json!(
             "the role_instance failed the identifier rule (must be non-empty, \
              length-bounded, and free of whitespace and control characters)"
-        }
-        Refusal::WrongActorType => {
+        ),
+        Refusal::WrongActorType => serde_json::json!(
             "the named identity is not an agent actor; only agent actors are attachable"
+        ),
+        Refusal::ActorLiveAttached => {
+            serde_json::json!("the actor already has a live attachment")
         }
-        Refusal::ActorLiveAttached => "the actor already has a live attachment",
-        Refusal::AttachmentMismatch => {
+        Refusal::AttachmentMismatch => serde_json::json!(
             "the session is already attached as a different role-instance; \
              one session binds one role-instance"
+        ),
+        Refusal::NotAttached => {
+            serde_json::json!("the session holds no live attachment; bind via `message poll` first")
         }
-        // Refusals not produced on the bind path; the machine reason_code
-        // still carries the precise code for any caller.
-        _ => "the coordination bind was refused",
+        Refusal::InvalidResource => serde_json::json!(
+            "the resource identifier is malformed, or names a family outside the closed set"
+        ),
+        Refusal::ReservedFamily => serde_json::json!(
+            "the `actor` resource family is reserved and barred from the entire claim surface"
+        ),
+        Refusal::InvalidDuration => {
+            serde_json::json!("duration_seconds must be a positive value within the policy maximum")
+        }
+        Refusal::ResourceHeld {
+            holder_actor_id,
+            expires_at,
+        } => serde_json::json!({
+            "holder_actor_id": holder_actor_id.to_string(),
+            "expires_at": expires_at.to_rfc3339(),
+        }),
+        Refusal::NotHolder => serde_json::json!(
+            "the caller does not hold this lease; only the current holder may renew or \
+             release it"
+        ),
+        Refusal::LeaseNotFound => serde_json::json!(
+            "no live lease matches the given lease_id (it never existed, or is expired, \
+             released, or taken over — an expired hold is not revivable; use `takeover`)"
+        ),
+        Refusal::NotExpired => serde_json::json!(
+            "the lease has not expired yet; a live lease cannot be taken over — no \
+             force-break verb exists at V0 (R-0066-a); wait out the TTL"
+        ),
+        // Message-family refusals (`send`/`ack`/`disposition` — R-0068/
+        // -0069/-0070) — not yet reachable on any wired path (Task 7). Same
+        // grouping rationale as the lease-family arm above.
+        Refusal::NotAddressee
+        | Refusal::InvalidTransition
+        | Refusal::InvalidDisposition
+        | Refusal::SchemaViolation
+        | Refusal::UnknownType
+        | Refusal::MessageNotFound => serde_json::json!(
+            "the message action was refused (not yet reachable on any wired path)"
+        ),
+        // Deliberately NO wildcard arm: `Refusal` is a closed enum
+        // (write_path.rs), not `#[non_exhaustive]`, so this match is
+        // exhaustive over every current variant. A later slice that makes
+        // one of the arms above reachable — or the enum gaining a new
+        // variant — is a compile error here, not a silently generic detail.
     }
 }
 
 /// The fail-closed stop surfaced when a coordination write cannot be verified
-/// (R-0074-a). Carries no store internals (no-leak posture).
-fn coordination_unavailable() -> ErrorData {
+/// (R-0074-a). Carries no store internals (no-leak posture). `pub(crate)`:
+/// shared by every coordination action body.
+pub(crate) fn coordination_unavailable() -> ErrorData {
     ErrorData {
         code: rmcp::model::ErrorCode::INTERNAL_ERROR,
         message: "coordination write unavailable".into(),
@@ -700,17 +875,167 @@ mod tests {
         );
     }
 
+    #[test]
+    fn claim_tool_advertised_with_action_resource_duration_and_no_acting_actor() {
+        let tools = coordination_tools();
+        let claim = tools
+            .iter()
+            .find(|t| t.name.as_ref() == "claim")
+            .expect("coordination_tools must advertise the `claim` tool");
+
+        let props = claim
+            .input_schema
+            .get("properties")
+            .and_then(|v| v.as_object())
+            .expect("the claim tool schema must declare a non-empty `properties` object");
+
+        assert!(
+            props.contains_key("action"),
+            "the claim tool schema must declare the closed `action` argument"
+        );
+        assert!(
+            props.contains_key("resource"),
+            "the claim tool schema must declare the `resource` argument"
+        );
+        assert!(
+            props.contains_key("duration_seconds"),
+            "the claim tool schema must declare the optional `duration_seconds` argument"
+        );
+        assert!(
+            props.contains_key("family"),
+            "the claim tool schema must declare the optional `family` list-filter argument"
+        );
+        assert!(
+            props.contains_key("resource_prefix"),
+            "the claim tool schema must declare the optional `resource_prefix` list-filter \
+             argument"
+        );
+        assert!(
+            props.contains_key("lease_id"),
+            "the claim tool schema must declare the `lease_id` argument (`renew`/`release`, \
+             Task 5 slice c)"
+        );
+
+        // R-0064-b: the schema carries NO acting-actor field — the principal is
+        // host-derived from attachment state, never a caller write input.
+        for forbidden in [
+            "actor",
+            "actor_id",
+            "acting_actor",
+            "principal",
+            "sender",
+            "holder",
+        ] {
+            assert!(
+                !props.contains_key(forbidden),
+                "R-0064-b: the coordination tool schema MUST NOT carry an \
+                 acting-actor field (found `{forbidden}`)"
+            );
+        }
+
+        // `acquire`, `list`, `renew`, `release`, and `takeover` are
+        // advertised at slice d (closed enum).
+        let action_enum = props
+            .get("action")
+            .and_then(|a| a.get("enum"))
+            .and_then(|e| e.as_array())
+            .expect("the `action` argument must declare a closed enum");
+        assert_eq!(
+            action_enum,
+            &vec![
+                serde_json::json!("acquire"),
+                serde_json::json!("list"),
+                serde_json::json!("renew"),
+                serde_json::json!("release"),
+                serde_json::json!("takeover"),
+            ],
+            "the advertised `claim` actions at slice d are `acquire`, `list`, `renew`, \
+             `release`, and `takeover`"
+        );
+    }
+
     // -----------------------------------------------------------------
-    // Action parsing — closed set; defensive against client-supplied shape.
+    // Action parsing — closed set; defensive against client-supplied shape;
+    // tool-aware (Task 5 b1 Q1 decision).
     // -----------------------------------------------------------------
 
     #[test]
-    fn parse_action_accepts_poll() {
+    fn parse_action_accepts_message_poll() {
         let mut args = serde_json::Map::new();
         args.insert("action".to_string(), serde_json::json!("poll"));
         assert_eq!(
-            parse_action(Some(&args)).expect("`poll` is a valid action"),
+            parse_action(MESSAGE_TOOL, Some(&args)).expect("`poll` is a valid `message` action"),
             CoordinationAction::Poll
+        );
+    }
+
+    #[test]
+    fn parse_action_accepts_claim_acquire() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("acquire"));
+        assert_eq!(
+            parse_action(CLAIM_TOOL, Some(&args)).expect("`acquire` is a valid `claim` action"),
+            CoordinationAction::ClaimAcquire
+        );
+    }
+
+    #[test]
+    fn parse_action_accepts_claim_list() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("list"));
+        assert_eq!(
+            parse_action(CLAIM_TOOL, Some(&args)).expect("`list` is a valid `claim` action"),
+            CoordinationAction::ClaimList
+        );
+    }
+
+    #[test]
+    fn parse_action_accepts_claim_renew() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("renew"));
+        assert_eq!(
+            parse_action(CLAIM_TOOL, Some(&args)).expect("`renew` is a valid `claim` action"),
+            CoordinationAction::ClaimRenew
+        );
+    }
+
+    #[test]
+    fn parse_action_accepts_claim_release() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("release"));
+        assert_eq!(
+            parse_action(CLAIM_TOOL, Some(&args)).expect("`release` is a valid `claim` action"),
+            CoordinationAction::ClaimRelease
+        );
+    }
+
+    #[test]
+    fn parse_action_accepts_claim_takeover() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("takeover"));
+        assert_eq!(
+            parse_action(CLAIM_TOOL, Some(&args)).expect("`takeover` is a valid `claim` action"),
+            CoordinationAction::ClaimTakeover
+        );
+    }
+
+    #[test]
+    fn parse_action_rejects_action_under_the_wrong_tool() {
+        // `acquire` is a `claim` action, not a `message` action, and vice
+        // versa — tool-aware parsing rejects a valid action name paired with
+        // the wrong tool.
+        let mut acquire = serde_json::Map::new();
+        acquire.insert("action".to_string(), serde_json::json!("acquire"));
+        assert!(
+            parse_action(MESSAGE_TOOL, Some(&acquire)).is_err(),
+            "`acquire` is not a `message` action"
+        );
+
+        let mut poll = serde_json::Map::new();
+        poll.insert("action".to_string(), serde_json::json!("poll"));
+        assert!(
+            parse_action(CLAIM_TOOL, Some(&poll)).is_err(),
+            "`poll` is not a `claim` action"
         );
     }
 
@@ -720,19 +1045,19 @@ mod tests {
         let mut send = serde_json::Map::new();
         send.insert("action".to_string(), serde_json::json!("send"));
         assert!(
-            parse_action(Some(&send)).is_err(),
+            parse_action(MESSAGE_TOOL, Some(&send)).is_err(),
             "an unsupported action must be refused, not silently accepted"
         );
 
         // Absent arguments.
         assert!(
-            parse_action(None).is_err(),
+            parse_action(MESSAGE_TOOL, None).is_err(),
             "a call with no arguments has no `action` and must be refused"
         );
 
         // Present arguments, absent `action`.
         assert!(
-            parse_action(Some(&serde_json::Map::new())).is_err(),
+            parse_action(MESSAGE_TOOL, Some(&serde_json::Map::new())).is_err(),
             "a missing `action` argument must be refused"
         );
 
@@ -740,7 +1065,7 @@ mod tests {
         let mut wrong_type = serde_json::Map::new();
         wrong_type.insert("action".to_string(), serde_json::json!(7));
         assert!(
-            parse_action(Some(&wrong_type)).is_err(),
+            parse_action(MESSAGE_TOOL, Some(&wrong_type)).is_err(),
             "a non-string `action` argument must be refused"
         );
     }

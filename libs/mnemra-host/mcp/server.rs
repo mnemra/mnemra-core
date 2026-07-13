@@ -39,8 +39,10 @@ use rmcp::model::{
 };
 use rmcp::service::RequestContext;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::coordination::CoordinationConfig;
+use crate::coordination::leases;
 use crate::coordination::session_plane;
 use crate::coordination::write_path::PgCoordinationStore;
 use crate::mcp::dispatch::{
@@ -173,8 +175,10 @@ impl MnemraMcpServer {
 
         // Parse the closed `action` argument (defensive — never trust the
         // client-supplied shape, even though the advertised schema constrains
-        // it).
-        let action = session_plane::parse_action(request.arguments.as_ref())?;
+        // it). Tool-aware (`request.name`): `claim` and `message` each own
+        // their own action vocabulary.
+        let action =
+            session_plane::parse_action(request.name.as_ref(), request.arguments.as_ref())?;
 
         // Per-action token-role capability gate (R-0073-b): a `read_observer`
         // token is refused pre-dispatch — `poll` is write-category and every
@@ -210,6 +214,144 @@ impl MnemraMcpServer {
                     role_instance,
                 )
                 .await
+            }
+            session_plane::CoordinationAction::ClaimAcquire => {
+                // `acquire` carries the required `resource` argument and the
+                // optional `duration_seconds` argument. `resource` absent/
+                // non-string is a malformed request (INVALID_PARAMS), distinct
+                // from a present-but-invalid resource (which the acquire body
+                // refuses `invalid_resource`/`reserved_family`). `duration_seconds`
+                // absent is `None` (defaults, R-0065-d); present-but-non-integer
+                // is also a malformed request — never silently treated as absent.
+                let resource = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("resource"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `acquire` requires a string `resource` argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let duration_seconds = match request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("duration_seconds"))
+                {
+                    None => None,
+                    Some(v) => Some(v.as_i64().ok_or_else(|| {
+                        rmcp::model::ErrorData {
+                            code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                            message:
+                                "coordination `acquire`'s `duration_seconds` argument must be \
+                                   an integer"
+                                    .into(),
+                            data: None,
+                        }
+                    })?),
+                };
+                leases::acquire(&self.coordination_store, &ctx, resource, duration_seconds).await
+            }
+            session_plane::CoordinationAction::ClaimList => {
+                // `list` carries the optional `family` and `resource_prefix`
+                // filter arguments (§API Contract `list`). Absent is `None`
+                // (no filter on that axis); present-but-non-string is a
+                // malformed request (INVALID_PARAMS), never silently treated
+                // as absent — mirrors `acquire`'s `duration_seconds` handling
+                // above.
+                let family = match request.arguments.as_ref().and_then(|m| m.get("family")) {
+                    None => None,
+                    Some(v) => Some(v.as_str().ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `list`'s `family` argument must be a string".into(),
+                        data: None,
+                    })?),
+                };
+                let resource_prefix = match request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("resource_prefix"))
+                {
+                    None => None,
+                    Some(v) => Some(v.as_str().ok_or_else(|| {
+                        rmcp::model::ErrorData {
+                            code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                            message: "coordination `list`'s `resource_prefix` argument must be a \
+                                   string"
+                                .into(),
+                            data: None,
+                        }
+                    })?),
+                };
+                leases::list(&self.coordination_store, &ctx, family, resource_prefix).await
+            }
+            session_plane::CoordinationAction::ClaimRenew => {
+                // `renew` carries the required `lease_id` argument (§API
+                // Contract) — a string UUID, distinct from `acquire`'s
+                // `resource` argument. Absent/non-string is a malformed
+                // request (INVALID_PARAMS); a present-but-unparseable UUID
+                // is ALSO malformed — never silently treated as
+                // `lease_not_found` (that refusal is reserved for a
+                // well-formed id the claim body cannot find/reach).
+                let lease_id_str = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("lease_id"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `renew` requires a string `lease_id` argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let lease_id =
+                    Uuid::parse_str(lease_id_str).map_err(|_| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `lease_id` argument must be a valid UUID".into(),
+                        data: None,
+                    })?;
+                leases::renew(&self.coordination_store, &ctx, lease_id).await
+            }
+            session_plane::CoordinationAction::ClaimRelease => {
+                // Same `lease_id` argument contract as `renew` above.
+                let lease_id_str = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("lease_id"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `release` requires a string `lease_id` argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let lease_id =
+                    Uuid::parse_str(lease_id_str).map_err(|_| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `lease_id` argument must be a valid UUID".into(),
+                        data: None,
+                    })?;
+                leases::release(&self.coordination_store, &ctx, lease_id).await
+            }
+            session_plane::CoordinationAction::ClaimTakeover => {
+                // `takeover` carries the required `resource` argument — the
+                // SAME argument contract as `acquire` above (§API Contract
+                // `takeover`: `{ action: "takeover", resource }`); it takes
+                // no `duration_seconds` (the recovered lease always uses the
+                // configured default, `leases::takeover`'s own doc comment).
+                let resource = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("resource"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `takeover` requires a string `resource` argument"
+                            .into(),
+                        data: None,
+                    })?;
+                leases::takeover(&self.coordination_store, &ctx, resource).await
             }
         }
     }
