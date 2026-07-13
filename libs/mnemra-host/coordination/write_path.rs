@@ -244,6 +244,27 @@ pub(crate) struct LiveLeaseRow {
 /// `clippy::type_complexity` at the query site.
 type LiveLeaseColumns = (Uuid, String, Uuid, String, DateTime<Utc>, DateTime<Utc>);
 
+/// Escape the LIKE metacharacters (`%`, `_`) and the escape character itself
+/// (`\`) in a caller-supplied string, so it matches only as a LITERAL
+/// substring once bound ahead of a `%`-suffixed `LIKE ... ESCAPE '\'`
+/// pattern (b2 review L-1) — used by [`PgCoordinationStore::list_leases`] for
+/// both its `family` and `resource_prefix` filters, each documented as a
+/// literal-prefix string. Without this, a caller's own `%`/`_` acted as a SQL
+/// wildcard rather than a literal character, contradicting that contract (no
+/// security impact either way: the `actor:`-exclusion and workspace scope in
+/// `list_leases`'s query stay literal/unconditional regardless of this
+/// escaping).
+fn escape_like_literal(raw: &str) -> String {
+    let mut escaped = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if ch == '\\' || ch == '%' || ch == '_' {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped
+}
+
 impl PgCoordinationStore {
     /// Construct a store over `pool` with the end-to-end write bound
     /// `write_timeout` (default 10 s; §Numeric calibrations).
@@ -285,6 +306,152 @@ impl PgCoordinationStore {
                   ORDER BY l.acquired_at, l.id",
         )
         .bind(ctx.workspace_id())
+        .fetch_all(self.pool.as_ref())
+        .await
+        .map_err(|e| Unavailable::Store(Box::new(e)))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    lease_id,
+                    resource,
+                    holder_actor_id,
+                    holder_role_instance,
+                    acquired_at,
+                    expires_at,
+                )| {
+                    LiveLeaseRow {
+                        lease_id,
+                        resource,
+                        holder_actor_id,
+                        holder_role_instance,
+                        acquired_at,
+                        expires_at,
+                    }
+                },
+            )
+            .collect())
+    }
+
+    /// Resolve the session's live attached actor (R-0064-e) as a short-lived
+    /// pool read — the `claim list` read path (Task 5 b2) uses this instead
+    /// of [`coordination::leases::resolve_acting_actor`]'s
+    /// `&mut CoordinationTxn`-taking sibling, because `list` performs no
+    /// state transition and must NOT open a `run_write` transaction (build
+    /// plan §3.0/§3.3 cross-dispatch item 3). Same query, same "live" rule
+    /// (non-terminal, unexpired at the store clock, `actor:`-family), run
+    /// against a direct pool connection rather than a txn — intentional
+    /// duplication, mirrored from the read-vs-write split
+    /// [`Self::live_leases_for_workspace`] already establishes for the poll
+    /// path's own read half.
+    ///
+    /// `Ok(Ok(..))` on a live attachment (actor id + role-instance name,
+    /// joined in the same query so callers need no follow-up round-trip);
+    /// `Ok(Err(Refusal::NotAttached))` when none exists; `Err(Unavailable)`
+    /// on a query failure (fail-closed, R-0074-a's posture extended to this
+    /// read).
+    pub(crate) async fn resolve_acting_actor_for_read(
+        &self,
+        ctx: &WorkspaceCtx,
+        session_id: Uuid,
+    ) -> Result<Result<(Uuid, String), Refusal>, Unavailable> {
+        let row: Option<(Uuid, String)> = sqlx::query_as(
+            "SELECT l.holder_actor_id, a.name
+               FROM leases l
+               JOIN actors a
+                 ON a.id = l.holder_actor_id
+                AND a.workspace_id = l.workspace_id
+              WHERE l.workspace_id = $1
+                AND l.session_id = $2
+                AND l.resource LIKE 'actor:%'
+                AND l.terminal_state IS NULL
+                AND l.expires_at > now()",
+        )
+        .bind(ctx.workspace_id())
+        .bind(session_id)
+        .fetch_optional(self.pool.as_ref())
+        .await
+        .map_err(|e| Unavailable::Store(Box::new(e)))?;
+
+        Ok(match row {
+            Some((actor_id, role_instance)) => Ok((actor_id, role_instance)),
+            None => Err(Refusal::NotAttached),
+        })
+    }
+
+    /// Read the workspace's live, non-`actor:`-family leases for `claim list`
+    /// (R-0073-a/R-0067-c), with optional `family`/`resource_prefix` filters
+    /// (§API Contract `list`) — a sibling to
+    /// [`Self::live_leases_for_workspace`] (the `poll` path's zero-arg
+    /// reader, kept untouched so `list`'s filters never ripple into `poll`).
+    ///
+    /// `family` matches leases whose `resource` starts with `"<family>:"`;
+    /// `resource_prefix` matches leases whose `resource` starts with the
+    /// literal prefix string. Either or both `None` means no filter on that
+    /// axis. An unrecognized `family` string (outside the closed
+    /// [`crate::coordination::resource_id::Family`] set) is not specially
+    /// rejected here — it simply matches no `resource` and returns an empty
+    /// list (dogfooder-default: spec-silent choice, revisit-trigger a real
+    /// external consumer surfacing a need for `invalid_resource` on an
+    /// unknown filter value; see this dispatch's completion report). The
+    /// reserved `actor` family is barred by the CALLER before this is ever
+    /// invoked (`family == "actor"` refuses `reserved_family`, R-0067-c) —
+    /// this reader's own `resource NOT LIKE 'actor:%'` exclusion is a second,
+    /// unconditional backstop so no `actor:` row can surface here regardless
+    /// of caller ordering.
+    ///
+    /// Both filters are escaped via [`escape_like_literal`] before binding
+    /// (b2 review L-1) so the "literal-prefix" contract above actually holds
+    /// — a caller's own `%`/`_` no longer acts as a SQL wildcard. `family`
+    /// still resolves to "matches no resource" for any unrecognized string
+    /// (the dogfooder-default two sentences up): escaping only strips a raw
+    /// value's ability to act as a wildcard, it does not validate the value
+    /// against [`crate::coordination::resource_id::Family`]'s closed set —
+    /// deliberately: that `Family` enum's constructor (`Family::parse`, in
+    /// `resource_id.rs`) is module-private, and resolving through it would
+    /// require widening that visibility in a file outside this fix's
+    /// `touch_scope`. Escaping both filters uniformly reaches the same
+    /// end state (no metacharacter can widen a match) without that
+    /// cross-file change; a literal, non-metacharacter `family` string that
+    /// isn't one of the four known tokens still matches zero rows because no
+    /// such `resource` prefix exists in the table — unchanged from before
+    /// this fix.
+    pub(crate) async fn list_leases(
+        &self,
+        ctx: &WorkspaceCtx,
+        family: Option<&str>,
+        resource_prefix: Option<&str>,
+    ) -> Result<Vec<LiveLeaseRow>, Unavailable> {
+        // Literal-prefix escaping (b2 review L-1): both filters are
+        // documented as literal-prefix strings, but the raw caller value was
+        // bound directly ahead of a `%`-suffixed LIKE pattern — a `%`/`_` in
+        // the caller's own string acted as a SQL wildcard, contradicting
+        // that contract (no security impact: the `actor:`-exclusion and
+        // workspace scope above stay literal/unconditional regardless).
+        // Escaping here + `ESCAPE '\'` below restores the literal-prefix
+        // semantics for both `family` and `resource_prefix` while keeping
+        // each value a bound parameter (never interpolated).
+        let family_escaped = family.map(escape_like_literal);
+        let resource_prefix_escaped = resource_prefix.map(escape_like_literal);
+
+        let rows: Vec<LiveLeaseColumns> = sqlx::query_as(
+            "SELECT l.id, l.resource, l.holder_actor_id, a.name, l.acquired_at, l.expires_at
+                   FROM leases l
+                   JOIN actors a
+                     ON a.id = l.holder_actor_id
+                    AND a.workspace_id = l.workspace_id
+                  WHERE l.workspace_id = $1
+                    AND l.terminal_state IS NULL
+                    AND l.expires_at > now()
+                    AND l.resource NOT LIKE 'actor:%'
+                    AND ($2::text IS NULL OR l.resource LIKE $2::text || ':%' ESCAPE '\\')
+                    AND ($3::text IS NULL OR l.resource LIKE $3::text || '%' ESCAPE '\\')
+                  ORDER BY l.acquired_at, l.id",
+        )
+        .bind(ctx.workspace_id())
+        .bind(family_escaped)
+        .bind(resource_prefix_escaped)
         .fetch_all(self.pool.as_ref())
         .await
         .map_err(|e| Unavailable::Store(Box::new(e)))?;
@@ -547,6 +714,91 @@ fn log_outcome<T>(
                 reason_code = "store",
                 error = %e,
                 "coordination write unavailable: storage failure"
+            );
+        }
+    }
+}
+
+/// Op-log emission for a coordination READ that is not routed through
+/// [`PgCoordinationStore::run_write`] (R-0075-a) — `claim list` (Task 5 b2,
+/// Q2 decision) is the first consumer; Task 7's `message list` is the next.
+///
+/// Mirrors [`log_outcome`]'s Commit/Refuse/Unavailable arms exactly — same
+/// structured fields (`op`, `workspace_id`, `token_id`, `actor_id`,
+/// `outcome`, and `reason_code` on refusals/unavailability) on the same
+/// [`COORDINATION_TARGET`] stream — but with its OWN `tracing` emit using
+/// read-appropriate message text ("coordination read …", not "coordination
+/// write …"). Before this (b2 review Nit-1), this function delegated
+/// straight to `log_outcome`, so a `list` logged the literal string
+/// "coordination write committed" — misleading for a read. `log_outcome`
+/// ITSELF IS UNCHANGED (zero lines modified), so every existing write op's
+/// emitted fields stay byte-identical (the Q2 constraint: Warden verifies
+/// this specifically). `T = ()`: a read never "commits" a state transition —
+/// a successful list's own leases are the response body, not an op-log field
+/// — so its success case is logged via the same `WriteResult::Commit(())`
+/// shape a write's commit already renders, and a read-side refusal
+/// (`not_attached`/`reserved_family`) via the same `WriteResult::Refuse`
+/// shape. Callers construct the `Result` themselves (mirroring `run_write`'s
+/// own construction just above `log_outcome`'s call site) so this helper
+/// adds no new outcome vocabulary. The acceptance tests assert `op=ClaimList`
+/// co-occurring with `actor_id`/`reason_code` on the SAME line
+/// (`logs_assert`), never the message text — so changing the message here is
+/// safe.
+pub(crate) fn log_read_outcome(
+    op: CoordinationOp,
+    workspace_id: Uuid,
+    token_id: Uuid,
+    acting_actor: Option<Uuid>,
+    result: &Result<WriteResult<()>, Unavailable>,
+) {
+    match result {
+        Ok(WriteResult::Commit(_)) => {
+            tracing::info!(
+                target: COORDINATION_TARGET,
+                op = ?op,
+                workspace_id = %workspace_id,
+                token_id = %token_id,
+                actor_id = ?acting_actor,
+                outcome = "commit",
+                "coordination read completed"
+            );
+        }
+        Ok(WriteResult::Refuse(refusal)) => {
+            tracing::info!(
+                target: COORDINATION_TARGET,
+                op = ?op,
+                workspace_id = %workspace_id,
+                token_id = %token_id,
+                actor_id = ?acting_actor,
+                outcome = "refused",
+                reason_code = refusal.reason_code(),
+                "coordination read refused"
+            );
+        }
+        Err(Unavailable::Timeout { bound, .. }) => {
+            tracing::warn!(
+                target: COORDINATION_TARGET,
+                op = ?op,
+                workspace_id = %workspace_id,
+                token_id = %token_id,
+                actor_id = ?acting_actor,
+                outcome = "unavailable",
+                reason_code = "timeout",
+                bound = ?bound,
+                "coordination read unavailable: end-to-end bound elapsed"
+            );
+        }
+        Err(Unavailable::Store(e)) => {
+            tracing::warn!(
+                target: COORDINATION_TARGET,
+                op = ?op,
+                workspace_id = %workspace_id,
+                token_id = %token_id,
+                actor_id = ?acting_actor,
+                outcome = "unavailable",
+                reason_code = "store",
+                error = %e,
+                "coordination read unavailable: storage failure"
             );
         }
     }

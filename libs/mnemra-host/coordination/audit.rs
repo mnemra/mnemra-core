@@ -124,6 +124,44 @@ impl AuditRecord {
             }),
         }
     }
+
+    /// Audited lease takeover (R-0066-a/-b, Task 5 d): `new_holder` recovered
+    /// `resource` from `prior_holder` after the prior lease's declared
+    /// expiry. Carries the four R-0066-b evidence fields — `prior_holder`,
+    /// `new_holder`, `expires_at` (the PRIOR lease's declared expiry), and
+    /// `takeover_ts` (the store-clock instant that observed it past expiry,
+    /// `expiry.observed_now`). The JSON key is `takeover_ts`, NOT
+    /// `observed_now` — build plan §3.4 step 5 pins this key name, and
+    /// `tests/coordination_leases.rs`'s `lease_takeover_audit_rows` queries
+    /// it verbatim.
+    ///
+    /// `actor_id` is `Some(new_holder)` — the acting actor performing the
+    /// takeover, the SAME actor `run_write`'s own op-log attribution already
+    /// carries via `CoordinationTxn::record_acting_actor` (R-0075-a). A
+    /// takeover concerns two distinct actors and the build plan leaves this
+    /// field unspecified, so this is a dogfooder-default pick made for
+    /// consistency with the op-log's own attribution convention — the
+    /// `payload`'s `prior_holder`/`new_holder` keys carry both identities
+    /// regardless of this field's value.
+    pub fn lease_takeover(
+        workspace_id: Uuid,
+        prior_holder: Uuid,
+        new_holder: Uuid,
+        expiry: ExpiryEvidence,
+    ) -> Self {
+        AuditRecord {
+            event_type: AuditEventType::LeaseTakeover,
+            event_version: 1,
+            workspace_id,
+            actor_id: Some(new_holder),
+            payload: json!({
+                "prior_holder": prior_holder.to_string(),
+                "new_holder": new_holder.to_string(),
+                "expires_at": expiry.expires_at.to_rfc3339(),
+                "takeover_ts": expiry.observed_now.to_rfc3339(),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]

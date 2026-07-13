@@ -18,6 +18,8 @@
 //! against this module.
 
 pub mod audit;
+pub mod leases;
+pub mod resource_id;
 pub mod session_plane;
 pub mod write_path;
 
@@ -60,6 +62,30 @@ impl Default for CoordinationConfig {
     }
 }
 
+/// `claim acquire` lease duration when `duration_seconds` is omitted
+/// (R-0065-d). Default 15 minutes (§Numeric calibrations).
+///
+/// off-default note: a module const, not a `CoordinationConfig` field. The
+/// config-field route (`CoordinationConfig` gaining `lease_default_duration`/
+/// `lease_max_duration`) would compile-break every existing
+/// `CoordinationConfig { .. }` struct literal that does not use
+/// `..Default::default()` — two such literals live in
+/// `mnemra_host.rs`'s test module, outside this dispatch's `touch_scope`.
+/// The b1 acceptance suite's own header comment confirms the assumption
+/// this rides: "no scenario in b1 needs to wait out an actual lease expiry
+/// … `CoordinationConfig` therefore needed no changes for this file." Flagged
+/// for revisit: fold into `CoordinationConfig` (with the `mnemra_host.rs`
+/// literals migrated to `..Default::default()`) when a later slice needs
+/// per-test duration override (dogfooder-default: simple + sufficient for
+/// b1's V0 usage).
+pub const LEASE_DEFAULT_DURATION: Duration = Duration::from_secs(900);
+
+/// `claim acquire` policy-maximum lease duration — a request above this
+/// bound is refused `invalid_duration` (R-0065-d). Default 4 hours
+/// (§Numeric calibrations). Same off-default rationale as
+/// [`LEASE_DEFAULT_DURATION`].
+pub const LEASE_MAX_DURATION: Duration = Duration::from_secs(14_400);
+
 /// Operation label for op-log attribution, span naming, and the timeout label
 /// (R-0075-a). `#[non_exhaustive]` (F4): Tasks 5/7 add actions without a
 /// breaking change.
@@ -76,6 +102,10 @@ pub enum CoordinationOp {
     Release,
     /// `claim takeover`.
     Takeover,
+    /// `claim list` (Task 5 b2) — a READ, never routed through `run_write`;
+    /// logged via [`write_path::log_read_outcome`] instead of
+    /// [`write_path::PgCoordinationStore::run_write`]'s own emission.
+    ClaimList,
     /// `message send`.
     Send,
     /// `message poll` (the delivery half of the bind call).
