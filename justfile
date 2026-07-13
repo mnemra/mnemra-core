@@ -109,7 +109,13 @@ sign-ceremony key wasm manifest:
 # via tests/common/shared_engine.rs, so it inherits the same --test-threads 1
 # serialization; it belongs in this shared list, guarded by the non-vacuity check
 # in verify-test-hooks below.
-PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
+# coordination_leases (Task 5 slice b1, R-0065/R-0067/R-0073/R-0075 — `claim
+# acquire`): drives the real `claim` MCP tool via the same
+# tests/common/shared_engine.rs harness as coordination_session_plane, so it
+# inherits the same --test-threads 1 serialization; it belongs in this shared
+# list, guarded by the non-vacuity check in verify-test below (mirrors the
+# coordination_session_plane guard — silent-failure class #2004).
+PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_leases --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
 # Non-PG integration test binaries (17 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
@@ -198,6 +204,28 @@ verify-test: plugin
     fi
     if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$csp_output"; then
         echo "coordination_session_plane non-vacuity check failed: no non-zero pass count found (#2004 silent-failure class)"
+        echo "GATE test FAIL"
+        exit 1
+    fi
+    # coordination_leases non-vacuity check (Task 5 slice b1, R-0065/R-0067/
+    # R-0073/R-0075): same #2004 false-green class as coordination_session_plane
+    # above — this suite is NOT cfg-gated either (drives the real `claim` MCP
+    # tool under the default feature set), so it runs in the combined
+    # PG_TEST_FLAGS pass above, but a binary silently dropped from that list —
+    # or emptied by a refactor — would pass vacuously on cargo's
+    # exit-0-on-empty-run. Scoped rerun so the pass count checked is
+    # unambiguously this binary's own.
+    set +e
+    cl_output="$(cargo test -p mnemra-host --test coordination_leases -- --test-threads 1 2>&1)"
+    cl_code=$?
+    set -e
+    echo "$cl_output"
+    if [[ "$cl_code" -ne 0 ]]; then
+        echo "GATE test FAIL"
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$cl_output"; then
+        echo "coordination_leases non-vacuity check failed: no non-zero pass count found (#2004 silent-failure class)"
         echo "GATE test FAIL"
         exit 1
     fi
