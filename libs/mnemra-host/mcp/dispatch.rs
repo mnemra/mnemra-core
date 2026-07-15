@@ -165,14 +165,17 @@ pub(crate) async fn resolve_ctx_from_token(
 /// coincidence, not the mechanism.) Task 5 (b1) added `claim`'s `acquire`
 /// action to the match; b2 added `list` — R-0073-b states explicitly that
 /// `list` is write-category too (it executes under a resolved attachment,
-/// itself a write); c added `renew`/`release`; d adds `takeover` — every arm
-/// maps to `CoordinationWriteVerb`.
+/// itself a write); c added `renew`/`release`; d adds `takeover`; Task 7
+/// slice a adds `message`'s `send` action — same `CoordinationWriteVerb`
+/// mapping (R-0073-b: every message action executes under a resolved
+/// attachment too) — every arm maps to `CoordinationWriteVerb`.
 pub(crate) fn authorize_coordination_action(
     ctx: &WorkspaceCtx,
     action: &CoordinationAction,
 ) -> Result<(), ErrorData> {
     let verb = match action {
         CoordinationAction::Poll => Verb::CoordinationWriteVerb,
+        CoordinationAction::Send => Verb::CoordinationWriteVerb,
         CoordinationAction::ClaimAcquire => Verb::CoordinationWriteVerb,
         CoordinationAction::ClaimList => Verb::CoordinationWriteVerb,
         CoordinationAction::ClaimRenew => Verb::CoordinationWriteVerb,
@@ -389,6 +392,31 @@ mod tests {
         // sub-run). Guards against the gate degrading into a blanket refusal.
         let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
         authorize_coordination_action(&ctx, &CoordinationAction::Poll)
+            .expect("an Admin token must pass the coordination capability gate");
+    }
+
+    #[test]
+    fn coordination_message_send_refused_for_read_observer_predispatch() {
+        // R-0073-b / Task 7 slice a: `send` is write-category; a
+        // `read_observer` token is refused at THIS dedicated per-action gate
+        // before any attach/validation/mint resolution.
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::ReadObserver, Uuid::new_v4());
+        let err = authorize_coordination_action(&ctx, &CoordinationAction::Send)
+            .expect_err("R-0073-b: a read_observer `send` must be refused pre-dispatch");
+        assert_eq!(
+            err.code, PERMISSION_DENIED_CODE,
+            "the refusal must carry the permission-denied code — distinct from \
+             an auth failure (valid token, wrong role)"
+        );
+    }
+
+    #[test]
+    fn coordination_message_send_admitted_for_admin() {
+        // The gate is a deny-for-read_observer control, not a deny-all: an
+        // Admin token passes it (the attach/validation/mint logic runs
+        // downstream in `coordination::messages::send`).
+        let ctx = WorkspaceCtx::new(Uuid::new_v4(), Role::Admin, Uuid::new_v4());
+        authorize_coordination_action(&ctx, &CoordinationAction::Send)
             .expect("an Admin token must pass the coordination capability gate");
     }
 

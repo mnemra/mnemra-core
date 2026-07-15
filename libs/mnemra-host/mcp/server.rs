@@ -43,6 +43,7 @@ use uuid::Uuid;
 
 use crate::coordination::CoordinationConfig;
 use crate::coordination::leases;
+use crate::coordination::messages;
 use crate::coordination::session_plane;
 use crate::coordination::write_path::PgCoordinationStore;
 use crate::mcp::dispatch::{
@@ -212,6 +213,81 @@ impl MnemraMcpServer {
                     &self.coordination_config,
                     &ctx,
                     role_instance,
+                )
+                .await
+            }
+            session_plane::CoordinationAction::Send => {
+                // `send` carries four required arguments: `to_role_instance`
+                // (string), `type` (string — the registered message-type
+                // name), `schema_version` (a JSON number, matching
+                // `message_types`'s `u16` version type), and `payload` (the
+                // JSON value forwarded verbatim to `validate_message`). Each
+                // absent/wrong-type argument is a malformed request
+                // (INVALID_PARAMS) — distinct from a present-but-invalid
+                // value, which the send body refuses via its own structured
+                // reason code (`invalid_role_instance`/`schema_violation`/
+                // `unknown_type`).
+                let to_role_instance = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("to_role_instance"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `send` requires a string `to_role_instance` \
+                                   argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let type_name = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("type"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `send` requires a string `type` argument".into(),
+                        data: None,
+                    })?;
+                let schema_version_raw = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("schema_version"))
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `send` requires an integer `schema_version` \
+                                   argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let schema_version: u16 =
+                    schema_version_raw
+                        .try_into()
+                        .map_err(|_| rmcp::model::ErrorData {
+                            code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                            message: "coordination `send`'s `schema_version` argument is out \
+                                       of range"
+                                .into(),
+                            data: None,
+                        })?;
+                let payload = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("payload"))
+                    .cloned()
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `send` requires a `payload` argument".into(),
+                        data: None,
+                    })?;
+                messages::send(
+                    &self.coordination_store,
+                    &ctx,
+                    to_role_instance,
+                    type_name,
+                    schema_version,
+                    payload,
                 )
                 .await
             }
