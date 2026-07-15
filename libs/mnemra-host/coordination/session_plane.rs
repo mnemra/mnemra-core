@@ -61,11 +61,11 @@ pub(crate) fn is_coordination_tool(name: &str) -> bool {
 /// tool-aware `parse_action` + one flat enum with tool-prefixed variant
 /// names, rather than splitting `ClaimAction`/`MessageAction`).
 ///
-/// Closed set. `message` advertises only `poll`; `claim` advertises
-/// `acquire` (Task 5 slice b1), `list` (Task 5 slice b2), `renew`/`release`
-/// (Task 5 slice c), and `takeover` (Task 5 slice d); Task 7 extends
-/// `message` with `send`/`list`/`ack`/`disposition`. Every
-/// coordination action is write-category under R-0073-b — the
+/// Closed set. `message` advertises `poll` and `send` (Task 7 slice a);
+/// `claim` advertises `acquire` (Task 5 slice b1), `list` (Task 5 slice b2),
+/// `renew`/`release` (Task 5 slice c), and `takeover` (Task 5 slice d); Task
+/// 7 further extends `message` with `list`/`ack`/`disposition` in later
+/// slices. Every coordination action is write-category under R-0073-b — the
 /// classification lives in
 /// [`crate::mcp::dispatch::authorize_coordination_action`], which reads the
 /// *action*, never the tool-name tail.
@@ -74,6 +74,9 @@ pub(crate) enum CoordinationAction {
     /// `message poll` — the bind call (R-0064-e): resolve-or-create, attach
     /// or audited succession, then deliver ([`poll_bind`]).
     Poll,
+    /// `message send` (R-0068-a, R-0070-b, R-0075-b; Task 7 slice a) —
+    /// routed to [`crate::coordination::messages::send`].
+    Send,
     /// `claim acquire` (R-0065-a/-b/-c/-d, R-0067) — routed to
     /// [`crate::coordination::leases::acquire`].
     ClaimAcquire,
@@ -116,6 +119,7 @@ pub(crate) fn parse_action(
 
     match (tool, action) {
         (MESSAGE_TOOL, "poll") => Ok(CoordinationAction::Poll),
+        (MESSAGE_TOOL, "send") => Ok(CoordinationAction::Send),
         (CLAIM_TOOL, "acquire") => Ok(CoordinationAction::ClaimAcquire),
         (CLAIM_TOOL, "list") => Ok(CoordinationAction::ClaimList),
         (CLAIM_TOOL, "renew") => Ok(CoordinationAction::ClaimRenew),
@@ -131,36 +135,61 @@ pub(crate) fn parse_action(
 
 /// The host-served coordination tools advertised by `list_tools`, concatenated
 /// with the plugin (echo) verbs. At this stage: `message` with the `poll`
-/// action only.
+/// and `send` actions (Task 7 slice a).
 ///
-/// The input schema declares the closed `action` enum + `role_instance`. It
-/// carries **no acting-actor field** (R-0064-b): the acting principal is
-/// host-derived from attachment state; a caller-supplied principal does not
-/// exist anywhere on the surface.
+/// The input schema declares the closed `action` enum + per-action
+/// arguments. It carries **no acting-actor field** (R-0064-b): the acting
+/// principal is host-derived from attachment state; a caller-supplied
+/// principal does not exist anywhere on the surface.
 pub(crate) fn coordination_tools() -> Vec<Tool> {
     vec![message_tool(), claim_tool()]
 }
 
-/// Build the `message` tool advertisement (poll action, R-0064-b schema).
+/// Build the `message` tool advertisement (`poll`/`send` actions, R-0064-b
+/// schema).
 fn message_tool() -> Tool {
-    // `action` is the closed enum argument (poll only at this stage);
-    // `role_instance` is the bind identifier. `additionalProperties: false`
-    // makes the closed shape explicit; there is deliberately NO acting-actor
-    // field (R-0064-b).
+    // `action` is the closed enum argument (`poll`/`send` at this stage);
+    // `role_instance` is the bind identifier (`poll` only); `to_role_instance`/
+    // `type`/`schema_version`/`payload` are `send`'s arguments (§API
+    // Contract `send`). Only `action` is required at the schema level —
+    // every other argument is meaningful to exactly one action, so no
+    // single argument is required across all of them (mirrors the `claim`
+    // tool's own schema convention, `claim_tool()` below).
+    // `additionalProperties: false` makes the closed shape explicit; there
+    // is deliberately NO acting-actor/sender field (R-0064-b) — the acting
+    // principal is host-derived from attachment state.
     let schema = serde_json::json!({
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["poll"],
+                "enum": ["poll", "send"],
                 "description": "The coordination action (closed set)."
             },
             "role_instance": {
                 "type": "string",
-                "description": "The role-instance identifier the session binds to on poll."
+                "description": "The role-instance identifier the session binds to on poll. \
+                                 `poll` only."
+            },
+            "to_role_instance": {
+                "type": "string",
+                "description": "The addressee role-instance identifier. `send` only."
+            },
+            "type": {
+                "type": "string",
+                "description": "The registered message-type name (R-0070-a). `send` only."
+            },
+            "schema_version": {
+                "type": "integer",
+                "description": "The registered message-type's schema version. `send` only."
+            },
+            "payload": {
+                "type": "object",
+                "description": "The message payload, schema-validated against the named \
+                                 type + schema_version (Task 6). `send` only."
             }
         },
-        "required": ["action", "role_instance"],
+        "required": ["action"],
         "additionalProperties": false
     });
     let schema_obj = schema
@@ -790,14 +819,21 @@ fn refusal_detail(refusal: &Refusal) -> serde_json::Value {
             "the lease has not expired yet; a live lease cannot be taken over — no \
              force-break verb exists at V0 (R-0066-a); wait out the TTL"
         ),
-        // Message-family refusals (`send`/`ack`/`disposition` — R-0068/
-        // -0069/-0070) — not yet reachable on any wired path (Task 7). Same
-        // grouping rationale as the lease-family arm above.
+        // `send` (Task 7 slice a) makes these two reachable — split out of
+        // the "not yet wired" group below with their own accurate detail.
+        Refusal::SchemaViolation => serde_json::json!(
+            "the send payload failed to validate against its named type + schema_version's \
+             schema (an undeclared field, a wrong-typed value, or a missing required field)"
+        ),
+        Refusal::UnknownType => serde_json::json!(
+            "the send named a (type, schema_version) pair that is not a registered message type"
+        ),
+        // Message-family refusals (`ack`/`disposition` — R-0069) — not yet
+        // reachable on any wired path (Task 7 slice b). Same grouping
+        // rationale as the lease-family arm above.
         Refusal::NotAddressee
         | Refusal::InvalidTransition
         | Refusal::InvalidDisposition
-        | Refusal::SchemaViolation
-        | Refusal::UnknownType
         | Refusal::MessageNotFound => serde_json::json!(
             "the message action was refused (not yet reachable on any wired path)"
         ),
@@ -851,6 +887,13 @@ mod tests {
             props.contains_key("role_instance"),
             "the message tool schema must declare the `role_instance` argument"
         );
+        for send_arg in ["to_role_instance", "type", "schema_version", "payload"] {
+            assert!(
+                props.contains_key(send_arg),
+                "the message tool schema must declare `send`'s `{send_arg}` argument \
+                 (Task 7 slice a)"
+            );
+        }
 
         // R-0064-b: the schema carries NO acting-actor field — the principal is
         // host-derived from attachment state, never a caller write input.
@@ -862,7 +905,7 @@ mod tests {
             );
         }
 
-        // Only `poll` is advertised at this stage (closed enum).
+        // `poll` and `send` are advertised at this stage (closed enum).
         let action_enum = props
             .get("action")
             .and_then(|a| a.get("enum"))
@@ -870,8 +913,8 @@ mod tests {
             .expect("the `action` argument must declare a closed enum");
         assert_eq!(
             action_enum,
-            &vec![serde_json::json!("poll")],
-            "the only advertised `message` action at this stage is `poll`"
+            &vec![serde_json::json!("poll"), serde_json::json!("send")],
+            "the advertised `message` actions at this stage are `poll` and `send`"
         );
     }
 
@@ -970,6 +1013,16 @@ mod tests {
     }
 
     #[test]
+    fn parse_action_accepts_message_send() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("send"));
+        assert_eq!(
+            parse_action(MESSAGE_TOOL, Some(&args)).expect("`send` is a valid `message` action"),
+            CoordinationAction::Send
+        );
+    }
+
+    #[test]
     fn parse_action_accepts_claim_acquire() {
         let mut args = serde_json::Map::new();
         args.insert("action".to_string(), serde_json::json!("acquire"));
@@ -1041,11 +1094,11 @@ mod tests {
 
     #[test]
     fn parse_action_rejects_unsupported_missing_and_non_string() {
-        // An action not yet supported at this stage (Task 7's `send`).
-        let mut send = serde_json::Map::new();
-        send.insert("action".to_string(), serde_json::json!("send"));
+        // An action not yet supported at this stage (Task 7 slice b's `ack`).
+        let mut ack = serde_json::Map::new();
+        ack.insert("action".to_string(), serde_json::json!("ack"));
         assert!(
-            parse_action(MESSAGE_TOOL, Some(&send)).is_err(),
+            parse_action(MESSAGE_TOOL, Some(&ack)).is_err(),
             "an unsupported action must be refused, not silently accepted"
         );
 

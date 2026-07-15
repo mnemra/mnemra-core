@@ -115,7 +115,14 @@ sign-ceremony key wasm manifest:
 # inherits the same --test-threads 1 serialization; it belongs in this shared
 # list, guarded by the non-vacuity check in verify-test below (mirrors the
 # coordination_session_plane guard — silent-failure class #2004).
-PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_leases --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
+# coordination_messages (Task 7 slice a, R-0068-a/R-0070-b/R-0075-b/R-0075-e —
+# `message send`): drives the real `message` MCP tool via the same
+# tests/common/shared_engine.rs harness as coordination_leases /
+# coordination_session_plane, so it inherits the same --test-threads 1
+# serialization; it belongs in this shared list (silent-failure class #2004 —
+# a PG-touching coordination suite left out of PG_TEST_FLAGS never runs under
+# verify-test and passes anyway).
+PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_leases --test coordination_messages --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
 # Non-PG integration test binaries (18 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
@@ -232,6 +239,33 @@ verify-test: plugin
         echo "GATE test FAIL"
         exit 1
     fi
+    # coordination_messages non-vacuity COUNT-PIN (Task 7a, Warden T7a finding —
+    # silent-failure gap): this suite is MIXED, not all-or-nothing like
+    # coordination_session_plane/coordination_leases above — 6 of its 8 tests
+    # (1/2/3/6/7/8) run under the DEFAULT feature set; the other 2 (tests 4/5 —
+    # the send-ordering pin and registration-audit-iff-minted, both
+    # security-critical) are `#[cfg(feature = "test-hooks")]`-gated and only
+    # compile/run under verify-test-hooks below. A bare non-zero check (the
+    # pattern used above) would NOT catch tests 4/5 being silently dropped from
+    # the test-hooks-gated set, since the remaining 6 default tests already
+    # produce a non-zero pass count on their own — so this check pins the EXACT
+    # expected count (6) instead. Scoped rerun so the pass count checked is
+    # unambiguously this binary's own, not a count borrowed from the combined
+    # PG_TEST_FLAGS run above (#2004 silent-failure class).
+    set +e
+    cm_output="$(cargo test -p mnemra-host --test coordination_messages -- --test-threads 1 2>&1)"
+    cm_code=$?
+    set -e
+    echo "$cm_output"
+    if [[ "$cm_code" -ne 0 ]]; then
+        echo "GATE test FAIL"
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. 6 passed; 0 failed;' <<< "$cm_output"; then
+        echo "coordination_messages non-vacuity count-pin failed: expected exactly 6 passed under the default feature set (tests 1/2/3/6/7/8); got a different count — a silent drop would otherwise pass vacuously (Task 7a, Warden finding, #2004 silent-failure class)"
+        echo "GATE test FAIL"
+        exit 1
+    fi
     echo "GATE test PASS"
 
 # Verify: test-hooks feature — runs resource_limits.rs seam tests (gated behind test-hooks).
@@ -294,6 +328,31 @@ verify-test-hooks: plugin
     fi
     if ! grep -qE 'test result: ok\. [1-9][0-9]* passed; 0 failed;' <<< "$cf_output"; then
         echo "coordination_failclosed non-vacuity check failed: no non-zero pass count found (test-hooks fault-injection suite must not silently empty)"
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+    # coordination_messages non-vacuity COUNT-PIN (Task 7a, Warden T7a finding —
+    # same mixed suite as the verify-test guard above). Under
+    # `--features test-hooks` all 8 tests compile and run — the 6 default-feature
+    # tests PLUS tests 4/5 (the send-ordering pin and registration-audit-iff-
+    # minted, both security-critical). A bare non-zero check would not catch
+    # tests 4/5 alone being silently dropped (or their #[cfg] gate breaking) while
+    # the other 6 keep passing, since 6 is already non-zero — so this check pins
+    # the EXACT expected count (8) instead, mirroring the verify-test guard's
+    # exact-count discipline. Scoped rerun so the pass count checked is
+    # unambiguously this binary's own, not a count borrowed from the combined
+    # PG_TEST_FLAGS run above.
+    set +e
+    cm_th_output="$(cargo test -p mnemra-host --features test-hooks --test coordination_messages -- --test-threads 1 2>&1)"
+    cm_th_code=$?
+    set -e
+    echo "$cm_th_output"
+    if [[ "$cm_th_code" -ne 0 ]]; then
+        echo "GATE test-hooks FAIL"
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. 8 passed; 0 failed;' <<< "$cm_th_output"; then
+        echo "coordination_messages non-vacuity count-pin failed: expected exactly 8 passed under --features test-hooks (tests 1-8, including the security-critical send-ordering-pin and registration-audit-iff-minted tests 4/5); got a different count — a silent drop of the two security-critical tests alone would otherwise pass vacuously behind the other 6 (Task 7a, Warden finding)"
         echo "GATE test-hooks FAIL"
         exit 1
     fi
