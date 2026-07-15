@@ -117,7 +117,7 @@ sign-ceremony key wasm manifest:
 # coordination_session_plane guard — silent-failure class #2004).
 PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_leases --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
-# Non-PG integration test binaries (17 members).
+# Non-PG integration test binaries (18 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
 # health_listener (T4, #1991, R-0022-b/R-0004-g): uses sqlx::connect_lazy against an
 # unreachable address to get a deterministic overall:"down" body — no embedded Postgres
@@ -130,7 +130,10 @@ PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_beh
 # scripts/ci-reap.sh against synthetic marker processes (argv0-renamed real
 # `sleep` invocations, never a real embedded-PG engine), so it belongs here,
 # not in PG_TEST_FLAGS.
-NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test content_hash_binding --test health_listener --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
+# coordination_message_types (Task 6, coordination-wedge, R-0070/R-0071):
+# pure host-code closed-schema validation over in-memory JSON payloads — no
+# embedded Postgres engine needed, so it belongs here, not in PG_TEST_FLAGS.
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test content_hash_binding --test coordination_message_types --test health_listener --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
