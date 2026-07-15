@@ -19,6 +19,7 @@
 
 pub mod audit;
 pub mod leases;
+pub mod message_types;
 pub mod resource_id;
 pub mod session_plane;
 pub mod write_path;
