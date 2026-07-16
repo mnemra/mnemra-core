@@ -178,6 +178,28 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      # Postgres binary cache (theseus) — required here too, unlike the rest
+      # of this shard's NONPG_TEST_FLAGS members. `-p mnemra-host --lib`
+      # includes exactly one live-DB test (write_path.rs,
+      # clean_write_commits_state_and_flushes_exactly_one_audit_row —
+      # deliberately the ONLY `--lib` test that boots an engine) that calls
+      # `EmbeddedEngine::start()`. `verify_pinned_artifacts()` hash-checks the
+      # installed Postgres binary AND the pgvector shared library BEFORE
+      # `install_pgvector()` ever runs (engine.rs bootstrap sequence,
+      # steps 2 vs 4) — so on a cold `~/.theseus` with no prior PG-touching
+      # test in this job to have installed pgvector first, that check fails
+      # with a hash-pin "no such file" error (the pgvector library was never
+      # written). Restoring the same cache the coverage-pg job warms carries
+      # the already-installed pgvector artifact into this job, closing the
+      # gap. Found via CI failure on this job (dispatch 1626): the pre-shard
+      # single job never hit this because its PG_TEST_FLAGS pass always ran
+      # before `-p mnemra-host --lib` in the same process/filesystem.
+      - name: Cache Postgres binaries (theseus)
+        uses: actions/cache@v4
+        with:
+          path: ~/.theseus
+          key: theseus-pg16.4.0-${{ runner.os }}-${{ runner.arch }}
+
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
@@ -189,11 +211,7 @@ jobs:
           tool: cargo-llvm-cov@0.8.6
 
       # Roulette-detector probe (R-0093) — same rationale as the coverage-pg
-      # job above; present in every coverage-instrumented job. No Postgres
-      # binary cache here: this shard's subset (NONPG_TEST_FLAGS + --lib +
-      # --workspace --exclude mnemra-host) needs no embedded Postgres engine
-      # (see justfile's NONPG_TEST_FLAGS comment for the per-member
-      # rationale) — each shard carries only the setup its own subset needs.
+      # job above; present in every coverage-instrumented job.
       - name: Disk-total + headroom probe (R-0093)
         run: |
           echo "[disk-probe] runner disk-total:"
