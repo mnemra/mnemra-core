@@ -85,9 +85,11 @@ sign-ceremony key wasm manifest:
 # No recipe has --fix side effects.
 # ---------------------------------------------------------------------------
 
-# PG-touching integration test binaries (20 members).
-# Defined once; all three verify-* recipes reference this variable so the list
-# stays in sync (R-0022: identical serialization directive across all recipes).
+# PG-touching integration test binaries (23 members).
+# Defined once; verify-test, verify-test-hooks, and verify-coverage-pg all
+# reference this variable so the list stays in sync (R-0022: identical
+# serialization directive across all three). verify-coverage-membership
+# below count-pins this at 23 as a mechanical drift guard.
 # These binaries run at --test-threads 1 to prevent concurrent embedded-Postgres
 # teardown races (SIGABRT / signal 6, #1852 / Tier-1 CI-flake fix).
 # startup_run_full (T5, #1992, R-0022-a): both scenarios reach real
@@ -358,24 +360,200 @@ verify-test-hooks: plugin
     fi
     echo "GATE test-hooks PASS"
 
-# Verify: coverage (emit number; no threshold gate at scaffold stage)
-# Depends on `plugin` for the same wasm-artifact reason as verify-test.
+# ---------------------------------------------------------------------------
+# Coverage sharding (R-0093-R-0098, docs/specs/2026-07-15-ci-coverage-shard.md)
 #
-# PG serialization mirrors verify-test via --no-report accumulation + final report
-# (R-0022: identical directive in all three recipes).
-verify-coverage: plugin
+# The CI coverage gate intermittently failed with "No space left on device"
+# on GitHub's mixed hosted-runner fleet (a smaller-disk image variant could
+# not fit the full instrumented binary set `cargo llvm-cov` builds — the
+# dominant disk consumer of the whole `just ci` run). Fix: split coverage
+# across independent CI jobs (R-0094, Shape B — see the spec's "load-bearing
+# decision" section for why NOT a cross-job merge), each on its own fresh
+# runner disk, each emitting its OWN per-shard coverage number (R-0095 —
+# union coverage across shards is NOT computed; acceptable only while this
+# gate stays emit-only). `verify-coverage` below delegates to the shard
+# recipes so local and CI enumerate identical shard membership by
+# construction (R-0096); `verify-coverage-membership` is the MECHANICAL
+# reconciliation guard on top of that (not eyeballed, per S2).
+# ---------------------------------------------------------------------------
+
+# Verify: coverage-shard membership reconciliation (R-0096, mechanical guard).
+# Confirms union(verify-coverage-pg, verify-coverage-rest) selectors equals
+# the pre-shard verify-coverage selector set exactly — PG_TEST_FLAGS in the
+# PG shard only; NONPG_TEST_FLAGS + `-p mnemra-host --lib` +
+# `--workspace --exclude mnemra-host` in the rest shard only; no selector
+# dropped and none duplicated across shards (R-0096 AC1, S2).
+#
+# Reads the justfile SOURCE TEXT directly via sed/grep (not `just --show`,
+# which does not interpolate {{...}} tokens and is a red herring here) plus
+# `just --evaluate` for the two variables' raw values — both are external
+# subprocess calls whose output is plain captured text, so this recipe's own
+# body never needs to embed a literal `{{`/`}}` pair (which `just` would
+# otherwise try to interpolate before bash ever sees it).
+#
+# PG_TEST_FLAGS-vs-NONPG_TEST_FLAGS disambiguation: "NONPG_TEST_FLAGS"
+# textually CONTAINS "PG_TEST_FLAGS" as a substring, so a naive grep for
+# PG_TEST_FLAGS would false-positive inside NONPG_TEST_FLAGS. Strip every
+# NONPG_TEST_FLAGS occurrence first, then check for PG_TEST_FLAGS in what's
+# left — that unambiguously finds only genuine standalone references.
+#
+# Count-pins PG_TEST_FLAGS=23 / NONPG_TEST_FLAGS=18 (mirrors the project's
+# non-vacuity count-pin convention, e.g. verify-test's coordination_messages
+# 6/8 pin) so a silently emptied or partially-dropped variable fails loudly
+# rather than passing on token-presence alone.
+verify-coverage-membership:
     #!/usr/bin/env bash
     set -euo pipefail
+    fail=0
+
+    pg_body="$(sed -n '/^verify-coverage-pg:/,/^$/p' justfile)"
+    rest_body="$(sed -n '/^verify-coverage-rest:/,/^$/p' justfile)"
+
+    if [[ -z "$pg_body" || -z "$rest_body" ]]; then
+        echo "membership check FAIL: could not locate verify-coverage-pg / verify-coverage-rest recipe bodies in justfile"
+        echo "GATE coverage-membership FAIL"
+        exit 1
+    fi
+
+    pg_body_no_nonpg="${pg_body//NONPG_TEST_FLAGS/}"
+    rest_body_no_nonpg="${rest_body//NONPG_TEST_FLAGS/}"
+
+    # PG_TEST_FLAGS: PG shard only, not the rest shard.
+    if ! grep -qF 'PG_TEST_FLAGS' <<< "$pg_body_no_nonpg"; then
+        echo "membership check FAIL: verify-coverage-pg does not reference PG_TEST_FLAGS"
+        fail=1
+    fi
+    if grep -qF 'PG_TEST_FLAGS' <<< "$rest_body_no_nonpg"; then
+        echo "membership check FAIL: PG_TEST_FLAGS referenced in verify-coverage-rest (duplicated across shards)"
+        fail=1
+    fi
+
+    # NONPG_TEST_FLAGS: rest shard only, not the PG shard.
+    if ! grep -qF 'NONPG_TEST_FLAGS' <<< "$rest_body"; then
+        echo "membership check FAIL: verify-coverage-rest does not reference NONPG_TEST_FLAGS"
+        fail=1
+    fi
+    if grep -qF 'NONPG_TEST_FLAGS' <<< "$pg_body"; then
+        echo "membership check FAIL: NONPG_TEST_FLAGS referenced in verify-coverage-pg (duplicated across shards)"
+        fail=1
+    fi
+
+    # The two non-enumerable selectors: rest shard only, never PG.
+    if ! grep -qF -- '-p mnemra-host --lib' <<< "$rest_body"; then
+        echo "membership check FAIL: verify-coverage-rest missing '-p mnemra-host --lib' selector"
+        fail=1
+    fi
+    if grep -qF -- '-p mnemra-host --lib' <<< "$pg_body"; then
+        echo "membership check FAIL: '-p mnemra-host --lib' selector duplicated into verify-coverage-pg"
+        fail=1
+    fi
+    if ! grep -qF -- '--workspace --exclude mnemra-host' <<< "$rest_body"; then
+        echo "membership check FAIL: verify-coverage-rest missing '--workspace --exclude mnemra-host' selector"
+        fail=1
+    fi
+    if grep -qF -- '--workspace --exclude mnemra-host' <<< "$pg_body"; then
+        echo "membership check FAIL: '--workspace --exclude mnemra-host' selector duplicated into verify-coverage-pg"
+        fail=1
+    fi
+
+    # Count-pins: catch a silently emptied or partially-dropped variable that
+    # token-presence checks above would miss.
+    pg_count="$(just --evaluate PG_TEST_FLAGS | grep -oE -- '--test [A-Za-z0-9_]+' | wc -l | tr -d ' ')"
+    nonpg_count="$(just --evaluate NONPG_TEST_FLAGS | grep -oE -- '--test [A-Za-z0-9_]+' | wc -l | tr -d ' ')"
+    if [[ "$pg_count" -ne 23 ]]; then
+        echo "membership check FAIL: PG_TEST_FLAGS has $pg_count members, expected 23 (update this pin if the variable's membership intentionally changed)"
+        fail=1
+    fi
+    if [[ "$nonpg_count" -ne 18 ]]; then
+        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 18 (update this pin if the variable's membership intentionally changed)"
+        fail=1
+    fi
+
+    # No test binary name present in BOTH variables (guards the source
+    # variables themselves, not just the shard recipes' wiring).
+    dup_tests="$(comm -12 \
+        <(just --evaluate PG_TEST_FLAGS | grep -oE -- '--test [A-Za-z0-9_]+' | awk '{print $2}' | sort -u) \
+        <(just --evaluate NONPG_TEST_FLAGS | grep -oE -- '--test [A-Za-z0-9_]+' | awk '{print $2}' | sort -u))"
+    if [[ -n "$dup_tests" ]]; then
+        echo "membership check FAIL: test binary name(s) present in BOTH PG_TEST_FLAGS and NONPG_TEST_FLAGS: $dup_tests"
+        fail=1
+    fi
+
+    if [[ "$fail" -ne 0 ]]; then
+        echo "GATE coverage-membership FAIL"
+        exit 1
+    fi
+    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [18], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
+
+# Verify: coverage — PG shard (embedded-Postgres binary set; the disk-heavy
+# set that drove the runner-disk roulette — see the spec's Purpose/context).
+# Emits its OWN per-shard coverage number over PG_TEST_FLAGS only (R-0095 —
+# union coverage across shards is not computed; see verify-coverage below).
+#
+# `cargo llvm-cov clean --workspace` first so this shard's report reflects
+# ONLY its own subset's profile data, never polluted by a prior shard's
+# accumulated data on the same filesystem (the "Clean per-shard slate"
+# constraint — matters for the local delegated run below; a no-op on a fresh
+# CI runner, where each shard already gets its own disk). --test-threads 1
+# mirrors verify-test / verify-test-hooks (R-0022).
+verify-coverage-pg: plugin
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo llvm-cov clean --workspace
     if cargo llvm-cov --no-report -p mnemra-host {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
-        && cargo llvm-cov --no-report -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
+        && cargo llvm-cov report 2>&1; then
+        echo "GATE coverage-pg PASS (per-shard number over the embedded-Postgres test subset only — union coverage not computed under Shape B, see verify-coverage)"
+    else
+        echo "GATE coverage-pg FAIL"
+        exit 1
+    fi
+
+# Verify: coverage — rest shard (non-PG integration binaries + host lib +
+# remaining workspace crates). Emits its OWN per-shard coverage number
+# (R-0095). Same clean-per-shard-slate reason as verify-coverage-pg above.
+verify-coverage-rest: plugin
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo llvm-cov clean --workspace
+    if cargo llvm-cov --no-report -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
         && cargo llvm-cov --no-report -p mnemra-host --lib 2>&1 \
         && cargo llvm-cov --no-report --workspace --exclude mnemra-host 2>&1 \
         && cargo llvm-cov report 2>&1; then
-        echo "GATE coverage PASS"
+        echo "GATE coverage-rest PASS (per-shard number over the non-PG test subset + host lib + remaining workspace crates — union coverage not computed under Shape B, see verify-coverage)"
     else
-        echo "GATE coverage FAIL"
+        echo "GATE coverage-rest FAIL"
         exit 1
     fi
+
+# Verify: coverage (emit number; no threshold gate at scaffold stage)
+# Delegates to the shard recipes above — single source of truth for shard
+# membership (R-0096): both shards draw from the SAME PG_TEST_FLAGS /
+# NONPG_TEST_FLAGS variables the pre-shard recipe used, so local and CI
+# enumerate the identical set by construction; verify-coverage-membership
+# above is the mechanical guard on top. Depends on `plugin` for the same
+# wasm-artifact reason as verify-test.
+#
+# Shape B (independent shards, no cross-job merge — LOCKED, see
+# docs/specs/2026-07-15-ci-coverage-shard.md § "The load-bearing decision").
+# Each shard emits its OWN coverage number over its own subset; there is no
+# cross-job merge. UNION COVERAGE ACROSS SHARDS IS NOT COMPUTED — a line
+# covered only by another shard's tests reads as uncovered in this shard's
+# report. Acceptable ONLY while this gate is emit-only (no pass/fail
+# threshold, per the header above). Tripwire (R-0095): before any coverage
+# THRESHOLD gate is introduced, the union-coverage question SHALL be
+# resolved first — either adopt cross-job profile-data merge (Shape A) or
+# define per-shard thresholds. Fires on a concrete event (a PR adding a
+# pass/fail threshold to this gate), not "later."
+#
+# In CI the shards run as SEPARATE jobs (R-0094) that invoke
+# verify-coverage-pg / verify-coverage-rest directly, NOT through this
+# delegator — that is the whole point of R-0094 (fresh disk per job).
+# Locally this recipe runs both shards in one process (no disk roulette
+# locally), so `just ci` still proves full-chain coverage (R-0098).
+verify-coverage: verify-coverage-pg verify-coverage-rest
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "GATE coverage PASS (delegated: verify-coverage-pg + verify-coverage-rest each emitted their own per-shard GATE line above; union coverage not computed under Shape B)"
 
 # Verify: debug build succeeds (release-build hardening lands in Task 26)
 verify-build:
@@ -427,14 +605,44 @@ verify-smoke: build
 # these as direct prerequisites; invoking each verify-* recipe as its own
 # separate `just` process from inside `ci`'s script body would lose that
 # dedup and rebuild the plugin/host binary redundantly per step.
-_ci-verify-chain: verify-type verify-lint verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-signing-root
+#
+# Local `just ci` retains FULL-chain coverage (R-0098): verify-coverage below
+# delegates to BOTH shard recipes, so this chain runs every shard.
+_ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-signing-root
 
-# CI entry point (R-0018-c, R-0018-f) — runs `_ci-verify-chain` (the exact
-# prior `ci` dependency list) wrapped in a baseline-PID self-reap safety net
-# (R-9, self-verify-long-jobs spec, baseline-reap mechanism amendment
-# 2026-07-06, #2119; see scripts/ci-reap.sh for the mechanics AND its
-# "ACTUAL GUARANTEE" note — read that before relying on this for concurrent
-# ci safety; also exercised directly by tests/ci_reap_baseline.rs).
+# Internal: the verify-* prerequisite chain MINUS coverage (R-0094) — used by
+# the CI workflow's main "CI gates" job. Coverage runs in its own separate CI
+# job(s) instead (`verify-coverage-pg` / `verify-coverage-rest`, invoked
+# directly by the CI workflow, not through this chain) so this job's runner
+# disk never accumulates the disk-heavy coverage instrumentation set. Every
+# other gate — including verify-coverage-membership, which is a cheap
+# justfile-introspection check, not a coverage build — is unchanged from
+# `_ci-verify-chain` above (R-0098: all non-coverage gate semantics
+# preserved). Local `just ci` does NOT use this recipe — it always runs the
+# full chain above, coverage included; local disk has no runner-fleet
+# roulette (R-0098).
+_ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-build verify-smoke verify-signing-root
+
+# CI entry point (R-0018-c, R-0018-f) — runs the given `chain` recipe (default:
+# `_ci-verify-chain`, the full chain including coverage) wrapped in a
+# baseline-PID self-reap safety net (R-9, self-verify-long-jobs spec,
+# baseline-reap mechanism amendment 2026-07-06, #2119; see scripts/ci-reap.sh
+# for the mechanics AND its "ACTUAL GUARANTEE" note — read that before relying
+# on this for concurrent ci safety; also exercised directly by
+# tests/ci_reap_baseline.rs).
+#
+# The `chain` parameter (R-0094) lets the CI workflow's main "CI gates" job
+# reuse this same reap-wrapped body while running `_ci-verify-chain-nocoverage`
+# instead of the default — that job still runs verify-test / verify-test-hooks
+# / verify-smoke, which touch embedded Postgres, so it keeps the same
+# baseline-reap protection without duplicating the reap-net bash. The
+# coverage-shard jobs (R-0094) do NOT go through this recipe at all — they
+# invoke verify-coverage-pg / verify-coverage-rest directly; ephemeral
+# single-use CI shard runners self-clean on teardown and don't need the reap
+# net re-wired per shard (see the spec's Illustrative implementation shape).
+# `ci` with no argument is behaviorally IDENTICAL to before this change (the
+# default `_ci-verify-chain` is the exact prior recipe list) — `just ci`,
+# `ci-full: ci docs-check`, and every other existing caller are unaffected.
 #
 # Captures the set of live embedded-PG postmasters BEFORE the verify chain
 # starts (baseline = everything alive at that moment — a concurrent agent's
@@ -451,13 +659,13 @@ _ci-verify-chain: verify-type verify-lint verify-test verify-test-hooks verify-c
 # concurrent ci ON THIS CODEBASE whose postmaster starts AFTER this
 # baseline is captured has its data dir under the temp root too, and is
 # reaped if this run fails (see scripts/ci-reap.sh's ACTUAL GUARANTEE).
-ci:
+ci chain='_ci-verify-chain':
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/ci-reap.sh
     ci_reap_capture_baseline
     trap 'ci_reap_own_postmasters; exit 130' INT TERM
-    if just _ci-verify-chain; then
+    if just {{chain}}; then
         rc=0
     else
         rc=$?
