@@ -162,6 +162,27 @@ impl AuditRecord {
             }),
         }
     }
+
+    /// A message disposition (Task 7 slice b; R-0075-b disposition half /
+    /// AC10): `actor_id` — the addressee, the only principal permitted to
+    /// disposition (R-0069-b) — dispositioned `message_id`. The payload's
+    /// identifying key is `message_id`, the natural analogue of
+    /// `registration`'s `role_instance` key and `lease_takeover`'s
+    /// `prior_holder`/`new_holder` keys — no plan/spec text fixes an exact
+    /// key name, so this is the contract `tests/coordination_messages.rs`
+    /// test 20 pins. Kept minimal (no `disposition` member or `note`
+    /// duplicated into the payload): the row itself is the source of truth
+    /// for those fields, and this audit exists to prove EMISSION happened,
+    /// not to re-carry state the `messages` row already owns.
+    pub fn disposition(workspace_id: Uuid, actor_id: Uuid, message_id: Uuid) -> Self {
+        AuditRecord {
+            event_type: AuditEventType::Disposition,
+            event_version: 1,
+            workspace_id,
+            actor_id: Some(actor_id),
+            payload: json!({ "message_id": message_id.to_string() }),
+        }
+    }
 }
 
 #[cfg(test)]

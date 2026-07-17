@@ -291,6 +291,93 @@ impl MnemraMcpServer {
                 )
                 .await
             }
+            session_plane::CoordinationAction::Ack => {
+                // `ack` carries the required `message_id` argument — a
+                // string UUID. Absent/non-string is a malformed request
+                // (INVALID_PARAMS); a present-but-unparseable UUID is ALSO
+                // malformed — never silently treated as `message_not_found`
+                // (that refusal is reserved for a well-formed id the ack
+                // body cannot find).
+                let message_id_str = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("message_id"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `ack` requires a string `message_id` argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let message_id =
+                    Uuid::parse_str(message_id_str).map_err(|_| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `ack`'s `message_id` argument must be a valid \
+                                   UUID"
+                            .into(),
+                        data: None,
+                    })?;
+                messages::ack(&self.coordination_store, &ctx, message_id).await
+            }
+            session_plane::CoordinationAction::Disposition => {
+                // `disposition` carries the required `message_id` (string
+                // UUID, same contract as `ack` above) and `disposition`
+                // (string member) arguments, plus the optional `note`
+                // (string) argument. Each absent/wrong-type argument is a
+                // malformed request (INVALID_PARAMS) — distinct from a
+                // present-but-invalid value, which the disposition body
+                // refuses via its own structured reason code
+                // (`invalid_disposition`).
+                let message_id_str = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("message_id"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `disposition` requires a string `message_id` \
+                                   argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let message_id =
+                    Uuid::parse_str(message_id_str).map_err(|_| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `disposition`'s `message_id` argument must be a \
+                                   valid UUID"
+                            .into(),
+                        data: None,
+                    })?;
+                let disposition_member = request
+                    .arguments
+                    .as_ref()
+                    .and_then(|m| m.get("disposition"))
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message: "coordination `disposition` requires a string `disposition` \
+                                   argument"
+                            .into(),
+                        data: None,
+                    })?;
+                let note = match request.arguments.as_ref().and_then(|m| m.get("note")) {
+                    None => None,
+                    Some(v) => Some(v.as_str().ok_or_else(|| rmcp::model::ErrorData {
+                        code: rmcp::model::ErrorCode::INVALID_PARAMS,
+                        message:
+                            "coordination `disposition`'s `note` argument must be a string".into(),
+                        data: None,
+                    })?),
+                };
+                messages::disposition(
+                    &self.coordination_store,
+                    &ctx,
+                    message_id,
+                    disposition_member,
+                    note,
+                )
+                .await
+            }
             session_plane::CoordinationAction::ClaimAcquire => {
                 // `acquire` carries the required `resource` argument and the
                 // optional `duration_seconds` argument. `resource` absent/

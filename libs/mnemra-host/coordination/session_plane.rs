@@ -32,6 +32,7 @@ use crate::builtins::actors::{ActorType, resolve_or_create_in_txn};
 use crate::coordination::CoordinationConfig;
 use crate::coordination::CoordinationOp;
 use crate::coordination::audit::{AuditRecord, ExpiryEvidence};
+use crate::coordination::messages;
 use crate::coordination::write_path::{
     CoordinationTxn, LiveLeaseRow, PgCoordinationStore, Refusal, StorageFailure, WriteResult,
 };
@@ -77,6 +78,12 @@ pub(crate) enum CoordinationAction {
     /// `message send` (R-0068-a, R-0070-b, R-0075-b; Task 7 slice a) —
     /// routed to [`crate::coordination::messages::send`].
     Send,
+    /// `message ack` (R-0069-a/-b; Task 7 slice b) — routed to
+    /// [`crate::coordination::messages::ack`].
+    Ack,
+    /// `message disposition` (R-0069-a/-b/-c, R-0075-b; Task 7 slice b) —
+    /// routed to [`crate::coordination::messages::disposition`].
+    Disposition,
     /// `claim acquire` (R-0065-a/-b/-c/-d, R-0067) — routed to
     /// [`crate::coordination::leases::acquire`].
     ClaimAcquire,
@@ -120,6 +127,8 @@ pub(crate) fn parse_action(
     match (tool, action) {
         (MESSAGE_TOOL, "poll") => Ok(CoordinationAction::Poll),
         (MESSAGE_TOOL, "send") => Ok(CoordinationAction::Send),
+        (MESSAGE_TOOL, "ack") => Ok(CoordinationAction::Ack),
+        (MESSAGE_TOOL, "disposition") => Ok(CoordinationAction::Disposition),
         (CLAIM_TOOL, "acquire") => Ok(CoordinationAction::ClaimAcquire),
         (CLAIM_TOOL, "list") => Ok(CoordinationAction::ClaimList),
         (CLAIM_TOOL, "renew") => Ok(CoordinationAction::ClaimRenew),
@@ -145,25 +154,29 @@ pub(crate) fn coordination_tools() -> Vec<Tool> {
     vec![message_tool(), claim_tool()]
 }
 
-/// Build the `message` tool advertisement (`poll`/`send` actions, R-0064-b
-/// schema).
+/// Build the `message` tool advertisement (`poll`/`send`/`ack`/`disposition`
+/// actions, R-0064-b schema).
 fn message_tool() -> Tool {
-    // `action` is the closed enum argument (`poll`/`send` at this stage);
-    // `role_instance` is the bind identifier (`poll` only); `to_role_instance`/
-    // `type`/`schema_version`/`payload` are `send`'s arguments (§API
-    // Contract `send`). Only `action` is required at the schema level —
-    // every other argument is meaningful to exactly one action, so no
-    // single argument is required across all of them (mirrors the `claim`
-    // tool's own schema convention, `claim_tool()` below).
-    // `additionalProperties: false` makes the closed shape explicit; there
-    // is deliberately NO acting-actor/sender field (R-0064-b) — the acting
-    // principal is host-derived from attachment state.
+    // `action` is the closed enum argument (`poll`/`send`/`ack`/
+    // `disposition` at this stage); `role_instance` is the bind identifier
+    // (`poll` only); `to_role_instance`/`type`/`schema_version`/`payload`
+    // are `send`'s arguments (§API Contract `send`); `message_id` is the
+    // target message identifier (`ack`/`disposition`); `disposition` is the
+    // closed terminal-disposition member (`disposition` only, R-0069-c);
+    // `note` is the optional structured note (`disposition` only). Only
+    // `action` is required at the schema level — every other argument is
+    // meaningful to exactly one action, so no single argument is required
+    // across all of them (mirrors the `claim` tool's own schema convention,
+    // `claim_tool()` below). `additionalProperties: false` makes the closed
+    // shape explicit; there is deliberately NO acting-actor/sender field
+    // (R-0064-b) — the acting principal is host-derived from attachment
+    // state.
     let schema = serde_json::json!({
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["poll", "send"],
+                "enum": ["poll", "send", "ack", "disposition"],
                 "description": "The coordination action (closed set)."
             },
             "role_instance": {
@@ -187,6 +200,21 @@ fn message_tool() -> Tool {
                 "type": "object",
                 "description": "The message payload, schema-validated against the named \
                                  type + schema_version (Task 6). `send` only."
+            },
+            "message_id": {
+                "type": "string",
+                "description": "The target message identifier (a UUID). `ack`/`disposition` \
+                                 only."
+            },
+            "disposition": {
+                "type": "string",
+                "enum": ["completed", "declined", "obsolete"],
+                "description": "The closed terminal-disposition member (R-0069-c). \
+                                 `disposition` only."
+            },
+            "note": {
+                "type": "string",
+                "description": "Optional structured note, stored verbatim. `disposition` only."
             }
         },
         "required": ["action"],
@@ -342,17 +370,22 @@ pub(crate) async fn poll_bind(
 
     match write {
         Ok(WriteResult::Commit(actor_id)) => {
-            // Deliver half (R-0072-a): the bind committed; read the workspace's
-            // live leases (post-commit, workspace-scoped, `actor:`-family
-            // excluded) and render the documented poll response on EVERY
-            // non-refused outcome — fresh attach, same-session renew, and
-            // audited succession alike. A read failure is fail-closed (R-0074-a),
-            // the same posture as a write-path unavailability.
+            // Deliver half (R-0072-a): the bind committed; transition the
+            // actor's still-`sent` messages to `delivered` and read its
+            // non-terminal queue (a SEPARATE `CoordinationOp::Poll` write —
+            // `messages::deliver_and_list`, Task 7 slice b), then read the
+            // workspace's live leases (post-commit, workspace-scoped,
+            // `actor:`-family excluded) and render the documented poll
+            // response on EVERY non-refused outcome — fresh attach,
+            // same-session renew, and audited succession alike. A read
+            // failure is fail-closed (R-0074-a), the same posture as a
+            // write-path unavailability.
+            let messages = messages::deliver_and_list(store, ctx, actor_id).await?;
             let live_leases = store
                 .live_leases_for_workspace(ctx)
                 .await
                 .map_err(|_| coordination_unavailable())?;
-            Ok(poll_response(actor_id, &role_owned, live_leases))
+            Ok(poll_response(actor_id, &role_owned, messages, live_leases))
         }
         Ok(WriteResult::Refuse(refusal)) => Ok(refusal_result(&refusal)),
         // Fail-closed (R-0074-a): a write that could not be verified surfaces as
@@ -701,15 +734,17 @@ async fn succeed_via_takeover(
 /// Returned on EVERY non-refused poll outcome — fresh attach, same-session
 /// renew, and audited succession alike.
 ///
-/// `messages` is EMPTY at Task 4: no `send` exists yet, so the polling actor's
-/// queue is empty (the delivery half lands Task 7). `live_leases` is already
-/// workspace-scoped and `actor:`-family excluded by the read
-/// ([`PgCoordinationStore::live_leases_for_workspace`]); each entry renders the
-/// documented lease object `{ lease_id, resource, holder: {actor_id,
-/// role_instance}, acquired_at, expires_at }`.
+/// `messages` is the actor's non-terminal queue (`sent → delivered` already
+/// applied), read by [`crate::coordination::messages::deliver_and_list`]
+/// (Task 7 slice b) — each entry is the §API Contract message object.
+/// `live_leases` is already workspace-scoped and `actor:`-family excluded by
+/// the read ([`PgCoordinationStore::live_leases_for_workspace`]); each entry
+/// renders the documented lease object `{ lease_id, resource, holder:
+/// {actor_id, role_instance}, acquired_at, expires_at }`.
 fn poll_response(
     actor_id: Uuid,
     role_instance: &str,
+    messages: Vec<serde_json::Value>,
     live_leases: Vec<LiveLeaseRow>,
 ) -> CallToolResult {
     let leases: Vec<serde_json::Value> = live_leases
@@ -733,7 +768,7 @@ fn poll_response(
             "actor_id": actor_id.to_string(),
             "role_instance": role_instance,
         },
-        "messages": [],
+        "messages": messages,
         "live_leases": leases,
     }))
 }
@@ -828,20 +863,30 @@ fn refusal_detail(refusal: &Refusal) -> serde_json::Value {
         Refusal::UnknownType => serde_json::json!(
             "the send named a (type, schema_version) pair that is not a registered message type"
         ),
-        // Message-family refusals (`ack`/`disposition` — R-0069) — not yet
-        // reachable on any wired path (Task 7 slice b). Same grouping
-        // rationale as the lease-family arm above.
-        Refusal::NotAddressee
-        | Refusal::InvalidTransition
-        | Refusal::InvalidDisposition
-        | Refusal::MessageNotFound => serde_json::json!(
-            "the message action was refused (not yet reachable on any wired path)"
+        // Message-family refusals (`ack`/`disposition` — R-0069; Task 7
+        // slice b makes these reachable) — each split out with its own
+        // accurate detail, same posture as `send`'s `SchemaViolation`/
+        // `UnknownType` arm above.
+        Refusal::NotAddressee => serde_json::json!(
+            "the caller's attached actor is not this message's addressee; `ack`/`disposition` \
+             are addressee-only"
         ),
-        // Deliberately NO wildcard arm: `Refusal` is a closed enum
-        // (write_path.rs), not `#[non_exhaustive]`, so this match is
-        // exhaustive over every current variant. A later slice that makes
-        // one of the arms above reachable — or the enum gaining a new
-        // variant — is a compile error here, not a silently generic detail.
+        Refusal::InvalidTransition => serde_json::json!(
+            "the message is not in a state from which this action is a legal transition (the \
+             lifecycle is monotonic — no reverse or re-transition; `ack` requires `delivered`, \
+             `disposition` requires `acknowledged`)"
+        ),
+        Refusal::InvalidDisposition => serde_json::json!(
+            "the disposition value is outside the closed vocabulary {completed, declined, \
+             obsolete}"
+        ),
+        Refusal::MessageNotFound => {
+            serde_json::json!("no message matches the given message_id in this workspace")
+        } // Deliberately NO wildcard arm: `Refusal` is a closed enum
+          // (write_path.rs), not `#[non_exhaustive]`, so this match is
+          // exhaustive over every current variant. A later slice that makes
+          // one of the arms above reachable — or the enum gaining a new
+          // variant — is a compile error here, not a silently generic detail.
     }
 }
 
@@ -894,6 +939,13 @@ mod tests {
                  (Task 7 slice a)"
             );
         }
+        for ack_disposition_arg in ["message_id", "disposition", "note"] {
+            assert!(
+                props.contains_key(ack_disposition_arg),
+                "the message tool schema must declare `ack`/`disposition`'s \
+                 `{ack_disposition_arg}` argument (Task 7 slice b)"
+            );
+        }
 
         // R-0064-b: the schema carries NO acting-actor field — the principal is
         // host-derived from attachment state, never a caller write input.
@@ -905,7 +957,8 @@ mod tests {
             );
         }
 
-        // `poll` and `send` are advertised at this stage (closed enum).
+        // `poll`, `send`, `ack`, and `disposition` are advertised at this
+        // stage (closed enum; Task 7 slice b adds `ack`/`disposition`).
         let action_enum = props
             .get("action")
             .and_then(|a| a.get("enum"))
@@ -913,8 +966,14 @@ mod tests {
             .expect("the `action` argument must declare a closed enum");
         assert_eq!(
             action_enum,
-            &vec![serde_json::json!("poll"), serde_json::json!("send")],
-            "the advertised `message` actions at this stage are `poll` and `send`"
+            &vec![
+                serde_json::json!("poll"),
+                serde_json::json!("send"),
+                serde_json::json!("ack"),
+                serde_json::json!("disposition"),
+            ],
+            "the advertised `message` actions at this stage are `poll`, `send`, `ack`, and \
+             `disposition`"
         );
     }
 
@@ -1023,6 +1082,27 @@ mod tests {
     }
 
     #[test]
+    fn parse_action_accepts_message_ack() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("ack"));
+        assert_eq!(
+            parse_action(MESSAGE_TOOL, Some(&args)).expect("`ack` is a valid `message` action"),
+            CoordinationAction::Ack
+        );
+    }
+
+    #[test]
+    fn parse_action_accepts_message_disposition() {
+        let mut args = serde_json::Map::new();
+        args.insert("action".to_string(), serde_json::json!("disposition"));
+        assert_eq!(
+            parse_action(MESSAGE_TOOL, Some(&args))
+                .expect("`disposition` is a valid `message` action"),
+            CoordinationAction::Disposition
+        );
+    }
+
+    #[test]
     fn parse_action_accepts_claim_acquire() {
         let mut args = serde_json::Map::new();
         args.insert("action".to_string(), serde_json::json!("acquire"));
@@ -1094,11 +1174,16 @@ mod tests {
 
     #[test]
     fn parse_action_rejects_unsupported_missing_and_non_string() {
-        // An action not yet supported at this stage (Task 7 slice b's `ack`).
-        let mut ack = serde_json::Map::new();
-        ack.insert("action".to_string(), serde_json::json!("ack"));
+        // An action not yet supported at this stage. `ack`/`disposition`
+        // became supported in Task 7 slice b (see the dedicated
+        // `parse_action_accepts_message_ack`/`_disposition` tests below), so
+        // this test now anchors on `list` — the next `message` action,
+        // landing in Task 7 slice c — as the still-genuinely-unsupported
+        // case.
+        let mut list = serde_json::Map::new();
+        list.insert("action".to_string(), serde_json::json!("list"));
         assert!(
-            parse_action(MESSAGE_TOOL, Some(&ack)).is_err(),
+            parse_action(MESSAGE_TOOL, Some(&list)).is_err(),
             "an unsupported action must be refused, not silently accepted"
         );
 

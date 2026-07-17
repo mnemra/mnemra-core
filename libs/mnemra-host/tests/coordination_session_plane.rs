@@ -1402,7 +1402,7 @@ async fn succession_over_existing_actor_emits_no_new_registration_audit() {
 // | Poll RESPONSE shape (messages + live_leases) + actor-family exclusion (R-0072-a / R-0067-c) | `poll_response_returns_messages_and_live_leases_excluding_actor_family` | RED (guarantee-absent) |
 // | Same-session re-poll with a different role-instance → `attachment_mismatch` (R-0064-e) | `same_session_poll_with_different_role_instance_is_refused_attachment_mismatch` | RED (guarantee-absent) |
 // | Workspace-scoped poll — never surfaces another tenant's leases (R-0076-b / R-0072-a / R-0067-c) | `poll_is_workspace_scoped_and_excludes_other_tenants_leases` | RED (guarantee-absent, security-critical) |
-// | `not_attached` unreachable at Task 4 (only `poll` binds) — deferred to Task 5 (R-0064-e); deferral retired Task 7 slice a | `message_tool_advertises_poll_and_send_after_task7_slice_a` | green-on-arrival contract guard, updated (not deleted) when the deferral retired |
+// | `not_attached` unreachable at Task 4 (only `poll` binds) — deferred to Task 5 (R-0064-e); deferral retired Task 7 slice a, enum grown Task 7 slice b (AC5) | `message_tool_advertises_poll_send_ack_disposition_after_task7_slice_b` | green-on-arrival contract guard, updated (not deleted) when the deferral retired / enum grew |
 // | No client-settable per-request attachment-TTL override (§Numeric calibrations) | `message_schema_carries_no_per_request_attachment_ttl_override` | green-on-arrival contract guard |
 //
 // # Non-vacuity discipline (held)
@@ -1773,11 +1773,12 @@ fn role_from(prefix: &str) -> String {
 
 /// GIVEN the advertised `message` tool over the wire,
 /// WHEN a client lists tools,
-/// THEN the `message` tool advertises EXACTLY `[poll, send]` now that Task 7
-/// slice a has landed `send` (R-0068-a). *(R-0064-e — the deferral this test
-/// used to pin is now fulfilled)*
+/// THEN the `message` tool advertises EXACTLY `[poll, send, ack, disposition]`
+/// now that Task 7 slice b has landed `ack` and `disposition` (AC5) alongside
+/// slice a's `send` (R-0068-a). *(R-0064-e — the deferral this test used to
+/// pin is now fulfilled)*
 ///
-/// # Deferral retired (Task 7 slice a)
+/// # Deferral retired (Task 7 slice a), enum grown (Task 7 slice b)
 ///
 /// This test was originally
 /// `message_tool_advertises_only_poll_so_not_attached_is_deferred_to_task5` — a
@@ -1789,13 +1790,17 @@ fn role_from(prefix: &str) -> String {
 /// action landed EXACTLY that non-binding action, and it ships with its OWN
 /// `not_attached` coverage
 /// (`tests/coordination_messages.rs::send_from_unattached_session_is_refused_not_attached`)
-/// — so the guard tripped as designed, and this test is updated (not deleted)
-/// to pin the NEW closed enum rather than assert the retired one. `list`/`ack`/
-/// `disposition` (Task 7 slices b/c) still land later; each carries its own
-/// `not_attached` coverage per slice (the plan's cross-slice obligation), so no
-/// replacement deferral guard is needed here.
+/// — so the guard tripped as designed, and the test was renamed to
+/// `message_tool_advertises_poll_and_send_after_task7_slice_a`, pinning the
+/// grown closed enum rather than the retired one. Task 7 slice b now lands
+/// `ack` and `disposition` (AC5), growing the closed enum again — the guard
+/// trips a second time and the test is renamed and re-pinned here rather than
+/// deleted. Both new actions ship with their own `not_attached` coverage per
+/// slice (the plan's cross-slice obligation;
+/// `tests/coordination_messages.rs`), so no replacement deferral guard is
+/// needed here.
 #[tokio::test]
-async fn message_tool_advertises_poll_and_send_after_task7_slice_a() {
+async fn message_tool_advertises_poll_send_ack_disposition_after_task7_slice_b() {
     let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
     let db = engine
         .provision_test_database()
@@ -1825,11 +1830,16 @@ async fn message_tool_advertises_poll_and_send_after_task7_slice_a() {
 
     assert_eq!(
         action_enum,
-        &vec![json!("poll"), json!("send")],
-        "R-0064-e: after Task 7 slice a the `message` tool advertises exactly `[poll, send]` — \
-         `send` is the non-binding action whose arrival was expected to retire this guard, and it \
-         ships with its own `not_attached` coverage (`coordination_messages.rs`'s \
-         `send_from_unattached_session_is_refused_not_attached`). got: {action_enum:?}"
+        &vec![
+            json!("poll"),
+            json!("send"),
+            json!("ack"),
+            json!("disposition")
+        ],
+        "R-0064-e / AC5: after Task 7 slice b the `message` tool advertises exactly \
+         `[poll, send, ack, disposition]` — `ack` and `disposition` are the newly-landed \
+         non-binding actions, each shipping its own `not_attached` coverage \
+         (`coordination_messages.rs`). got: {action_enum:?}"
     );
 
     server.abort();
