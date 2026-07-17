@@ -263,8 +263,8 @@ verify-test: plugin
         echo "GATE test FAIL"
         exit 1
     fi
-    if ! grep -qE 'test result: ok\. 6 passed; 0 failed;' <<< "$cm_output"; then
-        echo "coordination_messages non-vacuity count-pin failed: expected exactly 6 passed under the default feature set (tests 1/2/3/6/7/8); got a different count — a silent drop would otherwise pass vacuously (Task 7a, Warden finding, #2004 silent-failure class)"
+    if ! grep -qE 'test result: ok\. 18 passed; 0 failed;' <<< "$cm_output"; then
+        echo "coordination_messages non-vacuity count-pin failed: expected exactly 18 passed under the default feature set (slice a tests 1/2/3/6/7/8 + slice b tests 9-20); got a different count — a silent drop would otherwise pass vacuously (Task 7a, Warden finding, #2004 silent-failure class)"
         echo "GATE test FAIL"
         exit 1
     fi
@@ -353,8 +353,8 @@ verify-test-hooks: plugin
         echo "GATE test-hooks FAIL"
         exit 1
     fi
-    if ! grep -qE 'test result: ok\. 8 passed; 0 failed;' <<< "$cm_th_output"; then
-        echo "coordination_messages non-vacuity count-pin failed: expected exactly 8 passed under --features test-hooks (tests 1-8, including the security-critical send-ordering-pin and registration-audit-iff-minted tests 4/5); got a different count — a silent drop of the two security-critical tests alone would otherwise pass vacuously behind the other 6 (Task 7a, Warden finding)"
+    if ! grep -qE 'test result: ok\. 20 passed; 0 failed;' <<< "$cm_th_output"; then
+        echo "coordination_messages non-vacuity count-pin failed: expected exactly 20 passed under --features test-hooks (slice a tests 1-8, including the security-critical send-ordering-pin and registration-audit-iff-minted tests 4/5, + slice b tests 9-20); got a different count — a silent drop of the security-critical tests alone would otherwise pass vacuously behind the others (Task 7a, Warden finding)"
         echo "GATE test-hooks FAIL"
         exit 1
     fi
