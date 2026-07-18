@@ -180,3 +180,23 @@ The trip-wire for V0.1 activation: accepted risk `R-0001` — "first deployment 
 - Accepted risk `R-0002` ([Overview](../architecture/overview.md)): external-AS integration deferred; static admin token is the V0 auth path.
 - Accepted risk `R-0006` ([Overview](../architecture/overview.md)): operator-action repudiation partially mitigated at V0; activity log at `0.5.0` is the fuller mitigation.
 - Follow-up: per-plugin scope extension for V0.1+ multi-tenant onboarding; per-agent token derivation for `EE-specialist-agent`/S mitigation.
+
+## Amendment 2026-07-17 — Ingest control-plane permission-matrix rows (`{{P-0009-A1-ingest-control-plane}}`)
+
+The ingestion-pipeline Frame ([`docs/intent/ingestion-pipeline-frame.md`](../../intent/ingestion-pipeline-frame.md), blob `f56b3685`, IP-1) places source registration and quarantine inspection as **admin CLI control-plane operations** in this ADR's admin family (the workspace-lifecycle / migrate / backup siblings) — but the permission matrix above does **not yet enumerate** them. Rather than stretching the existing rows to imply coverage the matrix text does not carry (the Frame's honesty note), this amendment **adds their rows explicitly**. Binding requirement text is single-sourced to the ingestion-pipeline spec **R-0099** ([`docs/specs/2026-07-16-ingestion-pipeline.md`](../../specs/2026-07-16-ingestion-pipeline.md); the registration-input allow-list validation rides at R-0099-d); the shape is rendered in [P-0024](P-0024-ingest-pipeline-shape.md) IPS-1. This amendment governs the permission matrix (which role may invoke each operation); the operations' behavior is governed by that spec.
+
+### Added permission-matrix rows
+
+These extend the `## Decision Outcome` § Permission matrix with the same enforcement discipline as the existing control-plane rows (application-layer at V0 per [P-0006](P-0006-v0-tenant-enforcement.md); RLS-hardening path at V0.1+ unchanged):
+
+| Verb category | `admin` | `read_observer` | Notes |
+|---|---|---|---|
+| CLI ingest source registration (`source register`, `source retire`) | Allowed | Denied | Admin scope only; registration is the admission-control boundary — registering a root authorizes write-through from it under the attested `trust_class`. Input validated against allow-lists (`trust_class` ∈ enum, `retention_policy` ∈ enum, `source_kind` ∈ enum, root canonicalized + must-be-directory + within an allowed prefix — spec R-0099-d), not mere well-formedness. Audited like the `migrate`/`backup` siblings. |
+| CLI ingest source listing (`source list`) | Allowed | Denied | Admin scope only, consistent with the other control-plane listings; no read-observer control-plane access. |
+| CLI quarantine inspection (`quarantine list`, `quarantine inspect`) | Allowed | Denied | Admin scope only. **Metadata-only** (path, `rejection_class`, diagnostic — never a payload render; spec R-0112-d); payload retrieval, if ever offered, is an explicit operator action re-entering the sandboxed extraction path. Audited. |
+
+The ingest write path itself runs under a distinguished **system principal** (the [P-0015](P-0015-provenance-envelope-source-roles.md) PE-3 pattern; the [P-0018](P-0018-core-entity-manifest.md) `system` actor), **not** an admin token and **not** a workspace role — the system principal cannot register/retire sources or touch these admin control-plane operations (spec R-0106-b/R-0107-a). The rows above govern the **operator** control-plane surface; the standing service's authority is separately least-scoped.
+
+### Scope of this amendment
+
+This amendment adds **only** the three ingest control-plane rows above to the permission matrix. It does **not** change the role enum (`admin` / `read_observer` unchanged), the `WorkspaceCtx` encoding, the admin-scope structural invariants, the V0→V0.1 RLS hardening path, or any existing matrix row. The V0.1 RLS activation trip-wire (accepted risk `R-0001`) is unchanged. It rides the ingestion-pipeline spec-exit gate for maintainer ratification.
