@@ -67,8 +67,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "a1e121124211d3701ba8d96d243b835082abec66f5ababc07bfcb2f8086187c4",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "9e2cd0cd817b17178ad90616ff4b83e38cd541b805264bb22428c591df36659b",
+      "translated_at": "2026-07-18T13:26:03Z"
     },
     "adrs/P-0010-storage-substrate-engine.md": {
       "primary_audience": "agent",
@@ -109,8 +109,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "7f3f8f9a61da5a9ced633366bec90c311dedc2ec8b00243ab9d45fd2606c9c21",
-      "translated_at": "2026-07-03T17:27:41Z"
+      "source_sha256": "872b63c0fe99b9d7ddf2f9d930151d2dea22fa9f75303df769c8b52d426d8ee5",
+      "translated_at": "2026-07-18T13:26:03Z"
     },
     "adrs/P-0016-edge-schema.md": {
       "primary_audience": "agent",
@@ -167,6 +167,20 @@
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
       "source_sha256": "2fa096f83d7edc1646edc4867800f369d9755acb6e444ca6980af14a2641f1bd",
       "translated_at": "2026-07-11T13:00:14Z"
+    },
+    "adrs/P-0024-ingest-pipeline-shape.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "d1783bf0b09130e2a4982ff00ddbf46930e3926fd73c4bc8eb0dca7bb4c8c8e6",
+      "translated_at": "2026-07-18T13:26:03Z"
+    },
+    "adrs/P-0025-job-queue.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "0c2e9067a723d1e60faff969c3081aca3711b1cd0426ca47b87dcdea90134fbc",
+      "translated_at": "2026-07-18T13:26:03Z"
     },
     "adrs/README.md": {
       "primary_audience": "human",
