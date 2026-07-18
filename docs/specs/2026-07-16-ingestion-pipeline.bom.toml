@@ -1,0 +1,44 @@
+spec_type = "code"
+
+[audit_chain.intent]
+ref = "docs/intent/ingestion-pipeline.md"
+version = "962fc2b0c785b64beb9a54a984d2f5ce0dd268af"
+locked_at = 2026-07-16T14:11:48Z
+
+[audit_chain.frame]
+ref = "docs/intent/ingestion-pipeline-frame.md"
+version = "f56b3685b3422144a0290114d11537238a09ed9a"
+internal_conformance = "pass"
+locked_at = 2026-07-17T20:11:14Z
+
+[audit_chain.frame.generated_against]
+intent_version = "962fc2b0c785b64beb9a54a984d2f5ce0dd268af"
+
+[audit_chain.spec]
+ref = "docs/specs/2026-07-16-ingestion-pipeline.md"
+version = "54fa614b97cec454d7dc8fc32ddb33daeb895eba"
+internal_conformance = "pass"
+locked_at = 2026-07-17T22:59:50Z
+
+[audit_chain.spec.generated_against]
+intent_version = "962fc2b0c785b64beb9a54a984d2f5ce0dd268af"
+frame_version = "f56b3685b3422144a0290114d11537238a09ed9a"
+
+[signals.auditor]
+applicable = true
+reviewer = "Charon"
+tier = "t1"
+
+[signals.spot_check]
+applicable = true
+depth = "review"
+gate = true
+
+[pre_signal_checks.stuck_detector]
+applicable = true
+
+[pre_signal_checks.chain_freshness]
+applicable = true
+
+[pre_signal_checks.chain_internal_conformance]
+applicable = true
