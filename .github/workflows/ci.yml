@@ -6,6 +6,34 @@ on:
   push:
     branches: [main]
 
+# Least-authority floor (brain #3597 Q3 / #3616): every step across all
+# three jobs below — checkout, the toolchain install actions, and every
+# `just`-invoked gate — only ever reads this repository's contents. None
+# uploads or downloads an artifact, posts a PR comment, creates a check
+# run, or writes a package. (actions/cache and Swatinem/rust-cache are
+# believed to use their own internal cache-service token rather than this
+# one — inherited knowledge, not verified against a live source this
+# session; watch the first post-landing run for a cache-permission
+# surprise if that's wrong.) Set at the workflow level rather than per job
+# because all three jobs need the exact same floor (one declaration, not
+# three copies that could drift).
+#
+# This block is a NARROWING, not a restatement of today's ambient
+# default: the repo's `default_workflow_permissions` is currently `read`
+# (confirmed via `gh api repos/mnemra/mnemra-core/actions/permissions/
+# workflow`, 2026-09-15), which grants read access across EVERY scope
+# (issues, pull-requests, checks, actions, packages, ...) — not just
+# `contents`. An explicit `permissions:` block sets every scope it does
+# not list to `none`, so this pins `contents: read` and drops every other
+# scope to no-access, tighter than the ambient default rather than merely
+# recording it. It also stops the effective permission from depending on
+# a mutable org/repo setting nobody here controls, and makes the floor
+# reviewable in the workflow file itself. A job that genuinely needs more
+# (e.g. a future job that comments on a PR) declares its own
+# `permissions:` override — do not widen this block for it.
+permissions:
+  contents: read
+
 # Coverage sharding (R-0093-R-0098, docs/specs/2026-07-15-ci-coverage-shard.md):
 # the CI coverage gate intermittently failed with "No space left on device"
 # on GitHub's mixed hosted-runner fleet — the workflow cannot select which
@@ -53,11 +81,46 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Compute pinned-artifact cache-key suffix
+        id: pin-hash
+        # Cache-key mechanism (brain #3597 Q4 / #3616) — the theseus cache
+        # key must change whenever the pinned Postgres/pgvector version or
+        # any KNOWN_GOOD_HASHES entry changes, or a bump silently restores a
+        # now-wrong-version cache forever (actions/cache never overwrites an
+        # existing key, so a stale key never self-heals — it cold-downloads
+        # the NEW version on every run from then on, permanently, since the
+        # save-on-miss path keeps targeting the same unchanged key). A plain
+        # `hashFiles('.../engine.rs')` would work but churns the cache on
+        # every doc-comment edit to that ~850-line file — most edits there
+        # have nothing to do with the pin, and that's unacceptable churn for
+        # a file this size. Smallest mechanism instead: hash only the lines
+        # that ARE the pin — the two version consts and every `sha256:`
+        # field in KNOWN_GOOD_HASHES (verified this matches exactly those
+        # seven lines and no doc-comment text: `grep -nE 'pub const
+        # (EMBEDDED_PG_VERSION|PGVECTOR_VERSION)|sha256:'
+        # libs/mnemra-host/storage/postgres/engine.rs`) — and use that as
+        # the key suffix. `set -euo pipefail` makes this fail LOUD, not
+        # silently produce a hash-of-nothing, if the grep pattern ever stops
+        # matching (e.g. the pin moves to a different file): pipefail
+        # propagates grep's own exit 1 through `sha256sum`/`cut` even though
+        # neither of those fails on empty input.
+        #
+        # Deliberately NO `restore-keys:` (brain #3597 review, 2026-09-15): a
+        # prefix-match fallback could restore a cache built for a DIFFERENT
+        # pinned version, and `verify_pinned_artifacts()` is fail-shut — a
+        # stale restore doesn't just miss a speed-up, it hash-mismatches and
+        # turns CI red for what reads as a regression but is actually a
+        # cache-staleness artifact. Exact-match-or-miss only.
+        run: |
+          set -euo pipefail
+          hash="$(grep -E 'pub const (EMBEDDED_PG_VERSION|PGVECTOR_VERSION)|sha256:' libs/mnemra-host/storage/postgres/engine.rs | sha256sum | cut -d' ' -f1)"
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
       - name: Cache Postgres binaries (theseus)
         uses: actions/cache@v4
         with:
           path: ~/.theseus
-          key: theseus-pg16.4.0-${{ runner.os }}-${{ runner.arch }}
+          key: theseus-pg-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin-hash.outputs.hash }}
 
       - name: Install just
         uses: taiki-e/install-action@v2
@@ -103,11 +166,24 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Compute pinned-artifact cache-key suffix
+        id: pin-hash
+        # Same mechanism as the `ci` job above (brain #3597 Q4 / #3616) —
+        # hashes only the version-pin and sha256-pin lines in engine.rs, so
+        # the cache key changes exactly when the pin changes, not on every
+        # doc edit to that file. No restore-keys: a stale prefix-match would
+        # hash-mismatch (fail-shut) and read as a regression, not a cache
+        # issue.
+        run: |
+          set -euo pipefail
+          hash="$(grep -E 'pub const (EMBEDDED_PG_VERSION|PGVECTOR_VERSION)|sha256:' libs/mnemra-host/storage/postgres/engine.rs | sha256sum | cut -d' ' -f1)"
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
       - name: Cache Postgres binaries (theseus)
         uses: actions/cache@v4
         with:
           path: ~/.theseus
-          key: theseus-pg16.4.0-${{ runner.os }}-${{ runner.arch }}
+          key: theseus-pg-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin-hash.outputs.hash }}
 
       - name: Install just
         uses: taiki-e/install-action@v2
@@ -178,27 +254,50 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
-      # Postgres binary cache (theseus) — required here too, unlike the rest
-      # of this shard's NONPG_TEST_FLAGS members. `-p mnemra-host --lib`
-      # includes exactly one live-DB test (write_path.rs,
+      - name: Compute pinned-artifact cache-key suffix
+        id: pin-hash
+        # Same mechanism as the `ci` job above (brain #3597 Q4 / #3616) —
+        # hashes only the version-pin and sha256-pin lines in engine.rs, so
+        # the cache key changes exactly when the pin changes, not on every
+        # doc edit to that file. No restore-keys: a stale prefix-match would
+        # hash-mismatch (fail-shut) and read as a regression, not a cache
+        # issue.
+        run: |
+          set -euo pipefail
+          hash="$(grep -E 'pub const (EMBEDDED_PG_VERSION|PGVECTOR_VERSION)|sha256:' libs/mnemra-host/storage/postgres/engine.rs | sha256sum | cut -d' ' -f1)"
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+      # Postgres binary cache (theseus). `-p mnemra-host --lib` includes
+      # exactly one live-DB test (write_path.rs,
       # clean_write_commits_state_and_flushes_exactly_one_audit_row —
       # deliberately the ONLY `--lib` test that boots an engine) that calls
-      # `EmbeddedEngine::start()`. `verify_pinned_artifacts()` hash-checks the
-      # installed Postgres binary AND the pgvector shared library BEFORE
-      # `install_pgvector()` ever runs (engine.rs bootstrap sequence,
-      # steps 2 vs 4) — so on a cold `~/.theseus` with no prior PG-touching
-      # test in this job to have installed pgvector first, that check fails
-      # with a hash-pin "no such file" error (the pgvector library was never
-      # written). Restoring the same cache the coverage-pg job warms carries
-      # the already-installed pgvector artifact into this job, closing the
-      # gap. Found via CI failure on this job (dispatch 1626): the pre-shard
-      # single job never hit this because its PG_TEST_FLAGS pass always ran
-      # before `-p mnemra-host --lib` in the same process/filesystem.
+      # `EmbeddedEngine::start()`. Before brain #3597's fix, this restore was
+      # load-bearing for correctness: `verify_pinned_artifacts()` hash-checked
+      # the pgvector shared library right after `setup()`, before
+      # `install_extension()` had ever written it, so a cold `~/.theseus` with
+      # no prior PG-touching test in this job to have installed pgvector first
+      # failed with a hash-pin "no such file" error. #3597 split that check in
+      # two — the pgvector library is now verified after the install-or-skip
+      # step, not before it — so `start()` succeeds from a genuinely cold
+      # `~/.theseus` (it installs pgvector itself), and this ordering bug no
+      # longer makes the restore load-bearing. It still is for a different
+      # reason: this job's `env:` has no `GITHUB_TOKEN` (unlike the `ci` job
+      # above, which has carried one at the job level since 2026-06-12,
+      # c11ae02 — three months before #3597 and the `verify-cold-start` gate
+      # existed, added generally to keep any PG-touching step in that job
+      # under the authenticated rate limit, not specifically for cold-start),
+      # so a cache miss here means an unauthenticated cold download of both
+      # artifacts from GitHub, which risks the unauthenticated API rate limit
+      # on a shared runner pool — restoring the cache avoids that path entirely,
+      # not just its round-trip cost. Found via CI failure on this job
+      # (dispatch 1626): the pre-shard single job never hit the ordering bug
+      # because its PG_TEST_FLAGS pass always ran before `-p mnemra-host
+      # --lib` in the same process/filesystem.
       - name: Cache Postgres binaries (theseus)
         uses: actions/cache@v4
         with:
           path: ~/.theseus
-          key: theseus-pg16.4.0-${{ runner.os }}-${{ runner.arch }}
+          key: theseus-pg-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin-hash.outputs.hash }}
 
       - name: Install just
         uses: taiki-e/install-action@v2
