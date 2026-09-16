@@ -3,16 +3,40 @@
 //! Wraps `postgresql_embedded::PostgreSQL` with the mnemra-specific bootstrap
 //! sequence:
 //!
-//! 1. `setup()` — installs / re-uses cached Postgres binaries.
-//! 2. `verify_pinned_artifacts()` — SHA-256 hash-pin of the installed Postgres
-//!    binary and pgvector shared library (A-04/A-05 interim control, Task 6b).
-//!    Fail-shut: unknown platform → error; hash mismatch → error.
-//! 3. `start()` — starts the server on an ephemeral port.
-//! 4. `install_pgvector()` — downloads and installs the `pgvector_compiled`
-//!    precompiled package from the portal-corp repository so that
-//!    `CREATE EXTENSION vector` succeeds without an OS-installed extension.
-//! 5. `create_database("mnemra")` — creates the application database.
-//! 6. `create_app_role()` — creates an ordinary (non-superuser, no BYPASSRLS)
+//! 1. `setup()` — installs / re-uses cached Postgres binaries. This ALWAYS
+//!    runs `initdb` internally: mnemra never overrides `SettingsBuilder`'s
+//!    default `data_dir` (a fresh `tempfile::tempdir()` per
+//!    `postgresql_embedded` `Settings::new()`), so the crate's own
+//!    `is_initialized()` check is always false and `initdb` — which EXECUTES
+//!    the just-installed `postgres`-family binaries — runs on every
+//!    `start()`, not only a cold one. This happens before step 2's hash
+//!    check ever runs; see "Known gaps" below.
+//! 2. `verify_pinned_artifacts()` (Postgres binary) — SHA-256 hash-pin of
+//!    the installed `postgres` binary (A-04/A-05 interim control, Task 6b),
+//!    checked right after `setup()` returns. Fail-shut: unknown platform,
+//!    no pin of the requested kind, or a hash mismatch (including a missing
+//!    file) → error.
+//! 3. `install_extension()` (pgvector) — downloads and installs the
+//!    `pgvector_compiled` precompiled package from the portal-corp repository
+//!    so that `CREATE EXTENSION vector` succeeds without an OS-installed
+//!    extension. Skipped when `share/extension/vector.control` already
+//!    exists on the installation. Needs no running server — confirmed from
+//!    `postgresql_extensions` crate source: it only shells out to
+//!    `postgres --version` and `pg_config` (one-shot subprocess calls) and
+//!    extracts an archive — so this step runs BEFORE `start()`.
+//! 4. `verify_pinned_artifacts()` (pgvector library) — SHA-256 hash-pin of
+//!    the installed pgvector shared library, checked right after step 3
+//!    (whichever branch it took) and before any caller can reach
+//!    `CREATE EXTENSION` or other use of the extension. Same fail-shut
+//!    contract as step 2, also before `start()`.
+//! 5. `start()` — starts the server on an ephemeral port. Both pinned
+//!    artifacts (steps 2 and 4) have already passed their hash check by
+//!    this point — this split (brain #3597) replaces a single combined
+//!    check that ran right after step 1, before the pgvector library had
+//!    ever been written, which made every cold start (`~/.theseus` never
+//!    populated, or its cache expired) fail.
+//! 6. `create_database("mnemra")` — creates the application database.
+//! 7. `create_app_role()` — creates an ordinary (non-superuser, no BYPASSRLS)
 //!    application role with a session-local password, then connects through
 //!    that role for all subsequent storage operations.
 //!
@@ -44,21 +68,59 @@
 //!
 //! # Hash-pin control (A-04/A-05, Task 6b)
 //!
-//! `verify_pinned_artifacts()` is called at engine bring-up BEFORE first use.
+//! `verify_pinned_artifacts()` is called TWICE at engine bring-up (brain
+//! #3597) — once per [`ArtifactKind`] — verifying the TWO PINNED files this
+//! table names (`bin/postgres` and the pgvector shared library), each right
+//! before `start()` launches a server process, rather than as one combined
+//! gate that ran before either file necessarily existed on disk. "Before
+//! `start()`" is a narrower claim than "before the file is first executed
+//! at all" — see "Known gaps" below, which names where that narrower claim
+//! matters.
+//!
+//! - [`ArtifactKind::Postgres`] — checked right after `setup()` returns.
+//! - [`ArtifactKind::Pgvector`] — checked right after the install-or-skip
+//!   decision (`install_extension()` / the `vector.control`-exists guard).
+//!
+//! [`ArtifactKind::verification_site`] is an exhaustive match with no `_` arm,
+//! so adding a variant forces a compile-time touch here. It does NOT force a
+//! `verify_pinned_artifacts()` call for that variant: a new arm alone
+//! compiles. Wiring the call remains a reviewed step (see the method's own
+//! doc). Pins added to an EXISTING kind are verified automatically by the
+//! kind filter.
+//!
 //! It checks the SHA-256 of the `postgres` binary and the `vector` shared library
-//! that the crates install into `~/.theseus/`.  These are the artifacts that actually
-//! execute — verifying them covers both the fresh-download path (crate extracts the
-//! archive and we verify the result) and the warm-cache path (a tampered cache is
-//! the realistic local threat).
+//! that the crates install into `~/.theseus/`.  Verifying them covers both the
+//! fresh-download path (crate extracts the archive and we verify the result) and
+//! the warm-cache path (a tampered cache is the realistic local threat).
 //!
-//! ## Coverage and known window (Task 26 handoff)
+//! ## Known gaps (brain #3616 tracks closing these)
 //!
-//! - **Covered:** the extracted installed files are verified before the engine starts.
-//! - **Not covered by this control:** TOCTOU window between the crate's internal
-//!   download/extract and our check.  Full archive integrity during download is
-//!   partly addressed by the crate for PG (theseus releases include `.sha256` files
-//!   that `postgresql_archive` fetches and checks); pgvector archives have no
-//!   upstream hash file — that gap carries to Task 26 (SBOM + full provenance).
+//! - **The Postgres binary's first execution is not covered.**
+//!   `postgresql_embedded::PostgreSQL::setup()` calls the crate's private
+//!   `install()` and then `initialize()` — which builds and runs an
+//!   `initdb` command using the just-installed binaries (see step 1 above:
+//!   mnemra's usage makes this run on EVERY `start()`). That execution
+//!   happens BEFORE `verify_pinned_artifacts(..., ArtifactKind::Postgres)`
+//!   ever runs, so a tampered cached `postgres` binary set would already
+//!   have been run by `initdb` before this control could refuse it. The
+//!   warm-cache half looks closable from mnemra's side (the versioned
+//!   installation dir is known before `setup()`); the cold path needs
+//!   either an upstream change or mnemra-side download, verify and extract.
+//!   See the candidate directions on brain #3616.
+//! - **Only two files are pinned.** `bin/initdb`, `bin/pg_ctl`,
+//!   `bin/pg_config`, and the rest of `bin/` are unpinned executables from
+//!   the same archive as `bin/postgres`. On the pgvector side,
+//!   `share/extension/vector.control` and the `vector--*.sql` upgrade
+//!   scripts — also read by the server at `CREATE EXTENSION` / upgrade time,
+//!   as the bootstrap superuser — are unpinned too. Widening the pin table
+//!   is brain #3616's scope, not this control's V0 shape.
+//! - **Archive-download integrity:** partly addressed by the crate for PG
+//!   (theseus releases include `.sha256` files that `postgresql_archive`
+//!   fetches and checks); pgvector archives have no upstream hash file —
+//!   this control's own post-extraction hash check is what covers that case
+//!   today. The remaining TOCTOU window between the crate's internal
+//!   download/extract and this control's check, plus full archive
+//!   provenance / SBOM, is brain #3616.
 //! - **Pin maintenance:** when `EMBEDDED_PG_VERSION` or `PGVECTOR_VERSION` changes,
 //!   the `KNOWN_GOOD_HASHES` table MUST be updated.  Task 26 owns the supply-chain
 //!   audit; this pin is the V0 interim gate.
@@ -170,6 +232,40 @@ pub const PGVECTOR_VERSION: &str = "=0.16.105";
 // SHA-256 hash-pin table (A-04/A-05 interim control, Task 6b)
 // ---------------------------------------------------------------------------
 
+/// Which class of pinned artifact an [`ArtifactPin`] entry describes.
+///
+/// `EmbeddedEngine::start()` verifies each kind at its own point in the
+/// bootstrap sequence (brain #3597) instead of checking every pin in one
+/// combined gate — see the module-level "Hash-pin control" doc section for
+/// why a combined gate is the defect this splits away from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactKind {
+    /// The `postgres` server binary — verified before `server.start()`.
+    Postgres,
+    /// The pgvector shared library — verified after the install-or-skip
+    /// decision, before any `CREATE EXTENSION` or other use of the extension.
+    Pgvector,
+}
+
+impl ArtifactKind {
+    /// Where in `EmbeddedEngine::start()` this kind is verified.
+    ///
+    /// M4 (brain #3597 fix-up): an exhaustive `match` with no `_` arm —
+    /// adding a new `ArtifactKind` variant fails to compile HERE until an
+    /// arm is added, which is the prompt to also add that variant's real
+    /// `verify_pinned_artifacts()` call in `start()`. Without this, a new
+    /// variant plus new pins in `KNOWN_GOOD_HASHES` would compile clean and
+    /// simply never be checked — the exact silent-coverage gap this guards
+    /// against. `start()` calls this at each real call site (see there) so
+    /// the match is genuinely exercised, not dead code.
+    fn verification_site(self) -> &'static str {
+        match self {
+            ArtifactKind::Postgres => "right after setup(), before start()",
+            ArtifactKind::Pgvector => "right after the install-or-skip decision, before start()",
+        }
+    }
+}
+
 /// A known-good SHA-256 hash entry for an installed artifact file.
 ///
 /// Public so that tests can construct deliberate-mismatch entries to prove
@@ -182,6 +278,9 @@ pub struct ArtifactPin {
     pub rel_path: &'static str,
     /// Expected SHA-256 hex digest.
     pub sha256: &'static str,
+    /// Which artifact class this pin belongs to — selects when
+    /// `verify_pinned_artifacts()` checks it.
+    pub kind: ArtifactKind,
 }
 
 /// Known-good SHA-256 hashes of installed artifact files, keyed by Rust
@@ -219,6 +318,7 @@ pub const KNOWN_GOOD_HASHES: &[(&str, &[ArtifactPin])] = &[
                 // Installed binary SHA-256 (extracted from archive, cross-checked
                 // against local ~/.theseus cache — match confirmed):
                 sha256: "a245e44bebf13f9b61ef3855b085476cdd71ac59d22e4d99cc7f879c30d48ef3",
+                kind: ArtifactKind::Postgres,
             },
             ArtifactPin {
                 artifact: "pgvector-0.8.0(v0.16.105)-aarch64-apple-darwin",
@@ -230,6 +330,7 @@ pub const KNOWN_GOOD_HASHES: &[(&str, &[ArtifactPin])] = &[
                 // Installed library SHA-256 (extracted from archive, cross-checked
                 // against local ~/.theseus cache — match confirmed):
                 sha256: "de2fd49fcc0602f90c5b8821dd744f21f2a933a1eab0e600c944b683e8d3b65a",
+                kind: ArtifactKind::Pgvector,
             },
         ],
     ),
@@ -247,6 +348,7 @@ pub const KNOWN_GOOD_HASHES: &[(&str, &[ArtifactPin])] = &[
                 // Installed binary SHA-256 (extracted from archive; cross-check
                 // against remote cache not possible from darwin host):
                 sha256: "3ad9bf317793480fc50a0467b5da7ccbade48c41a0b234e1a27552c855945f8e",
+                kind: ArtifactKind::Postgres,
             },
             ArtifactPin {
                 artifact: "pgvector-0.8.0(v0.16.105)-x86_64-unknown-linux-gnu",
@@ -258,6 +360,7 @@ pub const KNOWN_GOOD_HASHES: &[(&str, &[ArtifactPin])] = &[
                 // Installed library SHA-256 (extracted from archive; cross-check
                 // against remote cache not possible from darwin host):
                 sha256: "d464f84c02e13744ad80a3d8316ec77e59759063a31077ef4798b51fa5daf33d",
+                kind: ArtifactKind::Pgvector,
             },
         ],
     ),
@@ -267,22 +370,29 @@ pub const KNOWN_GOOD_HASHES: &[(&str, &[ArtifactPin])] = &[
 // Artifact hash verification (pure function — testable without a live engine)
 // ---------------------------------------------------------------------------
 
-/// Verify the SHA-256 hash of every pinned artifact in `install_dir`.
+/// Verify the SHA-256 hash of every pinned artifact of the given `kind` in
+/// `install_dir`.
 ///
 /// This is a pure function that takes the installation directory, the current
-/// platform triple, and a pin table.  Production code passes
-/// [`KNOWN_GOOD_HASHES`]; tests pass an intentionally-wrong table to prove
-/// fail-shut without touching the shared `~/.theseus` cache.
+/// platform triple, a pin table, and the [`ArtifactKind`] to check.
+/// Production code passes [`KNOWN_GOOD_HASHES`], calling this once per kind
+/// at its own point in `EmbeddedEngine::start()`'s bootstrap sequence (brain
+/// #3597 — see the module-level "Hash-pin control" doc section); tests pass
+/// an intentionally-wrong table to prove fail-shut without touching the
+/// shared `~/.theseus` cache.
 ///
 /// # Errors
 ///
-/// Returns `HashPinError` on the first mismatch found.  Returns a distinct
-/// `HashPinError` with `expected = "(no pin entry)"` if the platform is not in
-/// the table — fail-shut, not silent skip.
+/// Returns `HashPinError` on the first mismatch found (including a missing
+/// file — surfaced as a read error). Returns a distinct `HashPinError` if
+/// the platform is not in the table (`expected` names the missing platform)
+/// or if the platform has no pin of the requested `kind` (`expected` names
+/// the missing kind) — fail-shut, not silent skip either way.
 pub fn verify_pinned_artifacts(
     install_dir: &Path,
     platform: &str,
     pins: &[(&str, &[ArtifactPin])],
+    kind: ArtifactKind,
 ) -> Result<(), HashPinError> {
     // Look up the pin entries for this platform.
     let entries = pins
@@ -295,7 +405,9 @@ pub fn verify_pinned_artifacts(
             actual: "(unknown)".into(),
         })?;
 
-    for pin in entries {
+    let mut checked_any = false;
+    for pin in entries.iter().filter(|p| p.kind == kind) {
+        checked_any = true;
         let path = install_dir.join(pin.rel_path);
         let bytes = fs::read(&path).map_err(|e| HashPinError {
             artifact: pin.artifact.into(),
@@ -316,6 +428,19 @@ pub fn verify_pinned_artifacts(
             });
         }
     }
+
+    // Fail-shut on a platform entry that exists but has no pin of this kind
+    // (e.g. a future platform added with only one of the two artifacts) —
+    // the same "add the missing entry" refusal as an unknown platform,
+    // rather than a silent no-op pass.
+    if !checked_any {
+        return Err(HashPinError {
+            artifact: format!("platform:{platform} kind:{kind:?}"),
+            expected: "(no pin entry for this artifact kind — add it to KNOWN_GOOD_HASHES)".into(),
+            actual: "(unknown)".into(),
+        });
+    }
+
     Ok(())
 }
 
@@ -493,7 +618,11 @@ impl EmbeddedEngine {
         let mut server = PostgreSQL::new(settings);
 
         // setup() downloads (first run) or reuses cached Postgres binaries from
-        // ~/.theseus/postgresql/.
+        // ~/.theseus/postgresql/. This ALWAYS runs initdb internally (mnemra
+        // never overrides the default fresh-tempdir data_dir — see the
+        // module doc's step 1), which EXECUTES the just-installed postgres
+        // binaries before the hash check below ever runs. See the module
+        // doc's "Known gaps" and the candidate directions on brain #3616.
         tracing::debug!(
             version = EMBEDDED_PG_VERSION,
             "postgres engine setup: download or cache reuse"
@@ -503,36 +632,41 @@ impl EmbeddedEngine {
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
-        // Hash-pin verification (A-04/A-05, Task 6b) — BEFORE first use.
+        // Hash-pin verification, Postgres binary (A-04/A-05, Task 6b, split
+        // per brain #3597) — right after setup() returns: this is the exact
+        // pinned file setup() just installed or reused. It does not mean
+        // "before this binary's first execution" — see the comment above
+        // setup() and the module doc's "Known gaps".
         //
-        // Verifies the installed postgres binary and pgvector shared library
-        // against known-good SHA-256 hashes.  Covers both the fresh-download
-        // path (crate extracts archive → we verify the result) and the warm-cache
-        // path (tampered local cache is the realistic threat model).
+        // Covers both the fresh-download path (crate extracts archive → we
+        // verify the result) and the warm-cache path (tampered local cache
+        // is the realistic threat model).
         //
-        // Fail-shut: any mismatch or unknown platform → structured error, engine
-        // refuses to start.  No warn-and-continue mode.
-        //
-        // TOCTOU note: there is a window between the crate's download/extract and
-        // this check; closing that window requires intercepting the crate's internal
-        // download path, which is not possible without upstream changes.  That gap
-        // carries to Task 26 (full provenance / SBOM).
+        // Fail-shut: unknown platform, no pin of the requested kind, or a
+        // hash mismatch (including a missing file) → structured error,
+        // engine refuses to start. No warn-and-continue mode.
         let install_dir = server.settings().installation_dir.clone();
-        verify_pinned_artifacts(&install_dir, current_platform(), KNOWN_GOOD_HASHES)
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+        tracing::debug!(
+            kind = ?ArtifactKind::Postgres,
+            site = ArtifactKind::Postgres.verification_site(),
+            "verifying pinned artifact"
+        );
+        verify_pinned_artifacts(
+            &install_dir,
+            current_platform(),
+            KNOWN_GOOD_HASHES,
+            ArtifactKind::Postgres,
+        )
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
 
-        // start() assigns an ephemeral port and launches the server.
-        server
-            .start()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
-
-        let elapsed_ms = t0.elapsed().as_millis() as u64;
-        // A-09: emit startup timing so cold-runner regressions are visible.
-        // Migrates to structured OTel emission when Task 25 observability lands.
-        tracing::info!(engine_startup_ms = elapsed_ms, "postgres engine started");
-
-        // Install the pgvector_compiled precompiled extension package.
+        // Install the pgvector_compiled precompiled extension package, BEFORE
+        // start() — no running server is required: postgresql_extensions'
+        // install() (crate source, extensions.rs) only shells out to
+        // `postgres --version` and `pg_config` (one-shot subprocesses against
+        // the installed binaries) and extracts an archive to disk. Moving
+        // this ahead of start() means both pinned artifacts are verified
+        // before any server process exists (see below).
+        //
         // portal-corp provides the precompiled .so + .control + .sql files.
         // No OS-level pgvector installation is required.
         //
@@ -563,6 +697,52 @@ impl EmbeddedEngine {
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
         }
+
+        // Hash-pin verification, pgvector library (A-04/A-05, Task 6b, split
+        // per brain #3597) — right after the install-or-skip decision above,
+        // still before start() and before any caller can reach
+        // `CREATE EXTENSION` or other use of the extension
+        // (`ensure_pgvector`/`ensure_extension` are only callable once
+        // `start()` has returned `Ok`). Runs unconditionally here, not only
+        // inside the `if !control_file.exists()` branch above: a directory
+        // where `vector.control` is already present (so the install step is
+        // skipped) but the pinned library itself is missing or tampered
+        // must still be refused, not silently started against a broken
+        // install. Same fail-shut contract as the Postgres binary check
+        // above — no warn-and-continue mode.
+        tracing::debug!(
+            kind = ?ArtifactKind::Pgvector,
+            site = ArtifactKind::Pgvector.verification_site(),
+            "verifying pinned artifact"
+        );
+        verify_pinned_artifacts(
+            &install_dir,
+            current_platform(),
+            KNOWN_GOOD_HASHES,
+            ArtifactKind::Pgvector,
+        )
+        .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        // start() assigns an ephemeral port and launches the server. Both
+        // pinned artifacts have already passed their hash check above — no
+        // server process exists until they have.
+        server
+            .start()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)?;
+
+        let elapsed_ms = t0.elapsed().as_millis() as u64;
+        // A-09: emit startup timing so cold-runner regressions are visible.
+        // Scope note: this measures from function entry (t0), so it now
+        // includes the pgvector install-or-skip step above (moved ahead of
+        // start() by this fix-up) as well as setup() and both hash checks —
+        // it always included setup() and the Postgres check; the pgvector
+        // step is the addition. Still fit for A-09's purpose (surfacing
+        // cold-runner regressions in cold-start wall-clock), and arguably
+        // more representative of it, since a slow cold pgvector download is
+        // exactly the kind of regression a cold runner would show.
+        // Migrates to structured OTel emission when Task 25 observability lands.
+        tracing::info!(engine_startup_ms = elapsed_ms, "postgres engine started");
 
         // Create the application database as the bootstrap superuser.
         tracing::debug!(
