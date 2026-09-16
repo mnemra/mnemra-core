@@ -596,6 +596,156 @@ verify-smoke: build
         exit 1
     fi
 
+# ---------------------------------------------------------------------------
+# Cold-start regression guard (brain #3597).
+# ---------------------------------------------------------------------------
+#
+# EmbeddedEngine::start() must succeed from an install directory that has
+# never held Postgres binaries or pgvector artifacts — the defect: it
+# hash-checked the pgvector shared library before install_extension() ever
+# wrote it, so a cold (or cache-evicted) ~/.theseus refused to start at all
+# (production host startup uses the identical start() call,
+# libs/mnemra-host/mnemra_host.rs:555 — not CI-only).
+#
+# Deliberately NOT folded into {{PG_TEST_FLAGS}} — mirrors verify-smoke's own
+# reasoning immediately above: PG_TEST_FLAGS members run three times over
+# (verify-test / verify-test-hooks / verify-coverage-pg), and every test in
+# this suite isolates HOME to a fresh, empty temp directory, so it ALWAYS
+# pays a real cold network download of Postgres 16.4.0
+# (theseus-rs/postgresql-binaries) and pgvector_compiled (portal-corp) from
+# GitHub — it never benefits from a warm ~/.theseus cache the way every
+# other PG-touching gate does. Tripling that network cost for no additional
+# coverage is the exact cost verify-smoke's own isolation already avoids for
+# a different reason. Its own gate, run once. No `plugin` / `build`
+# prerequisite — this suite never touches the wasm component or the `mnemra`
+# binary, only `-p mnemra-host`.
+#
+# --test-threads 1 mirrors the PG-touching convention (R-0022) even though
+# this suite's own ENV_LOCK (a `tokio::sync::Mutex`, held for each whole
+# `HOME`-mutating test body) already serializes its tests independently of
+# thread count — belt-and-suspenders here, not load-bearing.
+#
+# Non-vacuity count-pin (#2004 silent-failure class, same discipline as
+# verify-signing-root / verify-test's coordination_* guards): `cargo test`
+# exits 0 on a zero-test run too — a future filter mistake or an
+# accidentally-emptied file would otherwise silently PASS this gate. Pins
+# the exact expected count (3: the cold-start success scenario, the
+# tampered-pgvector regression guard, and the missing-library-with-
+# present-control-file guard — S1/S2/S3 respectively, dispatch #3597) so a
+# silently dropped test fails loudly instead.
+verify-cold-start:
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    # GITHUB_TOKEN precheck (Peter's decision, 2026-09-15; brain #3597 Q2 /
+    # #3616) — this gate ALWAYS pays a genuinely cold network download of
+    # Postgres 16.4.0 (theseus-rs/postgresql-binaries) and pgvector_compiled
+    # (portalcorp/pgvector_compiled) from GitHub's release-listing API
+    # (api.github.com), never benefiting from a warm ~/.theseus cache (see
+    # the doc block above). Unauthenticated, that API is capped at 60
+    # req/hr per source IP; a single cold EmbeddedEngine::start() costs a
+    # measured minimum of 6 such calls (paginated release listings for both
+    # artifacts — theseus-rs/postgresql-binaries alone pages 3 deep at
+    # per_page=100), so a handful of local runs in one hour exhausts it.
+    # MEASURED: a real local run hit exactly this — `HTTP status client
+    # error (403 Forbidden) for url
+    # (https://api.github.com/repos/theseus-rs/postgresql-binaries/releases?page=1&per_page=100)`
+    # — buried a minute into a `cargo test` run with no indication of the
+    # cause. Fail fast with a clear diagnosis instead.
+    #
+    # Least-authority (brain #3616): this token sits in the WHOLE process
+    # environment for the rest of this recipe, not scoped to the HTTP
+    # client alone — postgresql_embedded's setup() runs `initdb` (spawning
+    # the just-downloaded, not-yet-hash-verified postgres binary) BEFORE
+    # this engine's own hash-pin check ever runs, and that child process
+    # inherits this recipe's full environment by default (the crate never
+    # calls env_clear()). Use a token that is worth nothing if it leaks
+    # there: a fine-grained personal access token with NO permissions and
+    # NO repository access — both repos this gate reads
+    # (theseus-rs/postgresql-binaries, portalcorp/pgvector_compiled) are
+    # public, so a zero-access token is sufficient; it exists only to move
+    # this call from GitHub's 60/hr unauthenticated tier to the 5000/hr
+    # authenticated tier, never to grant a capability.
+    #
+    # Do NOT use `gh auth token` or any other broad personal token here —
+    # CI's "CI gates" job already carries a read-only, job-lifetime
+    # GITHUB_TOKEN (set job-wide in ci.yml, originally for
+    # install_extension()'s rate limit, before this gate existed); a local
+    # broad token would be a strictly worse version of the same credential,
+    # sitting in a process that runs an unverified binary before it is
+    # checked.
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        echo "verify-cold-start: GITHUB_TOKEN is unset — refusing before any network call."
+        echo "  This gate needs a token ONLY to reach GitHub's authenticated API rate limit"
+        echo "  (5000/hr vs 60/hr unauthenticated); it exercises no read or write capability."
+        echo "  Create a fine-grained personal access token with NO permissions and NO"
+        echo "  repository access (the two repos this gate downloads from are public), then:"
+        echo "    export GITHUB_TOKEN=<the token>"
+        echo "  Do NOT use \`gh auth token\` or any broad personal token: this recipe's full"
+        echo "  environment is inherited by the downloaded Postgres binary's initdb, which"
+        echo "  runs BEFORE this gate's own hash-pin check (brain #3616)."
+        echo "GATE cold-start FAIL (apparatus — missing GITHUB_TOKEN, no network call made)"
+        exit 1
+    fi
+
+    set +e
+    output="$(cargo test -p mnemra-host --test postgres_engine_cold_start -- --test-threads 1 2>&1)"
+    code=$?
+    set -e
+    echo "$output"
+
+    # Failure classification (brain #3597) — the exit code stays 1 either
+    # way; this only hints at a red run's cause on the GATE line. A
+    # HashPinError signature wins and is labelled regression. When only
+    # network text is present, the label says so but NEVER claims the run
+    # is not a regression: the most important regression here — a removed
+    # or skipped verification call — makes a scenario's start() wrongly
+    # SUCCEED, and that panic ("start() must refuse ...") carries no
+    # HashPinError text, so it can sit in the same output as an unrelated
+    # network failure from another test (Warden re-review N1). Classifying
+    # per failed test would make a stronger claim possible; it was not
+    # built. An unrecognized failure shape defaults to regression.
+    #
+    # Regression signatures — both tied to the ONE type this gate exists to
+    # exercise (engine.rs's HashPinError): the literal struct name (appears
+    # via Debug-formatting in `.expect()` panics, and in this suite's own
+    # panic! text when it names the type after a successful downcast) and
+    # its Display text (`hash-pin mismatch for ...`, engine.rs's
+    # `impl Display for HashPinError`), in case a Display-only path is ever
+    # hit instead of Debug.
+    is_regression=0
+    if grep -qE 'HashPinError|hash-pin mismatch' <<< "$output"; then
+        is_regression=1
+    fi
+
+    # Apparatus signatures — checked only when no regression signature
+    # matched. "403 Forbidden" is MEASURED (a real local run hit exactly
+    # this GitHub rate-limit response — see the precheck comment above);
+    # the rest are the same class of failure (GitHub's documented secondary
+    # rate limit, and reqwest's own transport-error text shapes) that have
+    # not yet been observed here but would look identical in kind.
+    is_apparatus=0
+    if [[ "$is_regression" -eq 0 ]] && grep -qiE '401 Unauthorized|Bad credentials|403 Forbidden|429 Too Many Requests|rate limit|error sending request|dns error|operation timed out' <<< "$output"; then
+        is_apparatus=1
+    fi
+
+    if [[ "$code" -ne 0 ]]; then
+        if [[ "$is_regression" -eq 1 ]]; then
+            echo "GATE cold-start FAIL (regression)"
+        elif [[ "$is_apparatus" -eq 1 ]]; then
+            echo "GATE cold-start FAIL (network/rate-limit errors present — this does NOT rule out a regression; read every failed test above)"
+        else
+            echo "GATE cold-start FAIL (regression — unrecognized failure shape, defaulting to the conservative label)"
+        fi
+        exit 1
+    fi
+    if ! grep -qE 'test result: ok\. 4 passed; 0 failed;' <<< "$output"; then
+        echo "cold-start non-vacuity count-pin failed: expected exactly 4 passed (S1 + S2 + S3 + S4); got a different count — a silently dropped test would otherwise pass vacuously (brain #3597, #2004 silent-failure class)"
+        echo "GATE cold-start FAIL (vacuity — test count changed, not a network or hash-pin signal)"
+        exit 1
+    fi
+    echo "GATE cold-start PASS"
+
 # Internal: the full verify-* prerequisite chain, unchanged in order and
 # semantics from before the baseline-reap wiring below. Kept as its own
 # recipe (rather than inlined into `ci`'s shell body) so `just ci` still
@@ -608,7 +758,7 @@ verify-smoke: build
 #
 # Local `just ci` retains FULL-chain coverage (R-0098): verify-coverage below
 # delegates to BOTH shard recipes, so this chain runs every shard.
-_ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-signing-root
+_ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-cold-start verify-signing-root
 
 # Internal: the verify-* prerequisite chain MINUS coverage (R-0094) — used by
 # the CI workflow's main "CI gates" job. Coverage runs in its own separate CI
@@ -621,7 +771,7 @@ _ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-test
 # preserved). Local `just ci` does NOT use this recipe — it always runs the
 # full chain above, coverage included; local disk has no runner-fleet
 # roulette (R-0098).
-_ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-build verify-smoke verify-signing-root
+_ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-build verify-smoke verify-cold-start verify-signing-root
 
 # CI entry point (R-0018-c, R-0018-f) — runs the given `chain` recipe (default:
 # `_ci-verify-chain`, the full chain including coverage) wrapped in a
@@ -634,8 +784,9 @@ _ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership 
 # The `chain` parameter (R-0094) lets the CI workflow's main "CI gates" job
 # reuse this same reap-wrapped body while running `_ci-verify-chain-nocoverage`
 # instead of the default — that job still runs verify-test / verify-test-hooks
-# / verify-smoke, which touch embedded Postgres, so it keeps the same
-# baseline-reap protection without duplicating the reap-net bash. The
+# / verify-smoke / verify-cold-start, which touch embedded Postgres, so it
+# keeps the same baseline-reap protection without duplicating the reap-net
+# bash. The
 # coverage-shard jobs (R-0094) do NOT go through this recipe at all — they
 # invoke verify-coverage-pg / verify-coverage-rest directly; ephemeral
 # single-use CI shard runners self-clean on teardown and don't need the reap

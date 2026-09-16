@@ -41,7 +41,8 @@
 mod shared_engine;
 
 use mnemra_host::storage::postgres::engine::{
-    ArtifactPin, EmbeddedEngine, KNOWN_GOOD_HASHES, current_platform, verify_pinned_artifacts,
+    ArtifactKind, ArtifactPin, EmbeddedEngine, KNOWN_GOOD_HASHES, current_platform,
+    verify_pinned_artifacts,
 };
 use sqlx::Row;
 use std::collections::HashSet;
@@ -94,33 +95,40 @@ async fn app_role_is_not_superuser_and_not_bypassrls() {
 /// `HashPinError` naming the artifact and both digest values.
 ///
 /// Proves the control fails SHUT (structured error, not panic) on a hash
-/// mismatch.  The install_dir is the real theseus cache so the file IS
-/// readable; only the expected sha256 is wrong.
+/// mismatch. `verify_pinned_artifacts` only hashes whatever bytes sit at
+/// `rel_path` — it has no opinion on whether they are a genuine Postgres
+/// binary — so a throwaway file in a fresh tempdir exercises the same
+/// mismatch path on every runner, without depending on a warm `~/.theseus`
+/// cache (this test used to SKIP on a cold runner that had never booted the
+/// engine).
 #[test]
 fn hash_pin_mismatch_returns_structured_error_not_panic() {
+    let install_dir = tempfile::tempdir().expect("tempdir for install_dir");
+    let bin_dir = install_dir.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).expect("create bin dir");
+    std::fs::write(
+        bin_dir.join("postgres"),
+        b"not a real postgres binary, just bytes for verify_pinned_artifacts to hash",
+    )
+    .expect("write throwaway postgres file");
+
     // Build a pin table with a known-wrong expected hash.
-    // We use the real postgres binary path but a bogus expected digest.
     let wrong_pins: &[(&str, &[ArtifactPin])] = &[(
         current_platform(),
         &[ArtifactPin {
             artifact: "postgres-tampered-test",
             rel_path: "bin/postgres",
             sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            kind: ArtifactKind::Postgres,
         }],
     )];
 
-    // Locate the real installation directory via HOME env var.
-    let home = std::env::var("HOME").unwrap_or_default();
-    let install_dir = std::path::PathBuf::from(&home).join(".theseus/postgresql/16.4.0");
-
-    if !install_dir.join("bin/postgres").exists() {
-        // Skip on a cold runner that has never run the engine; the positive
-        // pgvector_extension_is_available test covers the warm-cache path.
-        eprintln!("SKIP hash_pin_mismatch_returns_structured_error_not_panic: cache not warm");
-        return;
-    }
-
-    let result = verify_pinned_artifacts(&install_dir, current_platform(), wrong_pins);
+    let result = verify_pinned_artifacts(
+        install_dir.path(),
+        current_platform(),
+        wrong_pins,
+        ArtifactKind::Postgres,
+    );
     assert!(
         result.is_err(),
         "verify_pinned_artifacts must return Err on a hash mismatch, got Ok"
@@ -153,27 +161,87 @@ fn hash_pin_mismatch_returns_structured_error_not_panic() {
 
 /// NEGATIVE: An unknown platform produces a structured `HashPinError` telling
 /// the operator to add a pin — not a silent skip, not a panic.
+///
+/// Exact `assert_eq!` (not `contains`) so this test distinguishes an
+/// unknown-PLATFORM refusal from a known-platform-missing-KIND refusal (see
+/// `hash_pin_missing_kind_for_known_platform_returns_structured_error`
+/// below) — a `contains("platform:")` / `contains("no pin entry")` pair
+/// passes on either error shape and cannot tell them apart.
 #[test]
 fn hash_pin_unknown_platform_returns_structured_error() {
     let result = verify_pinned_artifacts(
         Path::new("/tmp"),
         "unknown-platform-not-in-table",
         KNOWN_GOOD_HASHES,
+        ArtifactKind::Postgres,
     );
     assert!(
         result.is_err(),
         "verify_pinned_artifacts must return Err for an unknown platform, got Ok"
     );
     let err = result.unwrap_err();
-    assert!(
-        err.artifact.contains("platform:"),
-        "HashPinError for unknown platform must name the platform in artifact field: {:?}",
-        err.artifact
+    assert_eq!(
+        err.artifact, "platform:unknown-platform-not-in-table",
+        "HashPinError for unknown platform must name exactly the platform in artifact field"
+    );
+    assert_eq!(
+        err.expected, "(no pin entry — add this platform to KNOWN_GOOD_HASHES)",
+        "HashPinError for unknown platform must carry the exact unknown-platform message"
+    );
+}
+
+/// NEGATIVE: a platform that IS in the table, but whose entries carry no pin
+/// of the requested `ArtifactKind`, produces a structured `HashPinError` —
+/// not a silent `Ok`.
+///
+/// Proves the `checked_any` fail-shut guard in `verify_pinned_artifacts`
+/// (brain #3597 fix-up, C2): without it, `.filter(|p| p.kind == kind)`
+/// yielding zero entries falls through the loop straight to `Ok(())`. C2
+/// mutation evidence (dispatch report): this test was confirmed to FAIL,
+/// with `checked_any` and its guard temporarily removed, then to PASS with
+/// them restored — the mutation was never committed.
+///
+/// Exact `assert_eq!` throughout, paired with the test above, so the two
+/// negative cases (unknown platform vs. known platform / missing kind)
+/// stay distinguishable by their exact `HashPinError` shape.
+#[test]
+fn hash_pin_missing_kind_for_known_platform_returns_structured_error() {
+    // A platform entry that exists (matches current_platform()) but whose
+    // only pin is Postgres-kind — requesting the Pgvector kind against it
+    // must refuse.
+    let postgres_only_pins: &[(&str, &[ArtifactPin])] = &[(
+        current_platform(),
+        &[ArtifactPin {
+            artifact: "postgres-only-test",
+            rel_path: "bin/postgres",
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+            kind: ArtifactKind::Postgres,
+        }],
+    )];
+
+    // /tmp is never read: the kind filter yields zero entries before any
+    // file access is attempted, same rationale as the unknown-platform test
+    // above.
+    let result = verify_pinned_artifacts(
+        Path::new("/tmp"),
+        current_platform(),
+        postgres_only_pins,
+        ArtifactKind::Pgvector,
     );
     assert!(
-        err.expected.contains("no pin entry"),
-        "HashPinError for unknown platform must say 'no pin entry' in expected: {:?}",
-        err.expected
+        result.is_err(),
+        "verify_pinned_artifacts must return Err when a known platform has no pin of the \
+         requested kind, got Ok"
+    );
+    let err = result.unwrap_err();
+    assert_eq!(
+        err.artifact,
+        format!("platform:{} kind:Pgvector", current_platform()),
+        "HashPinError must name both the platform and the missing kind"
+    );
+    assert_eq!(
+        err.expected, "(no pin entry for this artifact kind — add it to KNOWN_GOOD_HASHES)",
+        "HashPinError must carry the exact missing-kind message"
     );
 }
 
