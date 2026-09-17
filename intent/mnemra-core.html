@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-ab333741.js";
+            window.path_to_searchindex_js = "../searchindex-849525c4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5d081ac2.js"></script>
@@ -279,6 +279,18 @@ client coding agent can retrieve persistent, typed, cross-session context for a 
 artifact in one call, rather than reconstructing it by hand each session.</li>
 <li><strong>Self-hostable:</strong> a team can run the full core on its own infrastructure with data never
 leaving that boundary.</li>
+<li><strong>Durable across restart:</strong> stored context survives a host stop and restart, including a
+hard kill. Every write acknowledged to a caller before the host stops is readable, with
+the same content, after the host next starts, whether the stop was a clean shutdown, a
+hard kill of the host process, or a hard kill of the embedded storage engine. This is
+what “persistent” means wherever this brief says it of context. “Persisted” in the Hard
+constraints below names a storage <em>shape</em>, not this criterion. Verifiable: a restart
+acceptance test writes through the agent-facing surface, stops the host each of the three
+ways, starts it again against the same data location, and reads back equal content.
+<em>(ADDED 2026-09-15, maintainer ruling 2026-09-15: the brief promised persistence without
+defining it, the Frame (the constraint-locking stage of the pipeline) never weighed
+durability, and the V0 substrate spec narrowed “persist” to storage shape, so the promise
+had no checker. This criterion is the anchor the checker hangs from.)</em></li>
 <li>Commercial validation thresholds exist but live in the separate internal commercial
 record; they aren’t product success criteria and aren’t inlined here.</li>
 </ul>
@@ -310,6 +322,20 @@ host-side. <em>(MODIFIED 2026-07-02 per RC-1, retrieval-cluster intake (locked 2
 <li><strong>“Single-binary” constrains the server, not the deployment packaging.</strong> It means one
 process, not a microservice mesh. An immutable image or appliance is a valid packaging
 shape for that single binary and doesn’t violate this constraint.</li>
+<li><strong>Data lives outside the executable and its image, at a location the operator
+configures.</strong> A bare binary defaults to the operating system’s per-user application-data
+location and accepts an override. In a container, the operator mounts a volume at the
+configured location, and the host can be told to require that mount and refuse to start
+without it. <em>(MODIFIED 2026-09-17, maintainer ruling 2026-09-17; was: “a container image
+declares a mount point and the operator mounts a volume there”. No claim is made about
+what an image declares: an image-declared volume isn’t durable under <code>docker run --rm</code>,
+and the image contract is parked until an image exists.)</em> Stored context SHALL NOT live
+in a temporary directory, in the executable’s own directory, or in a container’s writable
+layer. Whether the location is local or network-backed is the operator’s choice.
+<em>(ADDED 2026-09-15, maintainer ruling 2026-09-15, verbatim: “mnemra has to run as a
+container in many cases not just an executable. The data should not be stored with the
+executable.” An earlier ruling’s “persisted on the local filesystem” wording is
+superseded: it meant “not a deleted temp dir”, and “local” is not a constraint.)</em></li>
 <li><strong>Tenancy invariant:</strong> the tenant scoping key (<code>workspace_id</code>) is structural from V0:
 NOT NULL, indexed, explicitly passed, and forward-compatible without migration. This is what
 makes deferring tenant-hierarchy/policy enforcement safe. The scoping key ships now; hierarchy
@@ -489,6 +515,16 @@ and is the first write/label-capability surface that fires the deferred write-si
 policy-dimension design. The retrieval cluster’s new tables carry <code>owner</code>/<code>created_by</code> columns
 from day one, so this lands as a feature rather than an excavation. Provenance:
 retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). <em>(ADDED 2026-07-02.)</em></li>
+<li><strong>External Postgres server as the substrate engine.</strong> An operator-provisioned Postgres
+reached over a connection string in place of the embedded engine, behind the same
+engine-agnostic <code>Storage</code> trait (P-0010 D5). When supported, durability of stored context
+is that server’s responsibility, not the host’s; the “Durable across restart” success
+criterion then binds the connection configuration surviving restart, not a host-owned data
+directory. Not V0: it moves the durability problem to the Postgres server rather than
+solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment; external
+Postgres is a future engine, not V0). <em>(ADDED 2026-09-17, maintainer ruling 2026-09-17 at
+the durability amendment’s gate: the thought takes a Layer-2 <code>idea</code> entry per this brief’s
+format note, rather than living only in the V0 substrate spec’s Out of Scope section.)</em></li>
 </ul>
 <h3 id="proposed"><a class="header" href="#proposed">Proposed</a></h3>
 <p>Has a locked intake (through intent capture). Not yet frame+spec complete, and not
@@ -992,6 +1028,27 @@ ruling is needed. The model removing those decisions is a model-quality signal.<
 </ul>
 <h2 id="changelog"><a class="header" href="#changelog">Changelog</a></h2>
 <ul>
+<li><strong>2026-09-17</strong>: Durability amendment approved at the maintainer’s gate (ruling
+2026-09-17). <strong>Register:</strong> ADDED the <code>idea</code>-tier entry for an external Postgres server as
+the substrate engine. The entry the 2026-09-15 changelog carried as a draft is now a real
+register entry by this ruling. <strong>Hard constraints:</strong> MODIFIED the data-location
+constraint’s container clause. The operator mounts a volume at the configured location and
+the host can require it; the former “a container image declares a mount point” wording is
+withdrawn (an image-declared volume isn’t durable, and the image contract is parked in the
+V0 substrate spec until an image exists). Also ruled at the gate and recorded in the spec
+rather than here: socket-only peer-authenticated cluster access ratified; the
+replace-the-executable survival check locked in its bare-binary form; network-backed data
+directories stay allowed, with the failover residual recorded as accepted.</li>
+<li><strong>2026-09-15</strong>: Durability amendment (labeled deltas; authored with the V0 substrate
+spec’s R-0116 and the overview’s Reliability / durability axis, riding the same docs
+change). <strong>Success criteria:</strong> ADDED “Durable across restart”: stored context survives a
+host stop and restart including a hard kill, which is the first place this brief defines
+what “persistent” means. <strong>Hard constraints:</strong> ADDED “Data lives outside the executable
+and its image”: an OS app-data default for a bare binary, a mounted volume for a
+container, never a temporary directory or a container’s writable layer; an earlier
+“persisted on the local filesystem” wording is superseded. <strong>Register (DRAFT, O2):</strong> an
+<code>idea</code>-tier entry for an external Postgres server as the substrate engine, flagged for
+the maintainer’s gate rather than locked. Register tiers otherwise unchanged.</li>
 <li><strong>2026-07-11</strong>: Plugin-distribution Stage-3 spec locked
 (<code>docs/specs/2026-07-07-plugin-distribution.md</code>, blob
 <code>10554ccdd6ae91731086b6fa6cba3de281a4fd49</code>; spec-exit gate accepted 2026-07-11) over the

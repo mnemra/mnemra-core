@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-ab333741.js";
+            window.path_to_searchindex_js = "../searchindex-849525c4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5d081ac2.js"></script>
@@ -592,6 +592,20 @@ own time-series tables (if any beyond observability) are plain timestamped Postg
 to a latency/storage trip-wire).</li>
 <li><strong>Content-first with CQRS-real projections.</strong> Mutations write content;
 projections rebuild reactively from content; reads hit projections.</li>
+<li><strong>Durable across restart, at an operator-configured data location.</strong> Stored content
+survives a host stop and restart, including a hard kill of the host or of the embedded
+engine (brief Success criteria “Durable across restart”). The embedded engine’s data
+directory lives outside the executable and its image: the OS per-user app-data
+location by default for a bare binary, overridable; for a container, a volume the
+operator mounts at the configured location, which the host can be told to require.
+Never a temporary directory (brief Hard constraints “Data lives outside the executable
+and its image”). The quality-attribute scenarios sit on the companion overview’s
+Reliability / durability axis; the requirement is the V0 substrate spec’s R-0116, which
+also carries socket-only peer-authenticated cluster access with no stored secret, the
+engine major-version guard, exclusive ownership of the directory across restarts and
+machines, and the restart acceptance. An operator-provisioned external Postgres server
+is not a V0 engine (durability would then be that server’s responsibility); the V0
+engine remains embedded Postgres per <a href="../adrs/P-0010-storage-substrate-engine.html">P-0010</a>.</li>
 <li><strong>The detailed layout of a single logical artifact across the four shapes</strong> (whether a
 task lives in one row, in multiple tables in the content substrate, or fans across
 content + state + log substrates) is the central architectural fork at the Spec stage.
@@ -761,7 +775,7 @@ pricing, and go-to-market to a separate internal record; Frame does not absorb t
 </ul>
 <h2 id="pointers"><a class="header" href="#pointers">Pointers</a></h2>
 <ul>
-<li>For the <strong>constraint inventory</strong>, the <strong>6-axis quality-attribute utility tree</strong>, the
+<li>For the <strong>constraint inventory</strong>, the <strong>7-axis quality-attribute utility tree</strong>, the
 <strong>data-flow diagram</strong>, and the <strong>threat-scaffold placeholder</strong>, see the companion
 artifact: <a href="../architecture/overview.html">Architecture overview</a>.</li>
 <li>For the workspace-wide project defaults (G-* ADR baseline projected at project
