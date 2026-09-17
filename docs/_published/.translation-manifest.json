@@ -207,22 +207,22 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "71dcc05dabf792532ac300f63d67cc18c6f7c63f749d8b7a7573d22a96e88678",
-      "translated_at": "2026-07-11T13:00:14Z"
+      "source_sha256": "5f63b12df6e59b041a407dd0c3ec0539bfc36cedc81ff2bc78b4dbe3a5bb93f6",
+      "translated_at": "2026-09-17T11:27:56Z"
     },
     "intent/mnemra-core-frame.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "90fbea180479eaaf087204fc52aae619186d1770f809814c60b497134ad027a7",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "fe75a6d47286bfa6bdd67758ba3620cc1152cf7e48614276eb23212acdb4cbf9",
+      "translated_at": "2026-09-17T11:27:56Z"
     },
     "intent/mnemra-core.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "ee5d3196f4d8aaa56f88c910b14ba265e6fc48450dde194756416f5ccb90834a",
-      "translated_at": "2026-07-11T13:00:14Z"
+      "source_sha256": "4d0b38b7d41d3de97fa437f650998897b55dc40f273f8583faa4652feee199bd",
+      "translated_at": "2026-09-17T11:27:56Z"
     },
     "intro.md": {
       "primary_audience": "human",

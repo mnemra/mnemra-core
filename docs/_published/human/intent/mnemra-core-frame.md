@@ -429,6 +429,20 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   to a latency/storage trip-wire).
 - **Content-first with CQRS-real projections.** Mutations write content;
   projections rebuild reactively from content; reads hit projections.
+- **Durable across restart, at an operator-configured data location.** Stored content
+  survives a host stop and restart, including a hard kill of the host or of the embedded
+  engine (brief Success criteria "Durable across restart"). The embedded engine's data
+  directory lives outside the executable and its image: the OS per-user app-data
+  location by default for a bare binary, overridable; for a container, a volume the
+  operator mounts at the configured location, which the host can be told to require.
+  Never a temporary directory (brief Hard constraints "Data lives outside the executable
+  and its image"). The quality-attribute scenarios sit on the companion overview's
+  Reliability / durability axis; the requirement is the V0 substrate spec's R-0116, which
+  also carries socket-only peer-authenticated cluster access with no stored secret, the
+  engine major-version guard, exclusive ownership of the directory across restarts and
+  machines, and the restart acceptance. An operator-provisioned external Postgres server
+  is not a V0 engine (durability would then be that server's responsibility); the V0
+  engine remains embedded Postgres per [P-0010](../adrs/P-0010-storage-substrate-engine.md).
 - **The detailed layout of a single logical artifact across the four shapes** (whether a
   task lives in one row, in multiple tables in the content substrate, or fans across
   content + state + log substrates) is the central architectural fork at the Spec stage.
@@ -580,7 +594,7 @@ boundary is unambiguous:
 
 ## Pointers
 
-- For the **constraint inventory**, the **6-axis quality-attribute utility tree**, the
+- For the **constraint inventory**, the **7-axis quality-attribute utility tree**, the
   **data-flow diagram**, and the **threat-scaffold placeholder**, see the companion
   artifact: [Architecture overview](../architecture/overview.md).
 - For the workspace-wide project defaults (G-* ADR baseline projected at project
