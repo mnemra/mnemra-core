@@ -135,6 +135,18 @@ identifiers:
   artifact in one call, rather than reconstructing it by hand each session.
 - **Self-hostable:** a team can run the full core on its own infrastructure with data never
   leaving that boundary.
+- **Durable across restart:** stored context survives a host stop and restart, including a
+  hard kill. Every write acknowledged to a caller before the host stops is readable, with
+  the same content, after the host next starts — whether the stop was a clean shutdown, a
+  hard kill of the host process, or a hard kill of the embedded storage engine. This is
+  what "persistent" means wherever this brief says it of context; "persisted" in the Hard
+  constraints below names a storage *shape*, not this criterion. Verifiable: a restart
+  acceptance test writes through the agent-facing surface, stops the host each of the three
+  ways, starts it again against the same data location, and reads back equal content.
+  *(ADDED 2026-09-15 — maintainer ruling 2026-09-15: the brief promised persistence without
+  defining it, the Frame never weighed durability, and the V0 substrate spec narrowed
+  "persist" to storage shape, so the promise had no checker. This criterion is the anchor
+  the checker hangs from.)*
 - Commercial validation thresholds exist but live in the separate internal commercial
   record; they are not product success criteria and are not inlined here.
 
@@ -165,6 +177,21 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
 - **"Single-binary" constrains the server, not the deployment packaging.** It means one
   process (not a microservice mesh) — an immutable image/appliance is a valid packaging
   shape for that single binary and does not violate this constraint.
+- **Data lives outside the executable and its image, at a location the operator
+  configures.** A bare binary defaults to the operating system's per-user application-data
+  location and accepts an override; in a container, the operator mounts a volume at the
+  configured location, and the host can be told to require that mount and refuse to start
+  without it. *(MODIFIED 2026-09-17 — maintainer ruling 2026-09-17; was: "a container image
+  declares a mount point and the operator mounts a volume there". No claim is made about
+  what an image declares: an image-declared volume is not durable under `docker run --rm`,
+  and the image contract is parked until an image exists.)* Stored context SHALL NOT live
+  in a temporary directory,
+  in the executable's own directory, or in a container's writable layer. Whether the
+  location is local or network-backed is the operator's choice. *(ADDED 2026-09-15 —
+  maintainer ruling 2026-09-15, verbatim: "mnemra has to run as a container in many cases
+  not just an executable. The data should not be stored with the executable." An earlier
+  ruling's "persisted on the local filesystem" wording is superseded: it meant "not a
+  deleted temp dir", and "local" is not a constraint.)*
 - **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0 —
   NOT NULL, indexed, explicitly passed, forward-compatible without migration. This is what
   makes deferring tenant-hierarchy/policy enforcement safe: the scoping key ships now;
@@ -289,6 +316,7 @@ never silently dropped to what-exists-live.**
 - **A newsfeed capability** (working name) — pure thought, no provenance.
 - **A permissions model** — pure thought; explicitly needs research into the approach (see Open Decision OD-B).
 - **Per-user identity machinery** — owner-columns-as-identity, caller identity in the request context, real owner==caller checks. Activates per-user `visibility: owner-only` serving semantics (at V0 owner-only serves no one — the fail-closed enforcement is the V0 semantics) and is the first write/label-capability surface that fires the deferred write-side policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns from day one so this lands as a feature, not an excavation. Provenance: retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
+- **External Postgres server as the substrate engine** — an operator-provisioned Postgres reached over a connection string in place of the embedded engine, behind the same engine-agnostic `Storage` trait (P-0010 D5). When supported, durability of stored context is that server's responsibility, not the host's; the "Durable across restart" success criterion then binds the connection configuration surviving restart, not a host-owned data directory. Not V0: it moves the durability problem to the Postgres server rather than solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment — external Postgres is a future engine, not V0). *(ADDED 2026-09-17 — maintainer ruling 2026-09-17 at the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's format note, rather than living only in the V0 substrate spec's Out of Scope.)*
 
 ### Proposed
 
@@ -792,6 +820,27 @@ unsettled scope are named, not papered.
 
 ## Changelog
 
+- **2026-09-17** — Durability amendment approved at the maintainer's gate (ruling
+  2026-09-17). **Register:** ADDED the `idea`-tier entry for an external Postgres server as
+  the substrate engine — the entry the 2026-09-15 changelog carried as a draft is now a
+  real register entry by this ruling. **Hard constraints:** MODIFIED the data-location
+  constraint's container clause — the operator mounts a volume at the configured location
+  and the host can require it; the former "a container image declares a mount point"
+  wording is withdrawn (an image-declared volume is not durable, and the image contract is
+  parked in the V0 substrate spec until an image exists). Also ruled at the gate, recorded
+  in the spec rather than here: socket-only peer-authenticated cluster access ratified; the
+  replace-the-executable survival check locked in its bare-binary form; network-backed data
+  directories stay allowed, with the failover residual recorded as accepted.
+- **2026-09-15** — Durability amendment (labeled deltas; authored with the V0 substrate
+  spec's R-0116 and the overview's Reliability / durability axis, riding the same docs
+  change). **Success criteria:** ADDED "Durable across restart" — stored context survives
+  a host stop and restart including a hard kill, which is the first place this brief
+  defines what "persistent" means. **Hard constraints:** ADDED "Data lives outside the
+  executable and its image" — OS app-data default for a bare binary, a mounted volume for
+  a container, never a temporary directory or a container's writable layer; an earlier
+  "persisted on the local filesystem" wording is superseded. **Register (DRAFT, O2):** an
+  `idea`-tier entry for an external Postgres server as the substrate engine, flagged for
+  the maintainer's gate rather than locked. Register tiers otherwise unchanged.
 - **2026-07-11** — Plugin-distribution Stage-3 spec locked
   (`docs/specs/2026-07-07-plugin-distribution.md`, blob
   `10554ccdd6ae91731086b6fa6cba3de281a4fd49`; spec-exit gate accepted 2026-07-11) over the
@@ -1417,6 +1466,22 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   to a latency/storage trip-wire).
 - **Content-first with CQRS-real projections.** Mutations write content;
   projections rebuild reactively from content; reads hit projections.
+- **Durable across restart, at an operator-configured data location.** Stored content
+  survives a host stop and restart, including a hard kill of the host or of the embedded
+  engine (brief Success criteria "Durable across restart"); the embedded engine's data
+  directory lives outside the executable and its image — the OS per-user app-data
+  location by default for a bare binary, overridable; for a container, a volume the
+  operator mounts at the configured location, which the host can be told to require —
+  never a temporary directory (brief Hard
+  constraints "Data lives outside the executable and its image"). The quality-attribute
+  scenarios sit on the companion overview's Reliability / durability axis; the
+  requirement is the V0 substrate spec's R-0116, which also carries socket-only
+  peer-authenticated cluster access with no stored secret, the engine major-version guard,
+  exclusive ownership of the directory across restarts and machines, and the restart
+  acceptance. An
+  operator-provisioned external Postgres server is not a V0 engine (durability would then
+  be that server's responsibility); the V0 engine remains embedded Postgres per
+  [P-0010](../adrs/P-0010-storage-substrate-engine.md).
 - **The detailed layout of a single logical artifact across the four shapes** (whether a
   task lives in one row, in multiple tables in the content substrate, or fans across
   content + state + log substrates) is the central architectural fork at the Spec stage.
@@ -1568,7 +1633,7 @@ boundary is unambiguous:
 
 ## Pointers
 
-- For the **constraint inventory**, the **6-axis quality-attribute utility tree**, the
+- For the **constraint inventory**, the **7-axis quality-attribute utility tree**, the
   **data-flow diagram**, and the **threat-scaffold placeholder**, see the companion
   artifact: [Architecture overview](../architecture/overview.md).
 - For the workspace-wide project defaults (G-* ADR baseline projected at project
@@ -1732,6 +1797,7 @@ stage, not under re-derivation.
 | Schema-driven dynamic admin CLI subcommands generated from plugin manifests | Architecture alignment R1 |
 | License: Apache-2.0 with future-relicense clause | Brief Hard constraints (license lock 2026-05-20) |
 | Self-hosted-first single-binary deployment posture; immutable image is valid packaging | Brief Hard constraints; architecture alignment R6 |
+| Stored context survives a host stop and restart, including a hard kill of the host or of the embedded engine; data lives outside the executable and its image at an operator-configured location (OS per-user app-data default for a bare binary, overridable; for a container, a volume the operator mounts at the configured location, which the host can be told to require), never a temporary directory or a container's writable layer; whether the location is local or network-backed is the operator's choice; the host reaches the cluster only over a private unix socket by peer authentication, so no cluster credential is held at rest | Brief Success criteria "Durable across restart" + Hard constraints "Data lives outside the executable and its image" (maintainer ruling 2026-09-15); V0 substrate spec R-0116; the Reliability / durability axis below |
 | Workspace cutover from the prior tooling at V0; the prior task-store binary remains available as a rollback path | V0 discovery |
 | Rust-default toolchain; ecosystem-aligned tooling (non-Rust adopted only when no viable in-stack path exists) | Brief Hard constraints; workspace stack-discipline principle |
 | Test-Driven Development pairs on non-trivial work; worktrees mandatory; main is protected | Workspace test/worktree/main-protection principles |
@@ -1791,10 +1857,12 @@ then operational hardening).
 
 ## Quality-attribute utility tree
 
-Six axes. Four of these are workspace core values; two are mnemra-specific non-functional
-requirements that surfaced as load-bearing in V0 discovery. Reversibility is folded into
-conflict-resolution discipline (cutover rollback path preserved per V0 discovery WC.x)
-rather than scored as its own axis.
+Seven axes. Four of these are workspace core values; one is the workspace supporting value
+Reliability, scored as its own axis once the brief defined what "persistent" means
+(brief Success criteria "Durable across restart", maintainer ruling 2026-09-15); two are mnemra-specific
+non-functional requirements that surfaced as load-bearing in V0 discovery. Reversibility
+is folded into conflict-resolution discipline (cutover rollback path preserved per V0
+discovery WC.x) rather than scored as its own axis.
 
 ### Security (load-bearing — multi-tenancy is structural)
 
@@ -1837,6 +1905,31 @@ rather than scored as its own axis.
 | Storage-independent emission | With no persistent observability backend configured, N MCP verb calls produce N observable metric emissions on the OTel/stdout surface; `\d+` shows no metrics/events hypertable and `\dx` does not list `timescaledb`. |
 | Generation at the bare shell | A structured log line appears on stdout and `GET /health` returns a response *before* the embedded Postgres is initialized (health endpoint is the first API). |
 | Health-endpoint shape | A request to `/health` returns a structured detail body identifying which dependency failed (Postgres reachable / `pgvector` loaded / workspace=default exists), e.g. 503 when a dependency is down. The listener binds loopback-only (`127.0.0.1`) at V0, so **loopback IS the gate** — every caller is necessarily on loopback and receives the detail body; there is no admin-token gating at V0. *(Named tripwire: if the `/health` listener ever binds non-loopback, admin-token gating on the detail body becomes required.)* |
+
+### Reliability / durability (workspace supporting value — restart survival)
+
+The brief's "Durable across restart" success criterion and "Data lives outside the
+executable and its image" hard constraint (maintainer ruling 2026-09-15) are the
+product-tier inputs; the V0 substrate spec's R-0116 is the requirement. Scenarios are written as
+`[stimulus, environment, response, measure]`. The stated reliability target for this axis
+(indicator, objective and window, what a breach obliges): **indicator** — the fraction of
+writes acknowledged to a caller before a stop that read back with identical content after
+the next start, read from the caller's side over the MCP surface; **objective** — 100% on
+every restart, with no window because the property is per-restart, not a rate;
+**breach** — the restart acceptance gate (`verify-smoke`) fails and blocks merge, and in
+operation a start that cannot honor the invariant refuses to serve (version mismatch,
+data directory in use) rather than serving a partial or empty store. No availability
+(uptime) target is stated for the host at V0; that absence is recorded here as a
+decision, not a blank.
+
+| Refinement | Scenario |
+|---|---|
+| Clean stop, then restart | *Stimulus:* SIGTERM to a host holding N acknowledged artifact writes. *Environment:* the production binary against an operator-configured data directory (`MNEMRA_DATA_DIR`), not a temporary one. *Response:* the host drains, stops the embedded postmaster, exits; a new host process starts against the same directory without re-initializing the cluster. *Measure:* every one of the N artifacts reads back via `artifact.get` with `frontmatter` and `body` equal to the pre-stop read, and the cluster's `system_identifier` is unchanged across the two starts. |
+| Hard kill of the host | *Stimulus:* SIGKILL to the host process. *Environment:* as above; the embedded postmaster, daemonized by `pg_ctl`, survives the host and holds `postmaster.pid` against the data directory. *Response:* the next host start reclaims ownership from the dead same-boot holder recorded in `host.lock`, identifies the orphan as a live postmaster only on a full match (host uid, `-D <data_dir>/pg` in argv, start time matching the pidfile), stops it cleanly, and starts its own; a pid that fails the match is never signalled and the start refuses instead. *Measure:* every acknowledged pre-kill write reads back equal; exactly one postmaster runs against the directory afterwards; the second start does not re-initialize; an unrelated process holding a reused pid survives. |
+| Hard kill of the storage engine | *Stimulus:* SIGKILL to the embedded postmaster, leaving a stale `postmaster.pid` (dead PID) and unflushed OS buffers. *Environment:* Postgres durability defaults intact (`fsync`, `synchronous_commit`, `full_page_writes` all `on`). *Response:* the next host start runs WAL crash recovery and serves. *Measure:* every write acknowledged before the kill reads back equal; no write acknowledged is missing. |
+| Engine major-version mismatch | *Stimulus:* a host whose pinned engine major differs from the `PG_VERSION` of an existing data directory. *Environment:* an operator upgrading the binary in place. *Response:* the host refuses to start before any postmaster start, with a structured error naming the directory, the found major and the engine major, and touches nothing under the directory. *Measure:* the refusal is the host's own error, the directory's bytes are unchanged, and no second (empty) cluster is initialized beside the old one. |
+| Two hosts, one directory | *Stimulus:* a second host started against a data directory a live host already owns — on the same machine, or on another machine sharing a network mount. *Environment:* any deployment shape; on a network mount the lock semantics may be local-only, so the lock alone is not the fence. *Response:* the second host exits with a structured `data_dir_in_use` error — on the same machine because the lock is held, on another machine because the `host.lock` holder record carries a foreign hostname and boot id, which is refused without any liveness test; the first host and its postmaster are undisturbed. *Measure:* the first host's writes continue to read back; exactly one postmaster runs against the directory; the holder record is unchanged. |
+| Replace the executable | *Stimulus:* between the stop and the start, the executable is replaced — minimally, the same binary run from a different filesystem path. *Environment:* a bare-binary deployment; the container form (recreate from a different image, same volume) is parked with the image contract in the spec's Out of Scope until an image exists. *Response:* the new host starts against the same data location. *Measure:* every acknowledged pre-stop write reads back equal (spec R-0116-j, locked in the bare-binary form by maintainer ruling 2026-09-17). |
 
 ### ABI evolution discipline (mnemra-NFR)
 

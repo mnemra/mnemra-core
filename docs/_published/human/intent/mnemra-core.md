@@ -108,6 +108,18 @@ marketing-tier labels** denoting product-promise milestones, distinct from Seman
   artifact in one call, rather than reconstructing it by hand each session.
 - **Self-hostable:** a team can run the full core on its own infrastructure with data never
   leaving that boundary.
+- **Durable across restart:** stored context survives a host stop and restart, including a
+  hard kill. Every write acknowledged to a caller before the host stops is readable, with
+  the same content, after the host next starts, whether the stop was a clean shutdown, a
+  hard kill of the host process, or a hard kill of the embedded storage engine. This is
+  what "persistent" means wherever this brief says it of context. "Persisted" in the Hard
+  constraints below names a storage *shape*, not this criterion. Verifiable: a restart
+  acceptance test writes through the agent-facing surface, stops the host each of the three
+  ways, starts it again against the same data location, and reads back equal content.
+  *(ADDED 2026-09-15, maintainer ruling 2026-09-15: the brief promised persistence without
+  defining it, the Frame (the constraint-locking stage of the pipeline) never weighed
+  durability, and the V0 substrate spec narrowed "persist" to storage shape, so the promise
+  had no checker. This criterion is the anchor the checker hangs from.)*
 - Commercial validation thresholds exist but live in the separate internal commercial
   record; they aren't product success criteria and aren't inlined here.
 
@@ -140,6 +152,20 @@ used where the requirement is observable):
 - **"Single-binary" constrains the server, not the deployment packaging.** It means one
   process, not a microservice mesh. An immutable image or appliance is a valid packaging
   shape for that single binary and doesn't violate this constraint.
+- **Data lives outside the executable and its image, at a location the operator
+  configures.** A bare binary defaults to the operating system's per-user application-data
+  location and accepts an override. In a container, the operator mounts a volume at the
+  configured location, and the host can be told to require that mount and refuse to start
+  without it. *(MODIFIED 2026-09-17, maintainer ruling 2026-09-17; was: "a container image
+  declares a mount point and the operator mounts a volume there". No claim is made about
+  what an image declares: an image-declared volume isn't durable under `docker run --rm`,
+  and the image contract is parked until an image exists.)* Stored context SHALL NOT live
+  in a temporary directory, in the executable's own directory, or in a container's writable
+  layer. Whether the location is local or network-backed is the operator's choice.
+  *(ADDED 2026-09-15, maintainer ruling 2026-09-15, verbatim: "mnemra has to run as a
+  container in many cases not just an executable. The data should not be stored with the
+  executable." An earlier ruling's "persisted on the local filesystem" wording is
+  superseded: it meant "not a deleted temp dir", and "local" is not a constraint.)*
 - **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0:
   NOT NULL, indexed, explicitly passed, and forward-compatible without migration. This is what
   makes deferring tenant-hierarchy/policy enforcement safe. The scoping key ships now; hierarchy
@@ -324,6 +350,16 @@ dropped to what-exists-live.**
   policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns
   from day one, so this lands as a feature rather than an excavation. Provenance:
   retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
+- **External Postgres server as the substrate engine.** An operator-provisioned Postgres
+  reached over a connection string in place of the embedded engine, behind the same
+  engine-agnostic `Storage` trait (P-0010 D5). When supported, durability of stored context
+  is that server's responsibility, not the host's; the "Durable across restart" success
+  criterion then binds the connection configuration surviving restart, not a host-owned data
+  directory. Not V0: it moves the durability problem to the Postgres server rather than
+  solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment; external
+  Postgres is a future engine, not V0). *(ADDED 2026-09-17, maintainer ruling 2026-09-17 at
+  the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's
+  format note, rather than living only in the V0 substrate spec's Out of Scope section.)*
 
 ### Proposed
 
@@ -821,6 +857,27 @@ unsettled scope are named, not papered over.
 
 ## Changelog
 
+- **2026-09-17**: Durability amendment approved at the maintainer's gate (ruling
+  2026-09-17). **Register:** ADDED the `idea`-tier entry for an external Postgres server as
+  the substrate engine. The entry the 2026-09-15 changelog carried as a draft is now a real
+  register entry by this ruling. **Hard constraints:** MODIFIED the data-location
+  constraint's container clause. The operator mounts a volume at the configured location and
+  the host can require it; the former "a container image declares a mount point" wording is
+  withdrawn (an image-declared volume isn't durable, and the image contract is parked in the
+  V0 substrate spec until an image exists). Also ruled at the gate and recorded in the spec
+  rather than here: socket-only peer-authenticated cluster access ratified; the
+  replace-the-executable survival check locked in its bare-binary form; network-backed data
+  directories stay allowed, with the failover residual recorded as accepted.
+- **2026-09-15**: Durability amendment (labeled deltas; authored with the V0 substrate
+  spec's R-0116 and the overview's Reliability / durability axis, riding the same docs
+  change). **Success criteria:** ADDED "Durable across restart": stored context survives a
+  host stop and restart including a hard kill, which is the first place this brief defines
+  what "persistent" means. **Hard constraints:** ADDED "Data lives outside the executable
+  and its image": an OS app-data default for a bare binary, a mounted volume for a
+  container, never a temporary directory or a container's writable layer; an earlier
+  "persisted on the local filesystem" wording is superseded. **Register (DRAFT, O2):** an
+  `idea`-tier entry for an external Postgres server as the substrate engine, flagged for
+  the maintainer's gate rather than locked. Register tiers otherwise unchanged.
 - **2026-07-11**: Plugin-distribution Stage-3 spec locked
   (`docs/specs/2026-07-07-plugin-distribution.md`, blob
   `10554ccdd6ae91731086b6fa6cba3de281a4fd49`; spec-exit gate accepted 2026-07-11) over the
