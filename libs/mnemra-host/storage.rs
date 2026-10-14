@@ -70,6 +70,10 @@ pub struct Record {
 /// `async-trait` rewrites `async fn` to return `Box<dyn Future>`, preserving
 /// object-safety so the host can hold `Box<dyn Transaction>` without knowing
 /// the concrete adapter type at compile time.
+#[expect(
+    clippy::double_must_use,
+    reason = "async-trait 0.1.89 adds a bare #[must_use] to each generated method whose Pin<Box<dyn Future>> return is already must_use; clippy 1.99 reports double_must_use. An expect, not an allow: verify-lint fails once async-trait stops injecting it (0.1.92 does) or on an older clippy that doesn't flag it"
+)]
 #[async_trait]
 pub trait Transaction: Send {
     /// Insert or replace a record by key within this transaction's workspace.
@@ -106,6 +110,10 @@ pub trait Transaction: Send {
 /// The sole entry point is `begin`, which opens a transaction scoped to a
 /// workspace. Per-write autocommit is not expressible through this API —
 /// callers must explicitly commit (P-0010 D5).
+#[expect(
+    clippy::double_must_use,
+    reason = "async-trait 0.1.89 adds a bare #[must_use] to each generated method whose Pin<Box<dyn Future>> return is already must_use; clippy 1.99 reports double_must_use. An expect, not an allow: verify-lint fails once async-trait stops injecting it (0.1.92 does) or on an older clippy that doesn't flag it"
+)]
 #[async_trait]
 pub trait Storage: Send + Sync {
     /// Open a new transaction scoped to `workspace`.
