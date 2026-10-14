@@ -498,6 +498,147 @@ verify-coverage-membership:
     fi
     echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [19], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
 
+# ---------------------------------------------------------------------------
+# Supply-chain advisory scan (brain #3566; related #3617, #2278, #3604).
+# ---------------------------------------------------------------------------
+#
+# `cargo deny check` with no WHICH argument runs every check cargo-deny
+# knows about — advisories, bans, licenses, sources — rather than an
+# enumerated allow-list of check names this recipe would have to keep in
+# sync by hand. Opt-out polarity: a future deny.toml section is covered
+# automatically, with no justfile edit and no chance of a silently-dropped
+# check name.
+#
+# Only `[advisories]` and `[licenses]` have a section in deny.toml today;
+# `bans` and `sources` run on cargo-deny's own built-in defaults (confirmed
+# via `cargo deny init`: multiple-versions = "warn", wildcards = "allow",
+# unknown-registry = "warn", unknown-git = "warn" — none of those DENY by
+# default, so those two checks run but have little today that could fail
+# them; they print warnings this gate does not read). All four pass cleanly
+# today (measured 2026-09-27). Folding bans/licenses/sources in alongside
+# advisories costs nothing and closes the same "deny.toml exists but is
+# never invoked" gap for licenses that this task was filed to close for
+# advisories (deny.toml's [licenses] section has sat unused since #1881).
+#
+# No `plugin` / `build` prerequisite: cargo-deny reads Cargo.lock and cargo
+# metadata only, never compiles anything.
+#
+# `--color never`: CI's `dtolnay/rust-toolchain@stable` step writes
+# `CARGO_TERM_COLOR=always` into GITHUB_ENV for every later step in the job,
+# and cargo-deny honours it — its summary line then carries ANSI codes
+# around each `ok`/`FAILED` token, and the non-vacuity grep below never
+# matches, so every CI run of this gate FAILs regardless of the real result
+# (found in review, reproduced locally with `CARGO_TERM_COLOR=always`).
+# Force `never` regardless of the ambient environment; this gate parses
+# cargo-deny's own text output and cannot afford to have it decorated.
+#
+# `--locked`: assert Cargo.lock does not change under this check — a gate is
+# a read, never a write, and `--locked` is what turns a resolution drift
+# (Cargo.toml and Cargo.lock disagreeing) into a loud failure here instead
+# of a silent mutation.
+#
+# This gate re-fetches the RustSec advisory database on every invocation
+# (no --disable-fetch) — a real network call, same class as
+# verify-cold-start's GitHub download. A failure here needs the same triage
+# discipline: read what actually failed (a reported vulnerability/yanked/
+# unsound/unmaintained/license/ban/source violation) before concluding a
+# network hiccup is a regression. Two failure shapes are labelled on the
+# GATE line itself, mirroring verify-cold-start's classification: cargo-deny
+# unavailable to `cargo` (checked up front via `cargo deny --version`, before
+# any network call — install hint printed; NOT a raw `command -v cargo-deny`
+# PATH check, which would misreport an install cargo can still reach through
+# $CARGO_HOME/bin, confirmed by seeding both directions) and an
+# advisory-database fetch failure (cargo-deny's own `failed to fetch advisory
+# database` log line, MEASURED against a deliberately unreachable `db-urls`
+# host). Anything else — including every
+# real finding this gate exists to catch — prints the plain "GATE advisories
+# FAIL" with no label. A FAIL from any one of the four checks still prints
+# that same line — this gate does not distinguish which of the four failed
+# in its own GATE line; read cargo-deny's own output above it for that.
+#
+# Non-vacuity: cargo-deny's own summary line carries one `<check>
+# ok`/`<check> FAILED` token per check it ran. `cargo deny check` with no
+# WHICH argument always runs all four regardless of deny.toml's content, so
+# a deny.toml edit alone cannot drop one — this loop instead guards the
+# recipe's OWN invocation and cargo-deny's own output shape: a future edit
+# that narrows the `cargo deny check` call above to fewer checks (e.g.
+# someone "optimizes" it to `check advisories`), or a cargo-deny upgrade
+# that changes its summary line format, fails this gate instead of quietly
+# reporting PASS over less coverage than the GATE line claims. Seeded: with
+# the invocation temporarily narrowed to `cargo deny check advisories`, this
+# loop's first iteration (`bans`) reports its missing token and the gate
+# FAILs — the loop exits on the first miss, it does not accumulate every
+# missing token in one run (verified during authoring, then reverted).
+verify-advisories:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    set +e
+    version_probe="$(cargo deny --version 2>&1)"
+    version_code=$?
+    set -e
+    if [[ "$version_code" -ne 0 ]]; then
+        echo "$version_probe"
+        echo "verify-advisories: cargo-deny is not available to \`cargo deny\` (checked via \`cargo deny --version\`, not raw PATH — cargo also resolves a subcommand through \$CARGO_HOME/bin, which a plain \`command -v cargo-deny\` would miss). Install it: cargo install --locked cargo-deny --version 0.19.0 (the version .github/workflows/ci.yml pins)."
+        echo "GATE advisories FAIL (apparatus — cargo-deny missing)"
+        exit 1
+    fi
+    # Pin check (#3646): the RUSTSEC-2026-0327 ignore in deny.toml is valid ONLY
+    # while Cargo.lock holds wasmtime exactly 45.0.2 (async lifts are rejected
+    # there; from 46.0.0 the feature defaults on and the advisory is reachable).
+    # Nothing in cargo-deny fires between 46.0.3 and the fixed releases, so this
+    # asserts it directly. Fails closed: an unreadable deny.toml, or a lock with
+    # no single `name = "wasmtime"` package block / unparseable version, is a
+    # FAIL, never a pass. The block is matched by exact `name` line, so
+    # wasmtime-environ and friends cannot match. (A cargo-deny [bans] version
+    # range does not work for this: on 0.19.0 it silently misses 45.0.2.)
+    # Armed by the ID appearing ANYWHERE in deny.toml, comments included, not by
+    # one syntax: cargo-deny honours a bare string, `{ reason = .., id = .. }`,
+    # single quotes and [[advisories.ignore]] too, and a text-form match would
+    # skip them (fail open). A leftover mention keeps the check armed, which is
+    # the intended direction. Residual: a TOML \u escape of the ID is honoured
+    # by cargo-deny and evades this; only deliberate evasion writes that, and
+    # such a person could edit this recipe, so a TOML parser is not worth it.
+    set +e
+    grep -qF 'RUSTSEC-2026-0327' deny.toml
+    ignore_code=$?
+    set -e
+    if [[ "$ignore_code" -gt 1 ]]; then
+        echo "verify-advisories: cannot read deny.toml to check the RUSTSEC-2026-0327 pin — failing closed (#3646)"
+        echo "GATE advisories FAIL (pin check — deny.toml unreadable)"
+        exit 1
+    fi
+    if [[ "$ignore_code" -eq 0 ]]; then
+        set +e
+        wasmtime_versions="$(awk '$0 == "name = \"wasmtime\"" { getline; print }' Cargo.lock 2>/dev/null)"
+        set -e
+        if [[ "$wasmtime_versions" != 'version = "45.0.2"' ]]; then
+            echo "verify-advisories: deny.toml ignores RUSTSEC-2026-0327, which holds ONLY on wasmtime 45.0.2, but Cargo.lock's wasmtime package block reads: '${wasmtime_versions:-<none found or unparseable>}'. After a wasmtime bump the advisory can be reachable: remove the RUSTSEC-2026-0327 ignore and the stale -0269/-0222 ones, and take wasmtime to >=48.0.4,<49 or >=49.0.2 with component-model-async explicitly off (#3646)."
+            echo "GATE advisories FAIL (pin check — RUSTSEC-2026-0327 ignore without wasmtime 45.0.2, #3646)"
+            exit 1
+        fi
+    fi
+    set +e
+    output="$(cargo deny --color never --locked check 2>&1)"
+    code=$?
+    set -e
+    echo "$output"
+    if [[ "$code" -ne 0 ]]; then
+        if grep -qE 'failed to fetch advisory database' <<< "$output"; then
+            echo "GATE advisories FAIL (apparatus — advisory DB fetch)"
+        else
+            echo "GATE advisories FAIL"
+        fi
+        exit 1
+    fi
+    for check in advisories bans licenses sources; do
+        if ! grep -qE "${check} ok" <<< "$output"; then
+            echo "verify-advisories: expected '${check} ok' in cargo-deny's summary line, not found — either this recipe's own \`cargo deny check\` invocation was narrowed to fewer checks, or cargo-deny changed its summary output format"
+            echo "GATE advisories FAIL"
+            exit 1
+        fi
+    done
+    echo "GATE advisories PASS"
+
 # Verify: coverage — PG shard (embedded-Postgres binary set; the disk-heavy
 # set that drove the runner-disk roulette — see the spec's Purpose/context).
 # Emits its OWN per-shard coverage number over PG_TEST_FLAGS only (R-0095 —
@@ -771,7 +912,7 @@ verify-cold-start:
 #
 # Local `just ci` retains FULL-chain coverage (R-0098): verify-coverage below
 # delegates to BOTH shard recipes, so this chain runs every shard.
-_ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-cold-start verify-signing-root
+_ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-advisories verify-test verify-test-hooks verify-coverage verify-build verify-smoke verify-cold-start verify-signing-root
 
 # Internal: the verify-* prerequisite chain MINUS coverage (R-0094) — used by
 # the CI workflow's main "CI gates" job. Coverage runs in its own separate CI
@@ -784,7 +925,7 @@ _ci-verify-chain: verify-type verify-lint verify-coverage-membership verify-test
 # preserved). Local `just ci` does NOT use this recipe — it always runs the
 # full chain above, coverage included; local disk has no runner-fleet
 # roulette (R-0098).
-_ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership verify-test verify-test-hooks verify-build verify-smoke verify-cold-start verify-signing-root
+_ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership verify-advisories verify-test verify-test-hooks verify-build verify-smoke verify-cold-start verify-signing-root
 
 # CI entry point (R-0018-c, R-0018-f) — runs the given `chain` recipe (default:
 # `_ci-verify-chain`, the full chain including coverage) wrapped in a

@@ -127,6 +127,15 @@ jobs:
         with:
           tool: just@1.51.0
 
+      # Pinned version, same install path as `just`/`cargo-llvm-cov` above and
+      # below — no unpinned `curl | sh` (brain #3566). `verify-advisories`
+      # (wired into `_ci-verify-chain-nocoverage`, run below) needs this on
+      # PATH.
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.0
+
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
