@@ -126,7 +126,7 @@ sign-ceremony key wasm manifest:
 # verify-test and passes anyway).
 PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_behavior --test artifact_list_paging --test artifact_list_paging_whitebox --test artifact_machinery --test content_schema --test coordination_failclosed --test coordination_leases --test coordination_messages --test coordination_schema --test coordination_session_plane --test identity_builtins --test invoke_health_gate --test mcp_server --test mcp_slice1_e2e --test mcp_verb_gate --test postgres_engine --test schema_init --test startup_population --test startup_run_full --test storage_contract_postgres --test tenancy_isolation"
 
-# Non-PG integration test binaries (18 members).
+# Non-PG integration test binaries (19 members).
 # These run at the default thread count — serialization is scoped to PG tests only (R-0021).
 # health_listener (T4, #1991, R-0022-b/R-0004-g): uses sqlx::connect_lazy against an
 # unreachable address to get a deterministic overall:"down" body — no embedded Postgres
@@ -142,7 +142,15 @@ PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_beh
 # coordination_message_types (Task 6, coordination-wedge, R-0070/R-0071):
 # pure host-code closed-schema validation over in-memory JSON payloads — no
 # embedded Postgres engine needed, so it belongs here, not in PG_TEST_FLAGS.
-NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test content_hash_binding --test coordination_message_types --test health_listener --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
+# lint_engine_construction (Task 6, R-0032): source-parsing guard lint over
+# libs/mnemra-host/tests/ — no embedded Postgres engine needed, so it belongs
+# here, not in PG_TEST_FLAGS.
+# NOTE (F10, dispatch 1713 review): lint_engine_construction also runs inside
+# verify-lint below (fast-fail alongside the other source lints) *and* here
+# via NONPG_TEST_FLAGS (verify-coverage-membership consistency). Deliberate
+# double-run, not an accident — 0.24s cost, two independent reasons to keep
+# it in both places.
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test content_hash_binding --test coordination_message_types --test health_listener --test lint_engine_construction --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
@@ -166,10 +174,15 @@ verify-lint:
     if cargo clippy --workspace --exclude mnemra-echo -- -D warnings 2>&1 \
         && cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings 2>&1 \
         && cargo fmt --all --check 2>&1 \
-        && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_workspace_clause 2>&1; then
+        && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_workspace_clause 2>&1 \
+        && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_engine_construction 2>&1; then
         # Checks, in order: host-crate clippy (deny warnings); plugin clippy for
         # wasm32-wasip2; fmt check (no --fix); WHERE-clause lint (R-0018-d) — every
-        # read-path host-fn must reference ctx.workspace_id.
+        # read-path host-fn must reference ctx.workspace_id; engine-construction
+        # guard lint (R-0032) — no EmbeddedEngine::start / start_embedded /
+        # postgresql_embedded outside the shared-engine fixture. (F10: this lint
+        # also runs via NONPG_TEST_FLAGS below — deliberate double-run, see the
+        # NOTE at NONPG_TEST_FLAGS's definition.)
         echo "GATE lint PASS"
     else
         echo "GATE lint FAIL"
@@ -397,7 +410,7 @@ verify-test-hooks: plugin
 # NONPG_TEST_FLAGS occurrence first, then check for PG_TEST_FLAGS in what's
 # left — that unambiguously finds only genuine standalone references.
 #
-# Count-pins PG_TEST_FLAGS=23 / NONPG_TEST_FLAGS=18 (mirrors the project's
+# Count-pins PG_TEST_FLAGS=23 / NONPG_TEST_FLAGS=19 (mirrors the project's
 # non-vacuity count-pin convention, e.g. verify-test's coordination_messages
 # 6/8 pin) so a silently emptied or partially-dropped variable fails loudly
 # rather than passing on token-presence alone.
@@ -464,8 +477,8 @@ verify-coverage-membership:
         echo "membership check FAIL: PG_TEST_FLAGS has $pg_count members, expected 23 (update this pin if the variable's membership intentionally changed)"
         fail=1
     fi
-    if [[ "$nonpg_count" -ne 18 ]]; then
-        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 18 (update this pin if the variable's membership intentionally changed)"
+    if [[ "$nonpg_count" -ne 19 ]]; then
+        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 19 (update this pin if the variable's membership intentionally changed)"
         fail=1
     fi
 
@@ -483,7 +496,7 @@ verify-coverage-membership:
         echo "GATE coverage-membership FAIL"
         exit 1
     fi
-    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [18], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
+    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [19], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
 
 # Verify: coverage — PG shard (embedded-Postgres binary set; the disk-heavy
 # set that drove the runner-disk roulette — see the spec's Purpose/context).

@@ -77,6 +77,13 @@ quote = "1.0.45"
 # `<test-binary-crate>=trace`, which would exclude `mnemra_host` events.
 tracing-test = { version = "0.2.6", features = ["no-env-filter"] }
 syn = { version = "2.0.117", features = ["full", "extra-traits"] }
+# R-0032 guard lint: the whole-file token walk (tests/lint_engine_construction.rs)
+# scans every tests/ file's TokenStream/TokenTree for the engine-construction
+# idents, so no AST position can hide one. Already a transitive dep of `syn` — this adds
+# no new supply-chain reach, only makes its TokenStream/TokenTree types
+# directly nameable. MIT OR Apache-2.0 (green-tier). Pinned to the version
+# already locked by the existing syn/quote graph (Cargo.lock).
+proc-macro2 = "1.0.106"
 tempfile = "3.27.0"
 tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
 trybuild = "1.0.116"
