@@ -1751,6 +1751,7 @@ dependencies = [
  "libc",
  "postgresql_embedded",
  "postgresql_extensions",
+ "proc-macro2",
  "quote",
  "rand 0.10.1",
  "rmcp",
