@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/ui/no_test_seams/register_module_rejects_unverified_allowlist.rs:10:55
+   |
+10 |     let _ = pool.register_module("x", "0", component, &HostFnAllowlist::default());
+   |                  ---------------                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `&VerifiedGrants`, found `&HostFnAllowlist`
+   |                  |
+   |                  arguments to this method are incorrect
+   |
+   = note: expected reference `&VerifiedGrants`
+              found reference `&HostFnAllowlist`
+note: method defined here
+  --> plugin/pool.rs
+   |
+   |     pub fn register_module(
+   |            ^^^^^^^^^^^^^^^

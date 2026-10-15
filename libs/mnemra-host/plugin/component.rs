@@ -42,11 +42,13 @@
 use std::cell::Cell;
 
 use uuid::Uuid;
+use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Instance, Linker};
 use wasmtime::{ResourceLimiter, Store};
 
 use sqlx::PgPool;
 
+use crate::plugin::allowlist::VerifiedGrants;
 use crate::plugin::limits::MEMORY_MAX_BYTES;
 
 // ---------------------------------------------------------------------------
@@ -721,8 +723,103 @@ impl mnemra::host::echo::Host for HostState {
 // Linker construction
 // ---------------------------------------------------------------------------
 
+/// Namespace prefix of every host-provided interface a plugin may import.
+/// Everything under it is a host function and is subject to the allowlist;
+/// imports outside it (WASI) are inert trap-stubs, never capability grants.
+const HOST_INTERFACE_PREFIX: &str = "mnemra:host/";
+
+/// A plugin component imports a host function its signed manifest does not
+/// declare (P-0003, R-0003-b). Raised at link time, before any instance exists.
+#[derive(Debug, PartialEq, Eq)]
+pub struct UndeclaredHostFn {
+    /// The manifest-style name (`artifact.delete`) of the offending import.
+    pub host_fn: String,
+}
+
+impl std::fmt::Display for UndeclaredHostFn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "plugin imports host function '{}' that its manifest [host_fns] does not declare \
+             (R-0003-b)",
+            self.host_fn
+        )
+    }
+}
+
+impl std::error::Error for UndeclaredHostFn {}
+
+/// The interface name of a host import (`mnemra:host/artifact@0.0.2` ->
+/// `artifact`), or `None` for an import outside the `mnemra:host/` namespace.
+fn host_interface(instance_name: &str) -> Option<&str> {
+    let iface = instance_name.strip_prefix(HOST_INTERFACE_PREFIX)?;
+    Some(iface.split('@').next().unwrap_or(iface))
+}
+
+/// Manifest-style name of a host function: `<interface>.<function>`, with the
+/// interface prefix stripped from the function name where WIT repeats it
+/// (`artifact` + `artifact-create` -> `artifact.create`;
+/// `echo` + `increment-counter` -> `echo.increment-counter`).
+fn manifest_host_fn_name(iface: &str, func: &str) -> String {
+    let short = func
+        .strip_prefix(iface)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .unwrap_or(func);
+    format!("{iface}.{short}")
+}
+
+/// Refuse a component that imports any host function absent from `grants`.
+///
+/// Complete mediation (control-integrity CI2/CI3): EVERY import under
+/// `mnemra:host/` is checked, and anything that is not a plain function of a
+/// plain interface instance (a bare function, a nested instance, a module) is
+/// refused outright rather than enumerated as forbidden. The check ranges over
+/// the component's own import table, so a function the manifest declares but
+/// the component never imports grants nothing, and one it imports but the
+/// manifest omits fails the load.
+fn check_host_fn_imports(
+    engine: &wasmtime::Engine,
+    component: &Component,
+    grants: &VerifiedGrants,
+) -> Result<(), UndeclaredHostFn> {
+    let ty = component.component_type();
+    for (name, ext) in ty.imports(engine) {
+        let Some(iface) = host_interface(name) else {
+            continue;
+        };
+        let ComponentItem::ComponentInstance(instance) = &ext.ty else {
+            return Err(UndeclaredHostFn {
+                host_fn: name.to_owned(),
+            });
+        };
+        for (func, item) in instance.exports(engine) {
+            match item.ty {
+                ComponentItem::ComponentFunc(_) => {}
+                // Type and resource declarations carry no callable of their own.
+                ComponentItem::Type(_) | ComponentItem::Resource(_) => continue,
+                _ => {
+                    return Err(UndeclaredHostFn {
+                        host_fn: format!("{name}#{func}"),
+                    });
+                }
+            }
+            let host_fn = manifest_host_fn_name(iface, func);
+            if !grants.is_host_fn_allowed(&host_fn) {
+                return Err(UndeclaredHostFn { host_fn });
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Build a component `Linker<HostState>` that registers the host-fn import
 /// bodies and trap-stubs every other import of `component` (R-0012-a, R-0006-a).
+///
+/// The per-plugin host-fn allowlist is enforced HERE, at link time, before any
+/// instance exists (P-0003, R-0003-b): a component importing a host function its
+/// manifest does not declare yields `Err(UndeclaredHostFn)` and no linker.
+/// `grants` is required and can only come from a verified manifest or
+/// `VerifiedGrants::deny_all()`, so an absent declaration fails closed.
 ///
 /// The wired imports (`artifact`, `echo`) come from the bindgen-generated
 /// `add_to_linker`; the remaining imports (WASI) are filled with trapping stubs
@@ -732,7 +829,10 @@ impl mnemra::host::echo::Host for HostState {
 pub fn build_linker(
     engine: &wasmtime::Engine,
     component: &Component,
+    grants: &VerifiedGrants,
 ) -> Result<Linker<HostState>, Box<dyn std::error::Error>> {
+    check_host_fn_imports(engine, component, grants)?;
+
     let mut linker: Linker<HostState> = Linker::new(engine);
 
     // Allow the real host-fn bodies to SHADOW the trap-stubs. Order matters:
@@ -897,4 +997,114 @@ pub fn content_delete(
     // See `content_create`: the accessor takes `&String`, not `&str`.
     #[allow(clippy::unnecessary_to_owned)]
     content.call_delete(&mut *store, &id.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin::allowlist::HostFnAllowlist;
+    use crate::plugin::limits::build_engine;
+    use crate::plugin::manifest::HostFnsSection;
+
+    fn allow(names: &[&str]) -> VerifiedGrants {
+        VerifiedGrants::new(
+            HostFnAllowlist::from_manifest(&HostFnsSection {
+                required: names.iter().map(|s| (*s).to_owned()).collect(),
+                optional: vec![],
+            }),
+            &[],
+        )
+    }
+
+    fn component_importing(engine: &wasmtime::Engine, instance: &str, func: &str) -> Component {
+        let wat =
+            format!(r#"(component (import "{instance}" (instance (export "{func}" (func)))))"#);
+        Component::new(engine, wat).expect("fixture component must compile")
+    }
+
+    #[test]
+    fn import_name_maps_to_manifest_name() {
+        assert_eq!(
+            host_interface("mnemra:host/artifact@0.0.2"),
+            Some("artifact")
+        );
+        assert_eq!(host_interface("wasi:io/poll@0.2.6"), None);
+        assert_eq!(
+            manifest_host_fn_name("artifact", "artifact-create"),
+            "artifact.create"
+        );
+        assert_eq!(manifest_host_fn_name("echo", "echo"), "echo.echo");
+        assert_eq!(
+            manifest_host_fn_name("echo", "increment-counter"),
+            "echo.increment-counter"
+        );
+    }
+
+    #[test]
+    fn undeclared_host_import_is_refused_and_declared_is_permitted() {
+        let engine = build_engine().expect("engine");
+        let c = component_importing(&engine, "mnemra:host/artifact@0.0.2", "artifact-frob");
+
+        let err = check_host_fn_imports(&engine, &c, &allow(&["artifact.create"]))
+            .expect_err("undeclared import must be refused");
+        assert_eq!(err.host_fn, "artifact.frob");
+        assert!(
+            check_host_fn_imports(&engine, &c, &VerifiedGrants::deny_all()).is_err(),
+            "deny_all denies every host fn"
+        );
+        assert!(check_host_fn_imports(&engine, &c, &allow(&["artifact.frob"])).is_ok());
+    }
+
+    /// Non-host imports are not mediated here: they stay inert trap-stubs
+    /// (`build_linker`), and `deny.toml` bans the crates that could give them
+    /// real bodies.
+    #[test]
+    fn non_host_imports_are_left_to_trap_stubs() {
+        let engine = build_engine().expect("engine");
+        let c = component_importing(&engine, "wasi:io/poll@0.2.6", "poll-thing");
+
+        assert!(check_host_fn_imports(&engine, &c, &VerifiedGrants::deny_all()).is_ok());
+    }
+
+    /// Fail-closed branch: a host-namespace import that is not an interface
+    /// instance is refused even when every name is allowlisted.
+    #[test]
+    fn host_namespace_import_that_is_not_an_instance_is_refused() {
+        let engine = build_engine().expect("engine");
+        let wat = r#"(component (import "mnemra:host/bare" (func)))"#;
+        let c = Component::new(&engine, wat).expect("fixture component must compile");
+
+        let err = check_host_fn_imports(&engine, &c, &allow(&["bare.bare"]))
+            .expect_err("a bare function import under mnemra:host/ must be refused");
+        assert_eq!(err.host_fn, "mnemra:host/bare");
+    }
+
+    /// Fail-closed branch: an interface instance exporting a nested instance is
+    /// refused rather than skipped.
+    #[test]
+    fn nested_instance_in_a_host_interface_is_refused() {
+        let engine = build_engine().expect("engine");
+        let wat = r#"(component
+  (import "mnemra:host/outer" (instance
+    (export "inner" (instance (export "f" (func)))))))"#;
+        let c = Component::new(&engine, wat).expect("fixture component must compile");
+
+        let err = check_host_fn_imports(&engine, &c, &allow(&["outer.inner", "outer.f"]))
+            .expect_err("a nested instance under mnemra:host/ must be refused");
+        assert_eq!(err.host_fn, "mnemra:host/outer#inner");
+    }
+
+    /// Fail-closed branch: a core module exported by a host interface is refused.
+    #[test]
+    fn module_in_a_host_interface_is_refused() {
+        let engine = build_engine().expect("engine");
+        let wat = r#"(component
+  (import "mnemra:host/outer" (instance
+    (export "m" (core module)))))"#;
+        let c = Component::new(&engine, wat).expect("fixture component must compile");
+
+        let err = check_host_fn_imports(&engine, &c, &allow(&["outer.m"]))
+            .expect_err("a module under mnemra:host/ must be refused");
+        assert_eq!(err.host_fn, "mnemra:host/outer#m");
+    }
 }

@@ -150,7 +150,7 @@ PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_beh
 # via NONPG_TEST_FLAGS (verify-coverage-membership consistency). Deliberate
 # double-run, not an accident — 0.24s cost, two independent reasons to keep
 # it in both places.
-NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test component_async_rejected --test content_hash_binding --test coordination_message_types --test health_listener --test lint_engine_construction --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test component_async_rejected --test content_hash_binding --test coordination_message_types --test health_listener --test host_fn_allowlist_enforcement --test lint_engine_construction --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
@@ -478,8 +478,8 @@ verify-coverage-membership:
         echo "membership check FAIL: PG_TEST_FLAGS has $pg_count members, expected 23 (update this pin if the variable's membership intentionally changed)"
         fail=1
     fi
-    if [[ "$nonpg_count" -ne 20 ]]; then
-        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 20 (update this pin if the variable's membership intentionally changed)"
+    if [[ "$nonpg_count" -ne 21 ]]; then
+        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 21 (update this pin if the variable's membership intentionally changed)"
         fail=1
     fi
 
@@ -497,7 +497,7 @@ verify-coverage-membership:
         echo "GATE coverage-membership FAIL"
         exit 1
     fi
-    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [20], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
+    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [21], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
 
 # ---------------------------------------------------------------------------
 # Supply-chain advisory scan (brain #3566; related #3617, #2278, #3604).

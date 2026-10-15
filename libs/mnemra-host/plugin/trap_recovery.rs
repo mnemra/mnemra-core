@@ -705,6 +705,7 @@ fn run_verb(store: &mut Store<HostState>, instance: &Instance) -> Result<Output,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin::allowlist::VerifiedGrants;
     use crate::plugin::pool::{POOL_MAX, PluginPool};
     use wasmtime::component::Component;
 
@@ -728,8 +729,13 @@ mod tests {
         let pool = PluginPool::new().expect("pool must initialise");
         let component =
             Component::new(pool.engine(), NOOP_WAT).expect("noop WAT component must compile");
-        pool.register_module(PANIC_TEST_PLUGIN, PANIC_TEST_VERSION, &component)
-            .expect("register_module must succeed for noop component");
+        pool.register_module(
+            PANIC_TEST_PLUGIN,
+            PANIC_TEST_VERSION,
+            &component,
+            &VerifiedGrants::deny_all(),
+        )
+        .expect("register_module must succeed for noop component");
         pool
     }
 

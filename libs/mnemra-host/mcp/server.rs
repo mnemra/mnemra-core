@@ -9,8 +9,8 @@
 //! # Verb advertisement (R-0010-b/g)
 //!
 //! Plugin verbs are advertised as MCP tools via `list_tools`. The echo plugin's
-//! verbs are read from the manifest at construction time via `parse_manifest`
-//! (TOML-only parse, no signature verification required for the verb list).
+//! verbs come from the plugin pool's verified grants (the signed manifest
+//! accepted by `PluginRuntime::load` at startup), never from an unsigned parse.
 //! Control-plane verbs (workspace create/delete, token rotation, migration,
 //! backup) are NEVER advertised (R-0010-g).
 //!
@@ -50,7 +50,6 @@ use crate::mcp::dispatch::{
     auth_and_authorize, authorize_coordination_action, resolve_content_call, resolve_ctx_from_token,
 };
 use crate::mcp::errors::{SUPERVISOR_DEGRADED_CODE, VERB_NOT_EXPOSED_CODE};
-use crate::plugin::manifest::parse_manifest;
 use crate::plugin::pool::PluginPool;
 use crate::plugin::trap_recovery::{ContentCall, ContentResult, ResourceBudget, invoke_content};
 
@@ -65,20 +64,6 @@ use crate::plugin::trap_recovery::{ContentCall, ContentResult, ResourceBudget, i
 /// Defined here rather than in `errors.rs` to stay within this task's edit scope;
 /// a follow-up may relocate it alongside -4001..-4006 for convention consistency.
 const QUERY_SCAN_TIMEOUT_CODE: rmcp::model::ErrorCode = rmcp::model::ErrorCode(-4007);
-
-// ---------------------------------------------------------------------------
-// Echo manifest bytes (embedded at compile time)
-// ---------------------------------------------------------------------------
-
-/// Embedded echo manifest TOML. Used ONLY for verb-list extraction via
-/// `parse_manifest` (TOML parse, no signature gate). The `[signature]` section
-/// is present but ignored by `parse_manifest`.
-///
-/// At V0 the echo plugin ships a placeholder signature (public_key = "ROOT"),
-/// so `PluginRuntime::load` (signature-verifying) would reject it. Verb
-/// advertisement does NOT need a verified runtime; it needs only the
-/// `[verbs].exposed` list, which is safe to extract from TOML alone.
-const ECHO_MANIFEST_TOML: &[u8] = include_bytes!("../../../plugins/mnemra-echo/manifest.toml");
 
 // ---------------------------------------------------------------------------
 // MnemraMcpServer
@@ -98,8 +83,6 @@ pub struct MnemraMcpServer {
     pool: PgPool,
     /// The live component-instance pool the dispatch path borrows from (R-0016-a).
     plugin_pool: Arc<PluginPool>,
-    /// Plugin verbs parsed from the echo manifest at construction time.
-    echo_verbs: Vec<String>,
     /// The host-served coordination write path (`message`/`claim`), constructed
     /// with `coordination_config.write_timeout`. The `message poll` bind body
     /// (`handle_coordination`) drives `run_write` through this store.
@@ -114,17 +97,13 @@ impl MnemraMcpServer {
     /// Construct a new `MnemraMcpServer` with the auth pool and the live plugin
     /// pool (R-0010-a, R-0016-a).
     ///
-    /// Parses the echo manifest to extract verb names for `list_tools`.
+    /// The verb list and verb gate come from the plugin pool's VERIFIED grants
+    /// for [`ECHO_PLUGIN_NAME`] (`PluginPool::verified_verbs` / `is_verb_exposed`),
+    /// i.e. the signed manifest `PluginRuntime::load` accepted at startup. There
+    /// is no second copy of the manifest here. A pool with no such plugin
+    /// registered advertises and permits nothing.
     /// Does NOT start any background tasks or open additional connections.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the embedded echo manifest TOML cannot be parsed. This is a
-    /// compile-time-embedded file; a parse failure indicates a broken build.
     pub fn new(pool: PgPool, plugin_pool: Arc<PluginPool>) -> Self {
-        let manifest =
-            parse_manifest(ECHO_MANIFEST_TOML).expect("embedded echo manifest must be valid TOML");
-        let echo_verbs = manifest.verbs.exposed;
         // Coordination config defaults to the §Numeric-calibrations dogfood
         // values; `run_with` overrides them from `RunConfig` via
         // `with_coordination_config`. The default keeps the many test
@@ -136,7 +115,6 @@ impl MnemraMcpServer {
         Self {
             pool,
             plugin_pool,
-            echo_verbs,
             coordination_store,
             coordination_config,
         }
@@ -544,7 +522,8 @@ impl ServerHandler for MnemraMcpServer {
     ) -> Result<ListToolsResult, rmcp::model::ErrorData> {
         let empty_schema: Arc<rmcp::model::JsonObject> = Arc::new(Default::default());
         let mut tools: Vec<Tool> = self
-            .echo_verbs
+            .plugin_pool
+            .verified_verbs(ECHO_PLUGIN_NAME)
             .iter()
             .map(|verb_name| {
                 Tool::new_with_raw(
@@ -638,7 +617,10 @@ impl ServerHandler for MnemraMcpServer {
         // declared but has no typed export (e.g. echo.audit) passes this gate
         // and then receives NON_DISPATCHABLE (-4003) from resolve_content_call
         // exactly as before (R-0019-d, precision guard — test #2).
-        if !self.echo_verbs.iter().any(|v| v == request.name.as_ref()) {
+        if !self
+            .plugin_pool
+            .is_verb_exposed(ECHO_PLUGIN_NAME, request.name.as_ref())
+        {
             return Err(rmcp::model::ErrorData {
                 code: VERB_NOT_EXPOSED_CODE,
                 message: format!(

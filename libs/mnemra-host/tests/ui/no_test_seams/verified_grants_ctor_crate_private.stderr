@@ -1,0 +1,10 @@
+error[E0624]: associated function `new` is private
+ --> tests/ui/no_test_seams/verified_grants_ctor_crate_private.rs:9:29
+  |
+9 |     let _ = VerifiedGrants::new(HostFnAllowlist::default(), &[]);
+  |                             ^^^ private associated function
+  |
+ ::: plugin/allowlist.rs
+  |
+  |     pub(crate) fn new(host_fns: HostFnAllowlist, exposed: &[String]) -> Self {
+  |     ------------------------------------------------------------------------ private associated function defined here

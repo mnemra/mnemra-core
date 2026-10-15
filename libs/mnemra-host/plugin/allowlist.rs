@@ -4,14 +4,15 @@
 //! plugin instance is created (R-0003-b). Subsequent per-call checks are
 //! O(n) over the compiled list — small N in practice (< 20 fns per plugin).
 //!
-//! # R-0003-b WIT-boundary enforcement (note)
+//! # R-0003-b enforcement
 //!
-//! This module implements the allowlist QUERY surface that `is_host_fn_allowed`
-//! exposes. Actual WIT-boundary enforcement (rejecting undeclared host-fn calls
-//! before they reach the host-fn body) requires a live Wasmtime linker with a
-//! catch-all that consults this allowlist. That wiring lives in `pool.rs` /
-//! `limits.rs` and is exercised at component-invocation time, not at the
-//! manifest-load seam tested by `manifest_load.rs`.
+//! This module is the allowlist QUERY surface. Enforcement happens at link time
+//! in `component::build_linker`, which refuses a component importing any host
+//! function this list does not name. The production writer of the list is
+//! `PluginRuntime::load` (signed manifest slice only), which wraps it in
+//! [`VerifiedGrants`], the only type `PluginPool::register_module` and
+//! `component::build_linker` accept. Its constructor is `pub(crate)`, so a list
+//! built from unsigned bytes cannot reach the linker (trybuild-pinned).
 
 use crate::plugin::manifest::HostFnsSection;
 
@@ -23,7 +24,9 @@ use crate::plugin::manifest::HostFnsSection;
 /// table. Both `required` and `optional` entries are included; the distinction
 /// is surfacing-only (required entries produce a load-time error if absent at
 /// Task-22 validation time; optional entries are advisory). Both are ALLOWED.
-#[derive(Debug, Clone)]
+///
+/// `Default` is the EMPTY list, which denies every host function (fail closed).
+#[derive(Debug, Clone, Default)]
 pub struct HostFnAllowlist {
     /// Union of `required` and `optional` fn names, deduplicated.
     allowed: Vec<String>,
@@ -31,7 +34,10 @@ pub struct HostFnAllowlist {
 
 impl HostFnAllowlist {
     /// Compile an allowlist from a manifest's `[host_fns]` section.
-    pub fn from_manifest(section: &HostFnsSection) -> Self {
+    ///
+    /// `pub(crate)`: the only path from manifest bytes to something the linker
+    /// accepts is `PluginRuntime::load` -> [`VerifiedGrants`].
+    pub(crate) fn from_manifest(section: &HostFnsSection) -> Self {
         let mut allowed: Vec<String> = section
             .required
             .iter()
@@ -77,5 +83,58 @@ impl VerbAllowlist {
         self.exposed
             .binary_search_by_key(&verb, |s| s.as_str())
             .is_ok()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// VerifiedGrants
+// ---------------------------------------------------------------------------
+
+/// What a plugin's SIGNED manifest grants: the host functions it may import and
+/// the verbs it exposes.
+///
+/// The one-writer-of-record guarantee, by type: [`VerifiedGrants::new`] is
+/// `pub(crate)` and is called only from `PluginRuntime::load`, after signature
+/// verification and over the signed slice. `PluginPool::register_module` and
+/// `component::build_linker` take this type and nothing weaker, so no caller
+/// outside the crate can hand them a list compiled from unsigned bytes.
+/// [`VerifiedGrants::deny_all`] is the only other source, and it grants nothing.
+#[derive(Debug, Clone)]
+pub struct VerifiedGrants {
+    host_fns: HostFnAllowlist,
+    verbs: VerbAllowlist,
+    /// `[verbs].exposed` in manifest order, for `list_tools`.
+    verb_order: Vec<String>,
+}
+
+impl VerifiedGrants {
+    pub(crate) fn new(host_fns: HostFnAllowlist, exposed: &[String]) -> Self {
+        Self {
+            host_fns,
+            verbs: VerbAllowlist::from_exposed(exposed),
+            verb_order: exposed.to_vec(),
+        }
+    }
+
+    /// Grants nothing: no host function, no verb. For fixtures that carry no
+    /// manifest (component-WAT traps), where denying everything is the point.
+    pub fn deny_all() -> Self {
+        Self::new(HostFnAllowlist::default(), &[])
+    }
+
+    /// `true` iff the signed manifest declares `fn_name` (R-0003-b).
+    pub fn is_host_fn_allowed(&self, fn_name: &str) -> bool {
+        self.host_fns.is_allowed(fn_name)
+    }
+
+    /// `true` iff the signed manifest's `[verbs].exposed` names `verb` (R-0010-d).
+    /// The MCP verb gate calls this through `PluginPool::is_verb_exposed`.
+    pub fn is_verb_allowed(&self, verb: &str) -> bool {
+        self.verbs.is_allowed(verb)
+    }
+
+    /// The exposed verbs, in manifest order.
+    pub fn verbs(&self) -> &[String] {
+        &self.verb_order
     }
 }

@@ -130,7 +130,7 @@ schema_version = 1
 core = {core}
 
 [verbs]
-exposed = ["task.create", "task.update", "task.get", "task.list"]
+exposed = ["task.create", "task.update", "task.get", "task.list", "echo.create", "echo.get"]
 
 [content_types]
 task = {{ table = "tasks", schema_doc = "docs/schemas/task.md" }}

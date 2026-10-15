@@ -48,6 +48,7 @@
 //! store running out of fuel first) fails the test LOUDLY — fail-shut on fixture
 //! correctness (the Task-22 analog of "fixtures must pass verify first").
 
+use mnemra_host::plugin::allowlist::VerifiedGrants;
 #[cfg(feature = "test-hooks")]
 use mnemra_host::plugin::epoch_thread::{EpochTickThread, HealthState};
 #[cfg(feature = "test-hooks")]
@@ -147,8 +148,13 @@ fn compile_fixture(pool: &PluginPool, wat: &str) -> Component {
 fn pool_with_fixture(wat: &str) -> PluginPool {
     let pool = PluginPool::new().expect("pool must initialise");
     let component = compile_fixture(&pool, wat);
-    pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &component)
-        .expect("register_module must populate live slots for the fixture");
+    pool.register_module(
+        TEST_PLUGIN_ID,
+        TEST_PLUGIN_VERSION,
+        &component,
+        &VerifiedGrants::deny_all(),
+    )
+    .expect("register_module must populate live slots for the fixture");
     pool
 }
 
@@ -668,7 +674,12 @@ fn register_module_bounds_a_looping_start_function() {
         let pool = PluginPool::new().expect("pool must initialise");
         let component = compile_fixture(&pool, START_LOOP_WAT);
         let started = std::time::Instant::now();
-        let result = pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &component);
+        let result = pool.register_module(
+            TEST_PLUGIN_ID,
+            TEST_PLUGIN_VERSION,
+            &component,
+            &VerifiedGrants::deny_all(),
+        );
         let elapsed = started.elapsed();
         let outcome = result.map_err(|err| {
             // The trap is the root cause; the outer error is only backtrace context.
@@ -753,7 +764,12 @@ fn register_module_rejects_duplicate_plugin_name() {
     let component = compile_fixture(&pool, EPOCH_LOOP_WAT);
 
     // When — attempt to register the same plugin_name a second time.
-    let result = pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &component);
+    let result = pool.register_module(
+        TEST_PLUGIN_ID,
+        TEST_PLUGIN_VERSION,
+        &component,
+        &VerifiedGrants::deny_all(),
+    );
 
     // Then — second call must return Err (duplicate is rejected, R-0016-a).
     // Right-reason red: current impl returns Ok unconditionally and pushes a

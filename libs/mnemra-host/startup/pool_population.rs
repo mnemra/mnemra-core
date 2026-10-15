@@ -38,8 +38,10 @@ use std::sync::Arc;
 use wasmtime::component::Component;
 
 use crate::mcp::server::ECHO_PLUGIN_NAME;
+use crate::plugin::component::UndeclaredHostFn;
 use crate::plugin::pool::PluginPool;
-use crate::signing::verify::{SigningError, extract_signed_payload, verify_plugin};
+use crate::plugin::runtime::{LoadError, PluginRuntime};
+use crate::signing::verify::{SigningError, extract_signed_payload};
 
 // ---------------------------------------------------------------------------
 // StartupError — public error type exported at mnemra_host::startup
@@ -67,6 +69,16 @@ pub enum StartupError {
     /// registered into it.
     PoolPopulation(String),
 
+    /// The manifest verified but is not loadable: unparseable after
+    /// verification (including an unknown key in `[host_fns]`) or an
+    /// unsupported `schema_version`. Nothing was constructed.
+    ManifestRejected(String),
+
+    /// The component imports a host function the signed manifest's
+    /// `[host_fns]` does not declare (P-0003, R-0003-b). Refused at link time,
+    /// before any instance exists.
+    UndeclaredHostFn(String),
+
     /// The declared `[component].hash` in the signed manifest body did not
     /// match the recomputed digest of the loaded component bytes, or was
     /// absent from the signed slice, or named a weak algorithm.  The
@@ -86,6 +98,10 @@ impl std::fmt::Display for StartupError {
             }
             Self::PoolPopulation(msg) => {
                 write!(f, "startup: failed to populate plugin pool: {msg}")
+            }
+            Self::UndeclaredHostFn(msg) => write!(f, "startup: {msg}"),
+            Self::ManifestRejected(msg) => {
+                write!(f, "startup: plugin manifest rejected: {msg}")
             }
             Self::ComponentHashMismatch(msg) => write!(f, "{msg}"),
         }
@@ -110,9 +126,13 @@ impl std::error::Error for StartupError {
 ///
 /// # Behavioral contract (SF1 fail-closed, R-0005-a, R-0021)
 ///
-/// 1. Calls `verify_plugin(manifest_toml, root_material)` **FIRST** (synchronous).
-///    If it returns `Err` → returns `Err(StartupError::SignatureVerification(..))`
-///    and builds / populates **nothing**.
+/// 1. Calls `PluginRuntime::load(manifest_toml, root_material)` **FIRST**
+///    (synchronous): signature verification, then parse of the **signed slice
+///    only** and compilation of the host-fn allowlist and verb list. A
+///    verification failure → `Err(StartupError::SignatureVerification(..))`; a
+///    verified-but-unloadable manifest (unparseable, unknown `[host_fns]` key,
+///    unsupported `schema_version`) → `Err(StartupError::ManifestRejected(..))`.
+///    Either builds / populates **nothing**.
 /// 2. Parses `[component].hash_alg` and `[component].hash` from the **signed
 ///    slice only** (R-0021-c); a `[component]` table in the unsigned region
 ///    does not satisfy presence.
@@ -124,8 +144,12 @@ impl std::error::Error for StartupError {
 ///    computed — then recomputes that algorithm's digest over the bytes read in
 ///    step 3 and compares against the declared hash value.
 /// 5. Only on hash match → builds a `PluginPool`, compiles the component from
-///    the same in-memory buffer, registers it, and returns `Ok(Arc::new(pool))`.
-///    On mismatch → `Err(StartupError::ComponentHashMismatch(..))` before any
+///    the same in-memory buffer, and registers it with the verified grants
+///    (`runtime.grants()`), returning `Ok(Arc::new(pool))`. The pool carries
+///    those grants: it is the one source of the MCP verb list and verb gate.
+///    A component importing a host function the signed manifest does not
+///    declare → `Err(StartupError::UndeclaredHostFn(..))` (R-0003-b), before any
+///    instance exists. On mismatch → `Err(StartupError::ComponentHashMismatch(..))` before any
 ///    pool or instance is constructed (R-0021-e).
 ///
 /// # Parameter-driven load (unchanged from Task 11/17)
@@ -164,8 +188,13 @@ fn populate_verified_pool_at_path(
     root_material: &[u8],
     component_path: &std::path::Path,
 ) -> Result<Arc<PluginPool>, StartupError> {
-    // Layer 1: verify signature FIRST — fail-closed (SF1, R-0005-a).
-    verify_plugin(manifest_toml, root_material).map_err(StartupError::SignatureVerification)?;
+    // Layer 1: verify signature FIRST — fail-closed (SF1, R-0005-a). The same
+    // call compiles the host-fn allowlist from the SIGNED slice of the manifest
+    // (R-0003-b); `PluginRuntime::load` is its one writer of record.
+    let runtime = PluginRuntime::load(manifest_toml, root_material).map_err(|e| match e {
+        LoadError::VerificationFailed(e) => StartupError::SignatureVerification(e),
+        other => StartupError::ManifestRejected(other.to_string()),
+    })?;
 
     // Layer 2a: extract the signed slice; parse [component] from it ONLY (R-0021-c).
     let signed_slice = extract_signed_payload(manifest_toml);
@@ -224,8 +253,12 @@ fn populate_verified_pool_at_path(
     let pool = PluginPool::new().map_err(|e| StartupError::PoolPopulation(e.to_string()))?;
     let component = Component::from_binary(pool.engine(), &component_bytes)
         .map_err(|e| StartupError::ComponentLoad(e.to_string()))?;
-    pool.register_module(ECHO_PLUGIN_NAME, "0.0.1", &component)
-        .map_err(|e| StartupError::PoolPopulation(e.to_string()))?;
+    // The linker refuses any host-fn import the signed manifest does not declare.
+    pool.register_module(ECHO_PLUGIN_NAME, "0.0.1", &component, runtime.grants())
+        .map_err(|e| match e.downcast_ref::<UndeclaredHostFn>() {
+            Some(undeclared) => StartupError::UndeclaredHostFn(undeclared.to_string()),
+            None => StartupError::PoolPopulation(e.to_string()),
+        })?;
     Ok(Arc::new(pool))
 }
 
