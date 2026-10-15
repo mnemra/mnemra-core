@@ -68,7 +68,7 @@ pub async fn seed_admin_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> AdminT
     sqlx::query("INSERT INTO admin_tokens (token_hash, workspace_id, scopes) VALUES ($1, $2, $3)")
         .bind(token_hash.as_bytes())
         .bind(workspace_id)
-        .bind(&vec!["admin".to_owned()])
+        .bind(vec!["admin".to_owned()])
         .execute(pool)
         .await
         .expect("INSERT admin token failed");

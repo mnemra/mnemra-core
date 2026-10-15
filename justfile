@@ -1,7 +1,7 @@
 # Run all checks (builds the plugin first so integration tests can load the wasm component)
 check: plugin
     cargo fmt --check
-    cargo clippy --workspace --exclude mnemra-echo -- -D warnings
+    cargo clippy --workspace --exclude mnemra-echo --all-targets -- -D warnings
     cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings
     cargo test --workspace
     uv run scripts/docs-translate.py --check --src docs/src --out docs/_published --prompts docs/prompts
@@ -171,12 +171,13 @@ verify-lint:
     # contract (exactly one GATE line + correct exit) holds. A command in the
     # `if` condition is exempt from errexit, so a failing check reaches the else
     # branch rather than aborting — same shape as verify-type / verify-test.
-    if cargo clippy --workspace --exclude mnemra-echo -- -D warnings 2>&1 \
+    if cargo clippy --workspace --exclude mnemra-echo --all-targets -- -D warnings 2>&1 \
         && cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings 2>&1 \
         && cargo fmt --all --check 2>&1 \
         && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_workspace_clause 2>&1 \
         && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_engine_construction 2>&1; then
-        # Checks, in order: host-crate clippy (deny warnings); plugin clippy for
+        # Checks, in order: host-crate clippy over every target, tests included
+        # (--all-targets, R-0038; deny warnings); plugin clippy for
         # wasm32-wasip2; fmt check (no --fix); WHERE-clause lint (R-0018-d) — every
         # read-path host-fn must reference ctx.workspace_id; engine-construction
         # guard lint (R-0032) — no EmbeddedEngine::start / start_embedded /

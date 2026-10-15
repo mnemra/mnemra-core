@@ -66,8 +66,7 @@ fn async_lift_with_callback_is_rejected_at_load() {
         r#"async (callback (core func $i "cb"))"#,
     );
     let err = Component::new(&engine, wat)
-        .err()
-        .expect("a component with an async lift must be rejected at load");
+        .expect_err("a component with an async lift must be rejected at load");
     let msg = format!("{err:?}");
     assert!(
         msg.contains(ASYNC_GATE_MESSAGE),
