@@ -85,7 +85,7 @@ async fn seed_admin_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> AdminToken
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["admin".to_owned()])
+    .bind(vec!["admin".to_owned()])
     .fetch_one(pool)
     .await
     .expect("INSERT admin token failed");
@@ -198,8 +198,8 @@ async fn actor_count_by_name(pool: &sqlx::PgPool, workspace_id: Uuid, name: &str
 }
 
 /// Count of LIVE attachment leases held by `actor_id` — the one-live-per-actor
-/// surface (R-0064-c). Observed by `holder_actor_id` + reserved `actor:` family
-/// + non-terminal, NEVER by an exact `resource` string: spec §Data Model L344
+/// surface (R-0064-c). Observed by `holder_actor_id` + reserved `actor:` family +
+/// non-terminal, NEVER by an exact `resource` string: spec §Data Model L344
 /// says `actor:<role-instance>` while the seam map says `actor:<actor_id>`;
 /// R-0064-f makes the qualifier green's choice, so only the family prefix and the
 /// holder are asserted.

@@ -18,7 +18,7 @@
 //!
 //! # Startup serialization
 //!
-//! A `std::sync::Mutex` serializes engine startup within this binary (A-11
+//! A `tokio::sync::Mutex` serializes engine startup within this binary (A-11
 //! cross-binary archive-extraction race note from `postgres_engine.rs` applies
 //! here too). Each test starts its own engine instance.
 //!
@@ -34,14 +34,14 @@ use mnemra_host::schema::init::{
     ROLE_MIGRATION, health_snapshot, init,
 };
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 /// Serializes engine startup across concurrent test threads (A-11).
-static STARTUP_LOCK: Mutex<()> = Mutex::new(());
+static STARTUP_LOCK: Mutex<()> = Mutex::const_new(());
 
 /// Start a fresh engine with startup serialized.
 async fn start_engine() -> EmbeddedEngine {
-    let _guard = STARTUP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = STARTUP_LOCK.lock().await;
     EmbeddedEngine::start()
         .await
         .expect("failed to start embedded Postgres")

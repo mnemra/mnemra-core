@@ -313,7 +313,7 @@ async fn cross_workspace_get_returns_none() {
     )
     .bind(token_b_hash.as_bytes())
     .bind(workspace_b_id)
-    .bind(&vec!["admin".to_owned()])
+    .bind(vec!["admin".to_owned()])
     .execute(&db.pool)
     .await
     .expect("INSERT workspace-B admin token failed");

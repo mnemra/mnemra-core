@@ -885,14 +885,12 @@ fn adversarial_infield_signature_marker_causes_rejection() {
     // same bytes with `[signature]` appended. The slice should cut at the
     // injected marker (too early), not at the real `[signature]` boundary.
     // Result: payload seen by verifier ≠ bytes signed by root → Err.
-    let attack_unsigned: Vec<u8> = format!(
-        // The `schema_doc` value embeds the marker. TOML parses this as a
-        // string containing literal `\n[signature]` text — but the byte-slice
-        // search operates on raw bytes, not on parsed TOML values.
-        // We use a double-quoted TOML string with a literal backslash-n to
-        // insert the newline byte directly in the raw bytes.
-        "[plugin]\nname = \"tasks\"\nversion = \"0.2.0\"\nschema_version = 1\ncore = true\n\n[verbs]\nexposed = [\"task.create\"]\n\n[content_types]\ntask = {{ table = \"tasks\", schema_doc = \"docs/schemas/task.md\n[signature]\nalgorithm = \\\"injected\\\"\" }}\n\n[state_scopes]\n\n[host_fns]\nrequired = []\noptional = []\n"
-    ).into_bytes();
+    // The `schema_doc` value embeds the marker. TOML parses this as a
+    // string containing literal `\n[signature]` text — but the byte-slice
+    // search operates on raw bytes, not on parsed TOML values.
+    // We use a double-quoted TOML string with a literal backslash-n to
+    // insert the newline byte directly in the raw bytes.
+    let attack_unsigned: Vec<u8> = "[plugin]\nname = \"tasks\"\nversion = \"0.2.0\"\nschema_version = 1\ncore = true\n\n[verbs]\nexposed = [\"task.create\"]\n\n[content_types]\ntask = { table = \"tasks\", schema_doc = \"docs/schemas/task.md\n[signature]\nalgorithm = \\\"injected\\\"\" }\n\n[state_scopes]\n\n[host_fns]\nrequired = []\noptional = []\n".as_bytes().to_vec();
 
     // Sign the attack bytes under root.
     let sig = sign_manifest(&root_key, &attack_unsigned);

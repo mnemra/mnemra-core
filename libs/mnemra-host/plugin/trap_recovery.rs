@@ -673,6 +673,31 @@ pub fn invoke_content(
     )
 }
 
+/// Call the world-level `run` export on a pre-instantiated component `instance`
+/// bound to `store` (CC-RUNVERB-REWRITE).
+///
+/// This is the trap-recovery probe used by the resource-limit suite: the trap
+/// fixtures are COMPONENTS exporting a parameterless world-level `run: func()`
+/// that loops (epoch) or burns fuel. A trap raised during the call is returned
+/// as the `Err` for the caller to classify — NEVER allowed to escape as a panic
+/// (R-0007-f). The component-typed `content` invoke for the REAL dispatch path
+/// lives in `crate::plugin::component::content_create` / `content_get`; both the
+/// trap path here and the real path go through this same kill-and-replace seam
+/// (`invoke_with_recovery` for the trap path; the dispatch site applies the same
+/// take→budget→invoke→repopulate discipline for the real path).
+///
+/// The move from the core-module `get_typed_func::<(),()>("run")` to the
+/// component `Instance::get_typed_func` is the CC-RUNVERB-REWRITE: the instance
+/// is a `component::Instance`, not a core `wasmtime::Instance`, but the trap
+/// classification (epoch/fuel, at the `wasmtime::Trap` level) is unchanged.
+fn run_verb(store: &mut Store<HostState>, instance: &Instance) -> Result<Output, wasmtime::Error> {
+    let run = instance.get_typed_func::<(), ()>(&mut *store, "run")?;
+    run.call(&mut *store, ())?;
+    // The trap fixtures' `run` returns no values; success yields empty output.
+    // (The real dispatch path returns the typed `content` value, not via here.)
+    Ok(Vec::new())
+}
+
 // ---------------------------------------------------------------------------
 // White-box unit tests — panic-safe seam (HIGH-2 / MEDIUM-1, T13-g)
 // ---------------------------------------------------------------------------
@@ -775,29 +800,4 @@ mod tests {
             );
         }
     }
-}
-
-/// Call the world-level `run` export on a pre-instantiated component `instance`
-/// bound to `store` (CC-RUNVERB-REWRITE).
-///
-/// This is the trap-recovery probe used by the resource-limit suite: the trap
-/// fixtures are COMPONENTS exporting a parameterless world-level `run: func()`
-/// that loops (epoch) or burns fuel. A trap raised during the call is returned
-/// as the `Err` for the caller to classify — NEVER allowed to escape as a panic
-/// (R-0007-f). The component-typed `content` invoke for the REAL dispatch path
-/// lives in `crate::plugin::component::content_create` / `content_get`; both the
-/// trap path here and the real path go through this same kill-and-replace seam
-/// (`invoke_with_recovery` for the trap path; the dispatch site applies the same
-/// take→budget→invoke→repopulate discipline for the real path).
-///
-/// The move from the core-module `get_typed_func::<(),()>("run")` to the
-/// component `Instance::get_typed_func` is the CC-RUNVERB-REWRITE: the instance
-/// is a `component::Instance`, not a core `wasmtime::Instance`, but the trap
-/// classification (epoch/fuel, at the `wasmtime::Trap` level) is unchanged.
-fn run_verb(store: &mut Store<HostState>, instance: &Instance) -> Result<Output, wasmtime::Error> {
-    let run = instance.get_typed_func::<(), ()>(&mut *store, "run")?;
-    run.call(&mut *store, ())?;
-    // The trap fixtures' `run` returns no values; success yields empty output.
-    // (The real dispatch path returns the typed `content` value, not via here.)
-    Ok(Vec::new())
 }

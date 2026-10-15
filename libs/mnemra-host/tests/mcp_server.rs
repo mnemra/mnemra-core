@@ -131,7 +131,7 @@ async fn seed_admin_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> (AdminToke
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["admin".to_owned()])
+    .bind(vec!["admin".to_owned()])
     .fetch_one(pool)
     .await
     .expect("INSERT admin token failed");
@@ -151,7 +151,7 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> (A
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["read_observer".to_owned()])
+    .bind(vec!["read_observer".to_owned()])
     .fetch_one(pool)
     .await
     .expect("INSERT read_observer token failed");

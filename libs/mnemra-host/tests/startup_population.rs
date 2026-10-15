@@ -330,7 +330,7 @@ async fn verified_manifest_populates_pool_and_call_tool_dispatches() {
     sqlx::query("INSERT INTO admin_tokens (token_hash, workspace_id, scopes) VALUES ($1, $2, $3)")
         .bind(token_hash.as_bytes())
         .bind(mnemra_host::schema::init::DEFAULT_WORKSPACE_ID)
-        .bind(&vec!["admin".to_owned()])
+        .bind(vec!["admin".to_owned()])
         .execute(&pg_pool)
         .await
         .expect("seed admin token");

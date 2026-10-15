@@ -86,7 +86,7 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> Ad
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["read_observer".to_owned()])
+    .bind(vec!["read_observer".to_owned()])
     .execute(pool)
     .await
     .expect("seed read_observer token");

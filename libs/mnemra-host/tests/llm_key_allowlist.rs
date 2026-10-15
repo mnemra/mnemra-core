@@ -216,7 +216,10 @@ fn allowlist_is_per_deployment_configurable_not_compiled_in() {
 
     // Deployment A: permits api.openai.com
     let config_a = write_llm_key_config(&dir, "config_a.toml", "key-a", &["api.openai.com"], 0o600);
-    let loaded_a = LlmKeyConfig::load(&config_a).expect("config_a must load successfully");
+    // Typed binding keeps `LlmKeyConfigError` pinned at compile time: the load
+    // contract returns exactly this error type.
+    let load_a: Result<LlmKeyConfig, LlmKeyConfigError> = LlmKeyConfig::load(&config_a);
+    let loaded_a = load_a.expect("config_a must load successfully");
 
     // Deployment B: permits api.cohere.com (different provider)
     let config_b = write_llm_key_config(&dir, "config_b.toml", "key-b", &["api.cohere.com"], 0o600);

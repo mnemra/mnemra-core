@@ -53,6 +53,10 @@ pub async fn shared_engine() -> &'static EmbeddedEngine {
             // the flake-runner log
             // (scratch/flake-runs/<bin>_run<i>_t<threads>.log) unconditionally.
             eprintln!("FIXTURE_BOOT engine_boot_number={n}");
+            // Single-boot invariant, checked through the same observable the
+            // R-0026 AC3 test reads, so `boot_count` has a production caller in
+            // every including binary (no dead-code suppression needed).
+            assert_eq!(boot_count(), 1, "shared engine init ran more than once");
             // Register exit-time teardown exactly once, at the point the
             // engine first exists — never depends on a second call site
             // remembering to. Safe to register unconditionally here: this

@@ -363,7 +363,7 @@ async fn seed_admin_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> AdminToken
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["admin".to_owned()])
+    .bind(vec!["admin".to_owned()])
     .fetch_one(pool)
     .await
     .expect("INSERT admin token failed");
@@ -382,7 +382,7 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> Ad
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["read_observer".to_owned()])
+    .bind(vec!["read_observer".to_owned()])
     .execute(pool)
     .await
     .expect("seed read_observer token");
@@ -881,7 +881,7 @@ async fn message_lifecycle_row(
     Option<String>,
     Option<String>,
 )> {
-    let row = sqlx::query_as(
+    sqlx::query_as(
         "SELECT state,
                 EXTRACT(EPOCH FROM delivered_at)::float8,
                 EXTRACT(EPOCH FROM acknowledged_at)::float8,
@@ -893,8 +893,7 @@ async fn message_lifecycle_row(
     .bind(message_id)
     .fetch_optional(pool)
     .await
-    .expect("message lifecycle read-back query must execute");
-    row
+    .expect("message lifecycle read-back query must execute")
 }
 
 /// The `(actor_id, payload)` of the `disposition`-typed `coordination_audit`

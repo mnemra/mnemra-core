@@ -49,15 +49,15 @@
 //! # Spec requirements traced
 //!
 //! - R-0009-c: Admin authorizes all MCP verb categories + CLI control-plane +
-//!             admin session management.
+//!   admin session management.
 //! - R-0009-d: ReadObserver authorizes only read-path MCP verbs; write verbs,
-//!             CLI control-plane, workspace lifecycle denied at host-fn boundary.
+//!   CLI control-plane, workspace lifecycle denied at host-fn boundary.
 //! - R-0009-e: Workspace lifecycle ops require Admin; ReadObserver → structured
-//!             permission error.
+//!   permission error.
 //! - R-0009-g: No Postgres RLS at V0; enforcement at application layer only
-//!             (non-goal / non-executable — documented above).
+//!   (non-goal / non-executable — documented above).
 //! - R-0015-f: `permissions` builtin checks plugin verb access at the host layer
-//!             before plugin dispatch.
+//!   before plugin dispatch.
 //!
 //! # Cross-dispatch handoff: seam contract for Task 14 GREEN
 //!
