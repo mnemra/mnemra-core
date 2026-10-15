@@ -94,3 +94,19 @@ unused-ignored-advisory = "deny"
 # wasmtime 48.x bump in #3646, which also keeps component-model async off
 # (libs/mnemra-host/Cargo.toml, plugin/limits.rs; tests/component_async_rejected.rs).
 ignore = []
+
+# #3842 — wasmtime's WASI host crates are banned, as a mechanism. The host-fn
+# allowlist (P-0003, R-0003-b) mediates only `mnemra:host/*` imports; every
+# other import of a plugin component (the `wasi:*` set the wasm32-wasip2 adapter
+# pulls in) is satisfied by an inert trap-stub in `component::build_linker`. A
+# `wasmtime_wasi::...::add_to_linker` call added after those stubs would shadow
+# them (allow_shadowing is on) with real filesystem/clock/stdio capability,
+# bypassing the manifest, and no WIT or test would change. Linking a WASI host
+# is a design decision, not a dependency bump: lift this ban only together with
+# an allowlist that covers the wasi: namespace.
+[bans]
+deny = [
+    { crate = "wasmtime-wasi" },
+    { crate = "wasmtime-wasi-io" },
+    { crate = "wasmtime-wasi-http" },
+]

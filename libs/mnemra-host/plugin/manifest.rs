@@ -75,7 +75,10 @@ pub struct VerbsSection {
 // [host_fns] table
 // ---------------------------------------------------------------------------
 
+/// `deny_unknown_fields`: this table is a permission grant, so a misspelt key
+/// must fail the load loudly rather than silently narrow or fork the grant.
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HostFnsSection {
     #[serde(default)]
     pub required: Vec<String>,
