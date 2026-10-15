@@ -95,6 +95,6 @@ syn = { version = "2.0.117", features = ["full", "extra-traits"] }
 # already locked by the existing syn/quote graph (Cargo.lock).
 proc-macro2 = "1.0.106"
 tempfile = "3.27.0"
-tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
+tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread", "time"] }
 trybuild = "1.0.116"
 wit-parser = "0.247"
