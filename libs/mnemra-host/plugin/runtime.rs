@@ -221,7 +221,7 @@ impl PluginRuntime {
     /// `optional` host-fn declarations (R-0003-b).
     ///
     /// Query surface only; enforcement is `component::build_linker`'s link-time
-    /// refusal of undeclared imports, fed by [`Self::host_fn_allowlist`].
+    /// refusal of undeclared imports, fed by [`Self::grants`].
     pub fn is_host_fn_allowed(&self, fn_name: &str) -> bool {
         self.grants.is_host_fn_allowed(fn_name)
     }
