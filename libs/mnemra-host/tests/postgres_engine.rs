@@ -37,6 +37,8 @@
 //! interruptions accumulate dirs under the system temp path.  Low-priority at V0;
 //! tracked for a housekeeping follow-up when local-dev ergonomics are prioritised.
 
+#[path = "common/await_bound.rs"]
+mod await_bound;
 #[path = "common/shared_engine.rs"]
 mod shared_engine;
 
@@ -64,11 +66,13 @@ async fn app_role_is_not_superuser_and_not_bypassrls() {
     let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
 
     // Query pg_roles for the current user's privilege flags.
-    let row =
+    let row = await_bound::bounded(
+        "app_role: pg_roles query on engine.pool",
         sqlx::query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
-            .fetch_one(engine.pool.as_ref())
-            .await
-            .expect("pg_roles query failed");
+            .fetch_one(engine.pool.as_ref()),
+    )
+    .await
+    .expect("pg_roles query failed");
 
     let rolsuper: bool = row.get(0);
     let rolbypassrls: bool = row.get(1);
@@ -260,17 +264,23 @@ async fn pgvector_extension_is_available_and_creates_successfully() {
 
     // ensure_pgvector calls CREATE EXTENSION IF NOT EXISTS vector (as superuser)
     // and returns a structured ExtensionError on failure.
-    engine
-        .ensure_pgvector()
-        .await
-        .expect("CREATE EXTENSION vector should succeed with bundled pgvector_compiled");
+    // Each pool await is bounded and labelled (#3987): the 2026-10-14 hang sat
+    // in one of these two with nothing to say which.
+    await_bound::bounded(
+        "pgvector: ensure_pgvector on superuser_pool",
+        engine.ensure_pgvector(),
+    )
+    .await
+    .expect("CREATE EXTENSION vector should succeed with bundled pgvector_compiled");
 
     // Confirm via catalog that the extension is loaded.
-    let row: (String,) =
+    let row: (String,) = await_bound::bounded(
+        "pgvector: pg_extension query on engine.pool",
         sqlx::query_as("SELECT extname FROM pg_extension WHERE extname = 'vector'")
-            .fetch_one(engine.pool.as_ref())
-            .await
-            .expect("pg_extension query failed — vector not in catalog");
+            .fetch_one(engine.pool.as_ref()),
+    )
+    .await
+    .expect("pg_extension query failed — vector not in catalog");
 
     assert_eq!(
         row.0, "vector",
@@ -370,12 +380,10 @@ async fn provisioned_databases_are_isolated_from_each_other() {
     let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
 
     // Given: two tests' worth of fixture-provisioned databases...
-    let db_a = engine
-        .provision_test_database()
+    let db_a = await_bound::bounded("isolated: provision db A", engine.provision_test_database())
         .await
         .expect("provision_test_database (db A) should succeed");
-    let db_b = engine
-        .provision_test_database()
+    let db_b = await_bound::bounded("isolated: provision db B", engine.provision_test_database())
         .await
         .expect("provision_test_database (db B) should succeed");
 
@@ -429,10 +437,12 @@ async fn provisioned_databases_are_pairwise_distinct_across_n_provisions() {
 
     let mut names: HashSet<String> = HashSet::new();
     for _ in 0..3 {
-        let db = engine
-            .provision_test_database()
-            .await
-            .expect("provision_test_database should succeed");
+        let db = await_bound::bounded(
+            "distinct: provision_test_database",
+            engine.provision_test_database(),
+        )
+        .await
+        .expect("provision_test_database should succeed");
         assert!(
             names.insert(db.name.clone()),
             "provisioned database name {} was not unique across provisions",
@@ -453,10 +463,12 @@ async fn provisioned_databases_are_pairwise_distinct_across_n_provisions() {
 async fn provisioned_database_has_vector_extension_available() {
     let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
 
-    let db = engine
-        .provision_test_database()
-        .await
-        .expect("provision_test_database should succeed");
+    let db = await_bound::bounded(
+        "vector-available: provision_test_database",
+        engine.provision_test_database(),
+    )
+    .await
+    .expect("provision_test_database should succeed");
 
     let row: (String,) =
         sqlx::query_as("SELECT extname FROM pg_extension WHERE extname = 'vector'")
@@ -467,5 +479,133 @@ async fn provisioned_database_has_vector_extension_available() {
     assert_eq!(
         row.0, "vector",
         "provisioned database's pg_extension should list 'vector'"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Hang backstops (#3987): the bounds must demonstrably fail loud
+// ---------------------------------------------------------------------------
+
+/// Seeded violation: an await that never completes must PANIC naming its
+/// label, not park. Without this, the bound could silently stop firing and
+/// nothing would say so.
+#[tokio::test]
+#[should_panic(expected = "FIXTURE_BOUND await 'seeded-never-completes'")]
+async fn bounded_await_that_never_completes_panics_naming_the_await() {
+    await_bound::bounded_for(
+        "seeded-never-completes",
+        std::time::Duration::from_millis(50),
+        std::future::pending::<()>(),
+    )
+    .await;
+}
+
+/// Positive control for the test above: a completing future passes through
+/// unchanged, so the bound is not simply always-panicking.
+#[tokio::test]
+async fn bounded_await_that_completes_returns_its_value() {
+    let v = await_bound::bounded_for(
+        "completes",
+        std::time::Duration::from_secs(5),
+        std::future::ready(7_u32),
+    )
+    .await;
+    assert_eq!(v, 7);
+}
+
+/// Child half of the watchdog test: boots the shared engine, then goes idle
+/// without ever calling `shared_engine()` again. `#[ignore]` so it only runs
+/// when the parent below launches it with `--ignored`.
+#[tokio::test]
+#[ignore = "child process of fixture_watchdog_exits_101_when_no_call_for_limit"]
+async fn watchdog_child_idle_forever() {
+    shared_engine::shared_engine().await;
+    tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+}
+
+/// The watchdog must end a binary that stops calling `shared_engine()`: exit
+/// code 101 and a `FIXTURE_WATCHDOG` line, well inside the child's 120 s
+/// sleep. Run as a subprocess because the watchdog's whole effect is
+/// `process::exit`.
+#[test]
+fn fixture_watchdog_exits_101_when_no_call_for_limit() {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    let exe = std::env::current_exe().expect("current_exe");
+    let mut child = Command::new(exe)
+        .args([
+            "--exact",
+            "watchdog_child_idle_forever",
+            "--ignored",
+            "--test-threads",
+            "1",
+        ])
+        .env("MNEMRA_FIXTURE_WATCHDOG_SECS", "3")
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn watchdog child");
+
+    // No `--nocapture`, matching how the gates run: the watchdog and teardown
+    // lines must reach real stderr through libtest's capture (#3987).
+    //
+    // Bound the parent's own wait; kill only the child this test started. This
+    // timeout path SIGKILLs the child, which bypasses its atexit teardown and
+    // can leak its postmaster (the accepted A-12 class); it is reached only
+    // when the watchdog has already failed, and that failure is the red.
+    let deadline = Instant::now() + Duration::from_secs(100);
+    let status = loop {
+        if let Some(st) = child.try_wait().expect("try_wait") {
+            break Some(st);
+        }
+        if Instant::now() >= deadline {
+            child.kill().expect("kill own child");
+            child.wait().expect("reap own child");
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+
+    let mut stderr = String::new();
+    child
+        .stderr
+        .take()
+        .expect("child stderr")
+        .read_to_string(&mut stderr)
+        .expect("read child stderr");
+
+    let Some(status) = status else {
+        panic!(
+            "watchdog child still running after 100 s: the watchdog did not fire. stderr:\n{stderr}"
+        );
+    };
+    assert_eq!(
+        status.code(),
+        Some(101),
+        "watchdog must exit 101; stderr:\n{stderr}"
+    );
+    let boot = stderr.find("FIXTURE_BOOT engine_boot_number=1");
+    // The full message prefix: a spawn failure also prints "FIXTURE_WATCHDOG"
+    // and exits 101.
+    let wd = stderr.find("FIXTURE_WATCHDOG no shared_engine() call");
+    assert!(
+        wd.is_some(),
+        "watchdog must name itself on stderr; got:\n{stderr}"
+    );
+    assert!(
+        boot.is_some_and(|b| b < wd.unwrap_or(0)),
+        "the engine must have booted before the watchdog fired; got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("FIXTURE_TEARDOWN engine shutdown complete"),
+        "atexit teardown must run to completion on the watchdog exit; got:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("FIXTURE_TEARDOWN engine shutdown failed")
+            && !stderr.contains("FIXTURE_TEARDOWN engine shutdown panicked")
+            && !stderr.contains("FIXTURE_TEARDOWN deadline"),
+        "teardown must not report failure; got:\n{stderr}"
     );
 }
