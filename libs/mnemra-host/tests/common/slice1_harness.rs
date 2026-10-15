@@ -25,6 +25,8 @@ use std::sync::Arc;
 use mnemra_host::auth::token::{AdminToken, generate, hash};
 use mnemra_host::mcp::server::{ECHO_PLUGIN_NAME, MnemraMcpServer};
 use mnemra_host::plugin::pool::PluginPool;
+use mnemra_host::plugin::runtime::PluginRuntime;
+use mnemra_host::signing::root_material::ROOT;
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use tokio::io::duplex;
 use uuid::Uuid;
@@ -103,8 +105,15 @@ pub async fn slice1_echo_harness(pg_pool: sqlx::PgPool) -> Slice1Harness {
     let plugin_pool_inner = PluginPool::new().expect("PluginPool::new");
     let component = Component::from_file(plugin_pool_inner.engine(), echo_component_path())
         .expect("load echo component");
+    // Same load the production path runs: signature-verified against ROOT, so the
+    // grants are the signed manifest's, never an unsigned parse.
+    let echo_runtime = PluginRuntime::load(
+        include_bytes!("../../../../plugins/mnemra-echo/manifest.toml"),
+        ROOT,
+    )
+    .expect("shipped echo manifest must verify against the embedded root");
     plugin_pool_inner
-        .register_module(ECHO_PLUGIN_NAME, "0.0.1", &component)
+        .register_module(ECHO_PLUGIN_NAME, "0.0.1", &component, echo_runtime.grants())
         .expect("register echo component into the pool");
     let plugin_pool = Arc::new(plugin_pool_inner);
 

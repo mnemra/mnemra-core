@@ -37,6 +37,7 @@ use std::sync::{Arc, Mutex};
 use wasmtime::component::{Component, Instance, Linker};
 use wasmtime::{Engine, Store};
 
+use crate::plugin::allowlist::VerifiedGrants;
 use crate::plugin::component::{self, HostState};
 use crate::plugin::epoch_thread::{EpochTickThread, HealthState};
 use crate::plugin::limits::{EPOCH_DEADLINE, FUEL_LIMIT, build_engine};
@@ -89,6 +90,8 @@ struct LiveModuleEntry {
     component: Arc<Component>,
     /// The host Linker for this component (host-fn imports + WASI trap-stubs).
     linker: Arc<Linker<HostState>>,
+    /// What the signed manifest grants this plugin (host fns, verbs).
+    grants: VerifiedGrants,
     /// Live slots. Each is `Some` when populated and `None` only transiently
     /// during a take→repopulate cycle. `slot_count` counts the `Some` entries.
     slots: Vec<Option<LiveSlot>>,
@@ -221,6 +224,10 @@ impl PluginPool {
     ///
     /// The host `Linker<HostState>` (host-fn imports + WASI trap-stubs) is built
     /// once per registered component and reused for every (re)instantiation.
+    /// `grants` is what the plugin's SIGNED manifest grants; a component importing
+    /// a host function outside it is refused before any instance is built
+    /// (R-0003-b), and its verb list is what the MCP verb gate reads
+    /// (`verified_verbs` / `is_verb_exposed`).
     ///
     /// Rejects duplicate registrations (same `plugin_name`) fail-closed via a
     /// two-phase guard: an early-out check is performed under a short-lived lock
@@ -234,6 +241,7 @@ impl PluginPool {
         plugin_name: &str,
         plugin_version: &str,
         component: &Component,
+        grants: &VerifiedGrants,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Cheap early-out: reject obvious duplicates before the (possibly slow)
         // POOL_MAX instantiation loop. This check is an OPTIMIZATION — the
@@ -251,7 +259,7 @@ impl PluginPool {
         let component = Arc::new(component.clone());
         // Build the host Linker once for this component (host-fn imports wired,
         // remaining imports trap-stubbed). Reused for every slot (re)instantiation.
-        let linker = Arc::new(component::build_linker(&self.engine, &component)?);
+        let linker = Arc::new(component::build_linker(&self.engine, &component, grants)?);
 
         // Pre-instantiate POOL_MAX live slots. A failure to instantiate the
         // fixture is a registration error, surfaced to the caller (fail-closed).
@@ -277,10 +285,30 @@ impl PluginPool {
             plugin_version: plugin_version.to_owned(),
             component,
             linker,
+            grants: grants.clone(),
             slots,
         });
 
         Ok(())
+    }
+
+    /// The verbs `plugin_name`'s signed manifest exposes, in manifest order.
+    /// Empty when the plugin is not registered (fail closed: nothing advertised).
+    pub fn verified_verbs(&self, plugin_name: &str) -> Vec<String> {
+        let live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        live.iter()
+            .find(|e| e.plugin_name == plugin_name)
+            .map(|e| e.grants.verbs().to_vec())
+            .unwrap_or_default()
+    }
+
+    /// The MCP verb gate (R-0010-d): `true` iff `plugin_name` is registered and
+    /// its signed manifest exposes `verb`. An unregistered plugin exposes nothing.
+    pub fn is_verb_exposed(&self, plugin_name: &str, verb: &str) -> bool {
+        let live = self.live_modules.lock().unwrap_or_else(|e| e.into_inner());
+        live.iter()
+            .find(|e| e.plugin_name == plugin_name)
+            .is_some_and(|e| e.grants.is_verb_allowed(verb))
     }
 
     /// The number of currently-populated live slots for `plugin_name`.

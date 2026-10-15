@@ -35,6 +35,16 @@
 //! The feature is named exactly `test-hooks`. The `cfg!(feature = "test-hooks")`
 //! guard below is the coordination point — green does not edit this file.
 
+/// #3842 (C1): the host-fn allowlist's single-writer rule is a type, not a
+/// convention. Unlike the seam fixtures below this holds with `test-hooks` on
+/// or off, so it is not skipped under that feature.
+#[test]
+fn unverified_allowlist_cannot_reach_register_module() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/no_test_seams/verified_grants_ctor_crate_private.rs");
+    t.compile_fail("tests/ui/no_test_seams/register_module_rejects_unverified_allowlist.rs");
+}
+
 #[test]
 fn test_epoch_seams_absent_in_default_build() {
     // When the `test-hooks` feature is explicitly enabled (e.g., running the

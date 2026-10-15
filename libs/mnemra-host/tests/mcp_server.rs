@@ -97,6 +97,8 @@ use uuid::Uuid;
 
 use mnemra_host::mcp::server::ECHO_PLUGIN_NAME;
 use mnemra_host::plugin::pool::PluginPool;
+use mnemra_host::plugin::runtime::PluginRuntime;
+use mnemra_host::signing::root_material::ROOT;
 use wasmtime::component::Component;
 
 // ---------------------------------------------------------------------------
@@ -181,7 +183,14 @@ fn echo_plugin_pool() -> Arc<PluginPool> {
     let pool = PluginPool::new().expect("PluginPool::new");
     let component =
         Component::from_file(pool.engine(), echo_component_path()).expect("load echo component");
-    pool.register_module(ECHO_PLUGIN_NAME, "0.0.1", &component)
+    // Same load the production path runs: signature-verified against ROOT, so the
+    // grants are the signed manifest's, never an unsigned parse.
+    let echo_runtime = PluginRuntime::load(
+        include_bytes!("../../../plugins/mnemra-echo/manifest.toml"),
+        ROOT,
+    )
+    .expect("shipped echo manifest must verify against the embedded root");
+    pool.register_module(ECHO_PLUGIN_NAME, "0.0.1", &component, echo_runtime.grants())
         .expect("register echo component");
     Arc::new(pool)
 }

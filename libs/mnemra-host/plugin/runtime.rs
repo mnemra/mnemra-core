@@ -26,10 +26,10 @@
 //!
 //! Only schema_version = 1. `0` and anything ≥ 2 produce `UnknownSchemaVersion`.
 
-use crate::plugin::allowlist::{HostFnAllowlist, VerbAllowlist};
+use crate::plugin::allowlist::{HostFnAllowlist, VerifiedGrants};
 use crate::plugin::manifest::parse_manifest;
 use crate::plugin::output;
-use crate::signing::verify::{SigningError, verify_plugin};
+use crate::signing::verify::{SigningError, extract_signed_payload, verify_plugin};
 
 // ---------------------------------------------------------------------------
 // Supported schema versions
@@ -156,10 +156,8 @@ impl std::error::Error for OutputError {}
 pub struct PluginRuntime {
     /// The `schema_version` field extracted from the loaded manifest.
     schema_version: u64,
-    /// Compiled host-fn allowlist from `[host_fns]`.
-    host_fn_allowlist: HostFnAllowlist,
-    /// Compiled verb capability list from `[verbs].exposed`.
-    verb_allowlist: VerbAllowlist,
+    /// Host-fn allowlist and verb list compiled from the signed manifest slice.
+    grants: VerifiedGrants,
 }
 
 impl PluginRuntime {
@@ -188,7 +186,11 @@ impl PluginRuntime {
 
         // Step 2: Parse manifest TOML. Verification passed, so the bytes are
         // structurally plausible — but they still need schema_version routing.
-        let manifest = parse_manifest(manifest_toml).map_err(LoadError::MalformedManifest)?;
+        // Only the signed slice (everything before `[signature]`) is trusted:
+        // bytes after that table are unsigned, so a `[host_fns]` or `[verbs]`
+        // table appended there must never reach the allowlists.
+        let manifest = parse_manifest(extract_signed_payload(manifest_toml))
+            .map_err(LoadError::MalformedManifest)?;
 
         // Step 3: schema_version branch. Unknown → error with observed + supported.
         let sv = manifest.plugin.schema_version;
@@ -200,13 +202,14 @@ impl PluginRuntime {
         }
 
         // Step 4: Compile allowlist + capability list from manifest fields.
-        let host_fn_allowlist = HostFnAllowlist::from_manifest(&manifest.host_fns);
-        let verb_allowlist = VerbAllowlist::from_exposed(&manifest.verbs.exposed);
+        let grants = VerifiedGrants::new(
+            HostFnAllowlist::from_manifest(&manifest.host_fns),
+            &manifest.verbs.exposed,
+        );
 
         Ok(Self {
             schema_version: sv,
-            host_fn_allowlist,
-            verb_allowlist,
+            grants,
         })
     }
 
@@ -217,17 +220,24 @@ impl PluginRuntime {
     /// Returns `true` iff `fn_name` appears in the manifest's `required` or
     /// `optional` host-fn declarations (R-0003-b).
     ///
-    /// This is the per-call check for WIT-boundary enforcement. The actual
-    /// boundary rejection (refusing undeclared host-fn calls before they reach
-    /// the host-fn body) is wired via the Wasmtime linker in `pool.rs`.
+    /// Query surface only; enforcement is `component::build_linker`'s link-time
+    /// refusal of undeclared imports, fed by [`Self::host_fn_allowlist`].
     pub fn is_host_fn_allowed(&self, fn_name: &str) -> bool {
-        self.host_fn_allowlist.is_allowed(fn_name)
+        self.grants.is_host_fn_allowed(fn_name)
     }
 
     /// Returns `true` iff `verb` appears in the manifest's `[verbs].exposed`
     /// list (R-0010-d). Called at dispatch time before the plugin is invoked.
     pub fn is_verb_allowed(&self, verb: &str) -> bool {
-        self.verb_allowlist.is_allowed(verb)
+        self.grants.is_verb_allowed(verb)
+    }
+
+    /// The verified grants, handed to `PluginPool::register_module` so the
+    /// linker can refuse undeclared imports (R-0003-b) and the verb gate can
+    /// read the signed verb list (R-0010-d). The only production source of
+    /// either.
+    pub fn grants(&self) -> &VerifiedGrants {
+        &self.grants
     }
 
     /// The `schema_version` field extracted from the loaded manifest.
