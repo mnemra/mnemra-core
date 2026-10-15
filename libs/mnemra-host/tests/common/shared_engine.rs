@@ -72,7 +72,7 @@ async fn acquire_engine() -> &'static EmbeddedEngine {
         .get_or_try_init(|| async {
             let engine = EmbeddedEngine::start().await?;
             let n = BOOT_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
-            // R-0026 AC1 evidence path: one-per-boot marker line. `eprintln!`,
+            // R-0026 AC1 evidence path: one-per-boot marker line. `emit!`,
             // not `tracing::info!` — a tracing event with no installed
             // subscriber is a silent no-op; this line must actually land in
             // the flake-runner log
@@ -212,7 +212,7 @@ pub fn boot_count() -> usize {
 }
 
 /// Exit-time teardown callback, registered once via `libc::atexit` inside
-/// [`shared_engine`]'s init closure.
+/// [`acquire_engine`]'s init closure.
 ///
 /// Calls `EmbeddedEngine::shutdown` to completion (R-0028: explicit,
 /// deterministic teardown — never `Drop` of a `static`). Serial, no fan-out
@@ -254,7 +254,7 @@ pub fn boot_count() -> usize {
 ///   the accepted A-12-class residual and vastly preferable to an infinite
 ///   hang.
 /// - **Panic-catching (belt-and-suspenders).** The spawned thread wraps its
-///   shutdown chain in `catch_unwind` so a panic is reported via `eprintln!`
+///   shutdown chain in `catch_unwind` so a panic is reported via `emit!`
 ///   instead of silently vanishing, and `TEARDOWN_DONE` is set on every
 ///   path — success, error, or panic — so the poll loop is never left
 ///   waiting on a flag that will never flip.
@@ -271,7 +271,7 @@ extern "C" fn teardown_shared_engine() {
         .name("fixture-teardown".into())
         .spawn(move || {
             // Catch a panic anywhere in the shutdown chain so it is
-            // surfaced (via `eprintln!`, below) instead of silently leaving
+            // surfaced (via `emit!`, below) instead of silently leaving
             // `TEARDOWN_DONE` unset, which would hang the poll loop forever.
             //
             // `AssertUnwindSafe`: the wrapped closure builds a fresh runtime

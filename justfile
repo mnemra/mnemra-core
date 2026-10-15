@@ -781,9 +781,10 @@ verify-cold-start:
     # inherits this recipe's full environment by default (the crate never
     # calls env_clear()). Use a token that is worth nothing if it leaks
     # there: a fine-grained personal access token with NO permissions and
-    # NO repository access — both repos this gate reads
+    # NO repository access, or the maintainer's sigil token (metadata:read on
+    # one repo). Both repos this gate reads
     # (theseus-rs/postgresql-binaries, portalcorp/pgvector_compiled) are
-    # public, so a zero-access token is sufficient; it exists only to move
+    # public, so either suffices; it exists only to move
     # this call from GitHub's 60/hr unauthenticated tier to the 5000/hr
     # authenticated tier, never to grant a capability.
     #
@@ -797,10 +798,13 @@ verify-cold-start:
     if [[ -z "${GITHUB_TOKEN:-}" ]]; then
         echo "verify-cold-start: GITHUB_TOKEN is unset — refusing before any network call."
         echo "  This gate needs a token ONLY to reach GitHub's authenticated API rate limit"
-        echo "  (5000/hr vs 60/hr unauthenticated); it exercises no read or write capability."
-        echo "  Mint a short-lived rate-limit-only token (metadata:read on one repo, valid 1"
-        echo "  hour; the two repos this gate downloads from are public), then run the gate with:"
+        echo "  (5000/hr vs 60/hr unauthenticated); the token's scope is never used."
+        echo "  Maintainer: mint a short-lived rate-limit-only token (metadata:read on one"
+        echo "  repo, valid 1 hour) and run the gate with:"
         echo "    GITHUB_TOKEN=\"\$(sigil-helper token --rate-limit-only mnemra/mnemra-core)\" just ci-full"
+        echo "  Otherwise: a fine-grained personal access token with no permissions and no"
+        echo "  repository access, exported as GITHUB_TOKEN (the two repos this gate"
+        echo "  downloads from are public)."
         echo "  Do NOT use \`gh auth token\` or any broad personal token: this recipe's full"
         echo "  environment is inherited by the downloaded Postgres binary's initdb, which"
         echo "  runs BEFORE this gate's own hash-pin check (brain #3616)."
