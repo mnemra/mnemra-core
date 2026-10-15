@@ -2,95 +2,75 @@
 //!
 //! # Purpose
 //!
-//! This file is the production WHERE-clause lint (`cargo test --test lint_workspace_clause`)
-//! AND the red-phase test for Task 12. It is NOT a throwaway fixture — Task 13
-//! wires it into the `verify-lint` just-recipe target as:
+//! The production WHERE-clause lint (`cargo test --test lint_workspace_clause`,
+//! run by `verify-lint`). At V0 there is no database row-level security
+//! (accepted risk R-0001), so this lint is the whole tenant boundary's
+//! tripwire: a read that never threads the workspace identity must fail loudly.
 //!
-//!   ```
-//!   verify-lint:
-//!     cargo test --manifest-path libs/mnemra-host/Cargo.toml \
-//!       --test lint_workspace_clause
-//!   ```
+//! # Design: default-deny over every file (Peter, 2026-10-15)
 //!
-//! # Contract
+//! An earlier revision scanned five hard-coded files, skipped a missing file
+//! with a message, and inspected only top-level `fn` items whose return type
+//! mentioned `Option` or `Vec`. Sixteen SQL-bearing production files, every
+//! impl method and every other return shape passed unexamined. This revision
+//! inverts the polarity, as the R-0032 guard lint
+//! (`tests/lint_engine_construction.rs`) did:
 //!
-//! Every read-path host-fn in the scanned source files must include a
-//! `workspace_id = ctx.workspace_id` WHERE-clause condition derived from the
-//! `WorkspaceCtx` argument. A function body that issues a DB query (SELECT)
-//! without this clause fails the lint.
+//! 1. **The population is computed, not listed.** Every `.rs` file under
+//!    `libs/mnemra-host/`, `cmd/` and `plugins/` (excluding each crate's own
+//!    `tests/` and `target/`) is
+//!    parsed. A file holding at least one SQL `SELECT` string literal (found by
+//!    a token walk of the whole file, attributes skipped, no position gated) is
+//!    in the population and is scanned. `EXPECTED_SQL_FILE_COUNT` pins the
+//!    population exactly, so a new SQL-bearing file is noticed.
+//! 2. **Every `fn` is a unit**: free functions, impl methods, trait default
+//!    methods, functions inside `mod`s and nested in other functions' statement
+//!    lists, whatever the return type. A unit whose body holds a SQL `SELECT`
+//!    literal must read `.workspace_id` from a binding the unit DECLARES as a
+//!    `WorkspaceCtx` or `CoordinationTxn` (parameter or closure parameter;
+//!    last path segment, exactly). Trust follows the declared type, never the
+//!    name: the guest-supplied `WitWorkspaceCtx`, a `tx` of another type and a
+//!    row's `workspace_id` field all fail. Presence only: whether the value
+//!    reaches the WHERE clause correctly is the semantic half, #1656.
+//! 3. **Reconciliation.** The per-function SQL count must sum to the whole-file
+//!    count. SQL that no function body owns (a module `const`, a `macro_rules!`
+//!    body, an item-position macro) is reported as `<unattributed>` and only a
+//!    whole-file exclusion can cover it.
+//! 4. **Exclusions are the opt-out**, an explicit list with a reason each
+//!    (`EXCLUSIONS`) and the exact number of SELECT literals each excuses. An
+//!    entry whose file or function no longer exists, that suppresses nothing,
+//!    or whose function gained a SELECT, FAILS.
+//! 5. **Caller tripwires** (`CALL_PINS`). Exclusions that rest on "no
+//!    production caller", or on callers passing a trusted workspace, pin the
+//!    production call-site count, so the first new caller fails loudly.
+//! 6. **Fail closed.** A file that does not parse, cannot be read, or a root
+//!    that is missing is an error, never a skip.
 //!
-//! ## What counts as a "read-path host-fn"
+//! ## What counts as SQL
 //!
-//! A function is a read-path host-fn if ALL of the following hold:
-//! 1. It is a free function (not an associated method) at the top level of the
-//!    scanned source file.
-//! 2. Its return type contains `Option` or `Vec` (data-returning signatures).
-//! 3. Its body (as a token string) contains a SELECT keyword (case-insensitive
-//!    match on the string "SELECT").
+//! A string literal holding the word `select`, except the enumerated prose
+//! forms (`GRANT`/`REVOKE` before it; ` failed` / ` canceled` after it). Every
+//! other `select` is SQL, so an unforeseen form fails closed.
 //!
-//! The classifier is **position-independent**: it does NOT require the first
-//! parameter to be named `ctx`. The builtins read-paths (added to the scanned
-//! set in T13.3) take `pool: &PgPool` first; a first-param-name gate would
-//! silently skip them and let an unscoped builtin SELECT pass the lint — a false
-//! green. See the rationale on `run_lint`.
+//! ## Not covered (named, not claimed)
 //!
-//! ## What counts as the required WHERE-clause
-//!
-//! The body token string (syn-parsed, comment-stripped) must contain `ctx.workspace_id`
-//! or `ctx . workspace_id` (quote! renders field access with spaces). This proves
-//! the workspace identity from WorkspaceCtx is actually used in the query path.
-//! A function that receives `_ctx` (unused) and issues a SELECT fails — the workspace
-//! identity is not threaded through to the query (R-0006-d: "not as a post-read filter").
-//!
-//! ## Source files scanned (production mode)
-//!
-//! The lint scans:
-//!   - `libs/mnemra-host/abi/host_fns.rs`
-//!   - `libs/mnemra-host/abi.rs`
-//!   - `libs/mnemra-host/builtins/agents.rs`     (T13.3 / R-0006-e)
-//!   - `libs/mnemra-host/builtins/sessions.rs`   (T13.3 / R-0006-e)
-//!   - `libs/mnemra-host/builtins/projects.rs`   (R-0006-e expansion)
-//!
-//! The `abi/*` files contain `todo!()` stubs with no SELECT queries, so they
-//! produce no read-path classifications. The classified read-paths
-//! (`agents::list_by_workspace`, `sessions::list_active_by_workspace`,
-//! `projects::list_by_workspace`) return `Vec` and issue `SELECT`, so they are
-//! classified — and at the current raw-`workspace_id` state they bind
-//! `workspace_id` directly without referencing `ctx.workspace_id`, so the lint
-//! FLAGS them (RED). The green phase threads `&WorkspaceCtx` and binds
-//! `ctx.workspace_id()`, which clears the flag.
-//!
-//! Note: `projects::exists` returns `Result<bool, _>` — `bool` is neither
-//! `Option` nor `Vec`, so the data-returning classifier does NOT pick it up. The
-//! lint flags `projects::list_by_workspace` (a `Vec`-returning SELECT), which is
-//! sufficient to make the projects.rs scan RED. The cross-tenant behavior of
-//! `exists` is pinned by the behavior test `projects_exists_is_false_cross_tenant`
-//! in `tests/tenancy_isolation.rs` rather than by this structural lint.
-//!
-//! `builtins/projects.rs` was SILENTLY omitted from the scanned set before the
-//! R-0006-e expansion (security audit, dispatch 1073) — a false green: the lint
-//! that enforces R-0006-e scanned only the builtins already threaded, so the live
-//! `projects` bypass passed by construction. The fix is to enumerate every
-//! tenant-table builtin source in the scanned set, not just the threaded ones.
-//!
-//! `builtins/authentication.rs` is intentionally NOT in the scanned set:
-//! `bootstrap` is the documented pre-token carve-out (R-0006-e) — it runs before
-//! any `WorkspaceCtx` can exist, so it cannot reference `ctx.workspace_id`. See
-//! the `bootstrap_is_the_single_pre_token_carve_out` test.
-//!
-//! # RED-phase design for `scan_real_host_fn_files`
-//!
-//! The `scan_real_host_fn_files` test runs the lint against the real source
-//! files. Since no `WorkspaceCtx` import from `auth` exists yet (Task 13 wires
-//! it), and bodies are `todo!()` stubs, the test currently PASSES (zero
-//! read-path functions with SELECT bodies = zero violations). That makes it
-//! green prematurely. The `host_fns_import_from_auth_for_lint` dependency test
-//! catches the red state: the lint's validity depends on `host_fns.rs` using
-//! the canonical `WorkspaceCtx`, which requires Task 13's import.
-//!
-//! The two-fixture tests (`violation_fixture_caught` and `compliant_fixture_passes`)
-//! are the load-bearing red evidence in this phase — they prove the lint
-//! mechanism works before Task 13 creates real read-path bodies.
+//! - Semantics: that the bound workspace value is the one in the WHERE clause
+//!   (#1656). A function can read `ctx.workspace_id` and still query unscoped.
+//! - Writes that do not contain a `select` word (`UPDATE`/`DELETE` by id).
+//! - SQL assembled across several literals so that no literal holds `select`,
+//!   SQL read from files or `include_str!`, and SQL built from non-literal
+//!   tokens.
+//! - Nested `fn` items inside inner blocks (an `if` arm, a closure): they stay
+//!   part of the enclosing function's unit.
+//! - `WorkspaceCtx::new` is `pub` (#1774): a forged `WorkspaceCtx` passes.
+//!   A WIT binding type literally named `WorkspaceCtx` (rather than aliased)
+//!   would pass the last-segment match.
+//! - Call pins match path suffixes, not resolved items: a `use` alias hides a
+//!   caller.
+//! - `tests/` and `target/` directly under a crate root are skipped; the same
+//!   names elsewhere are walked.
+//! - `#[cfg(test)]` code is scanned like any other; the one unit test that
+//!   needs it is listed in `EXCLUSIONS`.
 //!
 //! # Spec requirements traced
 //!
@@ -99,116 +79,633 @@
 //!   check SHALL assert this
 //! - R-0018-d: CI lint = `cargo test --test lint_workspace_clause` (syn AST);
 //!   a planted violation MUST return non-zero AND name the offending function
+//! - R-0006-e: `builtins::authentication::bootstrap` is the single pre-token
+//!   carve-out, pinned by `bootstrap_is_the_single_pre_token_carve_out`
 
-use syn::Item;
+use proc_macro2::{Delimiter, Spacing, TokenStream, TokenTree};
+use quote::ToTokens;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use syn::{ImplItem, Item, Stmt, TraitItem};
 
 // ---------------------------------------------------------------------------
-// Lint engine: classify and check functions
+// Lint engine: default-deny, whole-file
 // ---------------------------------------------------------------------------
 
-/// A lint finding: a read-path host-fn missing the WHERE-clause.
+/// Context key for SQL that no `fn` body owns (a module-level `const`, a
+/// `macro_rules!` body, an item-position macro, an impl/trait const). No
+/// per-function exclusion can name it: only a whole-file exclusion covers it.
+const UNATTRIBUTED_CONTEXT: &str = "<unattributed>";
+
+/// The only types whose `.workspace_id` is a trusted tenant scope:
+/// `WorkspaceCtx` (built once at the authenticated dispatch site) and
+/// `CoordinationTxn` (its `workspace_id` field is private and is set in one
+/// place, `PgCoordinationStore::run_write`, from `ctx.workspace_id()`).
+/// Matched on the LAST path segment of a declared type, exactly. A receiver is
+/// trusted by what it is declared to be, never by what it is called: the
+/// guest-supplied `WitWorkspaceCtx` (`wit/host.wit` `workspace-ctx`) must not
+/// pass, nor any `tx` or `ctx` of another type.
+const TRUSTED_WORKSPACE_TYPES: &[&str] = &["WorkspaceCtx", "CoordinationTxn"];
+
+/// A lint finding: SQL that reads a table outside a function that threads a
+/// trusted workspace identity.
 #[derive(Debug)]
 struct LintViolation {
+    /// Context key: `fn_name`, `Type::method`, or `UNATTRIBUTED_CONTEXT`.
     fn_name: String,
+    /// SQL SELECT literals this unit holds. An exclusion must match it exactly,
+    /// so a second SELECT added to an excluded function fails.
+    sql_literals: usize,
     reason: String,
 }
 
-/// Run the WHERE-clause lint over a string of Rust source code.
-///
-/// Returns a list of violations. An empty list means all read-path host-fns
-/// include the required WHERE-clause.
-///
-/// # Read-path classification
-///
-/// A function is classified as a read-path host-fn if:
-/// 1. It is a top-level free function (not method).
-/// 2. Its return type contains `Option` or `Vec` (data-returning).
-/// 3. Its body token string contains "SELECT" (case-insensitive).
-///
-/// ## Why the first-parameter NAME is NOT a classifier gate (T13.3 / R-0006-e)
-///
-/// An earlier version of this lint required the first parameter to be named
-/// `ctx`/`_ctx`. That gate was sound for the `abi/host_fns.rs` surface (where
-/// `WorkspaceCtx` is genuinely the first param), but it would SILENTLY SKIP the
-/// identity-query builtins (`builtins/agents.rs`, `builtins/sessions.rs`), whose
-/// first parameter is `pool: &PgPool`. With the builtins now in the scanned set
-/// (T13.3), a name gate would mean a raw-`workspace_id` builtin issuing an
-/// unscoped SELECT is never even classified — the lint would pass on a real
-/// tenancy bypass (a false green / inverted gate). The classifier is therefore
-/// position-independent: any data-returning function whose body contains SELECT
-/// is a read-path, regardless of where `WorkspaceCtx` sits in its parameter
-/// list. The contract is enforced by the required-clause check below.
-///
-/// # Required clause
-///
-/// The body token string must contain `ctx . workspace_id` or `ctx.workspace_id`
-/// (syn strips comments; `quote!` renders `.` field access with spaces).
-/// This proves the workspace identity derived from `WorkspaceCtx` is actually
-/// used in the query path, not as a post-read filter. A function that issues a
-/// SELECT but never references `ctx.workspace_id` fails the lint — this is
-/// exactly the state of the current raw-`workspace_id` builtins (RED).
-fn run_lint(source: &str) -> Vec<LintViolation> {
-    let ast = syn::parse_file(source).expect("lint source must parse");
-    let mut violations = Vec::new();
+/// What one source file contributed.
+#[derive(Debug)]
+struct FileReport {
+    /// SQL `SELECT` string literals anywhere in the file (attributes skipped).
+    /// Non-zero puts the file in the scanned population.
+    sql_literals: usize,
+    violations: Vec<LintViolation>,
+}
 
+/// A function, with nested `fn`/`impl`/`mod`/`trait` statement-items carved out
+/// into their own units so an inner function cannot lend its scoping to an
+/// outer one's SELECT or the reverse.
+struct FnUnit {
+    key: String,
+    /// The parameter list, where a typed receiver is declared.
+    sig: TokenStream,
+    body: TokenStream,
+}
+
+/// The text of a string-ish literal token (`"..."`, `r#"..."#`, `b"..."`), or
+/// `None` for any other literal.
+fn string_literal_content(lit: &proc_macro2::Literal) -> Option<String> {
+    let repr = lit.to_string();
+    let q = repr.find('"')?;
+    // Everything before the first quote must be a string prefix.
+    if !repr[..q].chars().all(|c| matches!(c, 'r' | 'b' | '#')) {
+        return None;
+    }
+    // Escapes that separate words would otherwise glue `\nSELECT` into one word.
+    Some(
+        repr[q..]
+            .replace("\\n", " ")
+            .replace("\\t", " ")
+            .replace("\\r", " ")
+            .replace("\\\n", " "),
+    )
+}
+
+/// Words that, directly before `select`, make it prose rather than a query
+/// (`GRANT SELECT ON ...`).
+const PROSE_BEFORE_SELECT: &[&str] = &["grant", "revoke"];
+/// Phrases that, directly after `select`, make it a log or panic message
+/// (`"artifact_get SELECT failed"`, `"keyset SELECT canceled by ..."`).
+const PROSE_AFTER_SELECT: &[&str] = &[" failed", " canceled"];
+
+/// True if the literal holds a SQL `SELECT`. Inverted, fail-closed polarity:
+/// EVERY word-boundary `select` in a string literal is SQL, except the
+/// enumerated prose forms above. A new prose form is a loud false positive to
+/// add to the lists; a SQL form the heuristic did not foresee (a leading
+/// comment, `EXPLAIN ANALYZE SELECT`, `DECLARE c CURSOR FOR SELECT`,
+/// `INSERT ... SELECT`) is caught by construction.
+fn is_sql_select(content: &str) -> bool {
+    let lower = content.to_lowercase();
+    let bytes = lower.as_bytes();
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut from = 0;
+    while let Some(off) = lower[from..].find("select") {
+        let at = from + off;
+        let end = at + "select".len();
+        from = end;
+        let before_ok = at == 0 || !is_word(bytes[at - 1]);
+        let after_ok = end >= bytes.len() || !is_word(bytes[end]);
+        if !(before_ok && after_ok) {
+            continue;
+        }
+        let prev_word: String = lower[..at]
+            .trim_end()
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_alphabetic())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        let prose = PROSE_BEFORE_SELECT.contains(&prev_word.as_str())
+            || PROSE_AFTER_SELECT
+                .iter()
+                .any(|p| lower[end..].starts_with(p));
+        if !prose {
+            return true;
+        }
+    }
+    false
+}
+
+/// End index of an attribute group at `tokens[i]` (`#[..]` / `#![..]`, which
+/// is also what doc comments lex to), or `None` if there is none there.
+fn attribute_end(tokens: &[TokenTree], i: usize) -> Option<usize> {
+    if !matches!(&tokens[i], TokenTree::Punct(p) if p.as_char() == '#') {
+        return None;
+    }
+    let mut j = i + 1;
+    if matches!(tokens.get(j), Some(TokenTree::Punct(b)) if b.as_char() == '!') {
+        j += 1;
+    }
+    matches!(
+        tokens.get(j),
+        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Bracket
+    )
+    .then_some(j + 1)
+}
+
+/// Count SQL `SELECT` literals in a token stream: every group recursively,
+/// attributes skipped, nothing position-gated.
+fn count_sql_literals(ts: TokenStream) -> usize {
+    let tokens: Vec<TokenTree> = ts.into_iter().collect();
+    let mut n = 0;
+    let mut i = 0;
+    while i < tokens.len() {
+        if let Some(next) = attribute_end(&tokens, i) {
+            i = next;
+            continue;
+        }
+        match &tokens[i] {
+            TokenTree::Group(g) => n += count_sql_literals(g.stream()),
+            TokenTree::Literal(l) => {
+                if string_literal_content(l).is_some_and(|c| is_sql_select(&c)) {
+                    n += 1;
+                }
+            }
+            TokenTree::Ident(_) | TokenTree::Punct(_) => {}
+        }
+        i += 1;
+    }
+    n
+}
+
+/// Collect every binding declared `name: [&] [mut] path::Type` whose type's
+/// last path segment is a `TRUSTED_WORKSPACE_TYPES` entry: function
+/// parameters and closure parameters alike (both lex as `name : type`).
+fn collect_trusted_receivers(ts: TokenStream, out: &mut HashSet<String>) {
+    let tokens: Vec<TokenTree> = ts.into_iter().collect();
+    for (i, tt) in tokens.iter().enumerate() {
+        match tt {
+            TokenTree::Group(g) => collect_trusted_receivers(g.stream(), out),
+            TokenTree::Ident(name) => {
+                // A single `:` (not the first half of `::`).
+                if !matches!(
+                    tokens.get(i + 1),
+                    Some(TokenTree::Punct(p)) if p.as_char() == ':' && p.spacing() == Spacing::Alone
+                ) {
+                    continue;
+                }
+                let mut j = i + 2;
+                // Skip `&`, a lifetime (`'` + ident) and `mut` before the path.
+                loop {
+                    match tokens.get(j) {
+                        Some(TokenTree::Punct(p)) if p.as_char() == '&' => j += 1,
+                        Some(TokenTree::Punct(p)) if p.as_char() == '\'' => j += 2,
+                        Some(TokenTree::Ident(m)) if m == "mut" => j += 1,
+                        _ => break,
+                    }
+                }
+                // Walk `a :: b :: C`, keeping the last segment.
+                let mut last: Option<String> = None;
+                while let Some(TokenTree::Ident(seg)) = tokens.get(j) {
+                    last = Some(seg.to_string());
+                    let is_path_sep = matches!(tokens.get(j + 1), Some(TokenTree::Punct(p)) if p.as_char() == ':')
+                        && matches!(tokens.get(j + 2), Some(TokenTree::Punct(p)) if p.as_char() == ':');
+                    if is_path_sep {
+                        j += 3;
+                    } else {
+                        break;
+                    }
+                }
+                if last.is_some_and(|l| TRUSTED_WORKSPACE_TYPES.contains(&l.as_str())) {
+                    out.insert(name.to_string());
+                }
+            }
+            TokenTree::Punct(_) | TokenTree::Literal(_) => {}
+        }
+    }
+}
+
+/// True if the stream contains `<trusted receiver> . workspace_id` (field
+/// access, or the start of a `workspace_id()` call). Presence only: that the
+/// workspace identity of a trusted type is threaded into the function. Whether
+/// it reaches the WHERE clause correctly is the semantic half, #1656.
+fn references_trusted_workspace_id(ts: TokenStream, trusted: &HashSet<String>) -> bool {
+    let tokens: Vec<TokenTree> = ts.into_iter().collect();
+    for (i, tt) in tokens.iter().enumerate() {
+        match tt {
+            TokenTree::Group(g) => {
+                if references_trusted_workspace_id(g.stream(), trusted) {
+                    return true;
+                }
+            }
+            TokenTree::Ident(id) => {
+                if trusted.contains(&id.to_string())
+                    && matches!(tokens.get(i + 1), Some(TokenTree::Punct(p)) if p.as_char() == '.')
+                    && matches!(tokens.get(i + 2), Some(TokenTree::Ident(f)) if f == "workspace_id")
+                {
+                    return true;
+                }
+            }
+            TokenTree::Punct(_) | TokenTree::Literal(_) => {}
+        }
+    }
+    false
+}
+
+fn type_key(ty: &syn::Type) -> String {
+    match ty {
+        syn::Type::Path(p) => p
+            .path
+            .segments
+            .last()
+            .map(|s| s.ident.to_string())
+            .unwrap_or_default(),
+        other => other.to_token_stream().to_string().replace(' ', ""),
+    }
+}
+
+fn collect_block(prefix: &str, sig: &syn::Signature, block: &syn::Block, out: &mut Vec<FnUnit>) {
+    let name = sig.ident.to_string();
+    let key = if prefix.is_empty() {
+        name
+    } else {
+        format!("{prefix}::{name}")
+    };
+    let mut body = TokenStream::new();
+    let mut nested: Vec<&Item> = Vec::new();
+    for stmt in &block.stmts {
+        match stmt {
+            Stmt::Item(item @ (Item::Fn(_) | Item::Impl(_) | Item::Mod(_) | Item::Trait(_))) => {
+                nested.push(item)
+            }
+            other => other.to_tokens(&mut body),
+        }
+    }
+    out.push(FnUnit {
+        key,
+        sig: sig.inputs.to_token_stream(),
+        body,
+    });
+    for item in nested {
+        collect_item(item, "", out);
+    }
+}
+
+fn collect_item(item: &Item, prefix: &str, out: &mut Vec<FnUnit>) {
+    match item {
+        Item::Fn(f) => collect_block(prefix, &f.sig, &f.block, out),
+        Item::Mod(m) => {
+            if let Some((_, items)) = &m.content {
+                for i in items {
+                    collect_item(i, "", out);
+                }
+            }
+        }
+        Item::Impl(imp) => {
+            let ty = type_key(&imp.self_ty);
+            for ii in &imp.items {
+                if let ImplItem::Fn(f) = ii {
+                    collect_block(&ty, &f.sig, &f.block, out);
+                }
+            }
+        }
+        Item::Trait(t) => {
+            let ty = t.ident.to_string();
+            for ti in &t.items {
+                if let TraitItem::Fn(f) = ti
+                    && let Some(block) = &f.default
+                {
+                    collect_block(&ty, &f.sig, block, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Run the lint over one file's source.
+///
+/// Every `fn` (free, impl method, trait default method, nested in a `mod` or
+/// in another `fn`'s statement list) whose body holds a SQL `SELECT` literal
+/// is a read path, whatever its return type, and must reference
+/// `<receiver>.workspace_id` where the unit declares `<receiver>` as a
+/// `WorkspaceCtx` or `CoordinationTxn`. SQL that no `fn` body owns is
+/// reconciled against the whole-file count and reported as
+/// `UNATTRIBUTED_CONTEXT`. `Err` means the source did not parse: the caller
+/// fails closed.
+fn try_lint(source: &str) -> Result<FileReport, String> {
+    let ast = syn::parse_file(source).map_err(|e| format!("does not parse: {e}"))?;
+    let sql_literals = count_sql_literals(ast.to_token_stream());
+
+    let mut units = Vec::new();
     for item in &ast.items {
-        if let Item::Fn(func) = item {
-            let fn_name = func.sig.ident.to_string();
+        collect_item(item, "", &mut units);
+    }
 
-            // 1. Return type contains Option or Vec
-            let sig_output = &func.sig.output;
-            let return_type_str = format!("{}", quote::quote!(#sig_output));
-            let is_data_returning =
-                return_type_str.contains("Option") || return_type_str.contains("Vec");
+    let mut violations = Vec::new();
+    let mut attributed = 0usize;
+    for unit in units {
+        let n = count_sql_literals(unit.body.clone());
+        attributed += n;
+        if n == 0 {
+            continue;
+        }
+        let mut trusted = HashSet::new();
+        collect_trusted_receivers(unit.sig.clone(), &mut trusted);
+        collect_trusted_receivers(unit.body.clone(), &mut trusted);
+        if !references_trusted_workspace_id(unit.body, &trusted) {
+            violations.push(LintViolation {
+                reason: format!(
+                    "read-path `{}` holds {n} SQL SELECT literal(s) but reads `.workspace_id` \
+                    from no binding declared `WorkspaceCtx` or `CoordinationTxn` — missing \
+                    workspace_id WHERE-clause (R-0006-d, R-0018-d)",
+                    unit.key
+                ),
+                fn_name: unit.key,
+                sql_literals: n,
+            });
+        }
+    }
 
-            if !is_data_returning {
+    // The partition cannot place more SQL than the whole-file walk saw; if it
+    // does, the two disagree and neither can be trusted.
+    assert!(
+        attributed <= sql_literals,
+        "lint partition attributed {attributed} SQL literals but the whole-file walk saw \
+        {sql_literals}: the attribution step is broken"
+    );
+    if attributed < sql_literals {
+        let n = sql_literals - attributed;
+        violations.push(LintViolation {
+            fn_name: UNATTRIBUTED_CONTEXT.to_string(),
+            sql_literals: n,
+            reason: format!(
+                "{n} SQL SELECT literal(s) sit outside any fn body (module const, macro body, \
+                item-position macro, impl/trait const) — no workspace scoping can be checked"
+            ),
+        });
+    }
+
+    Ok(FileReport {
+        sql_literals,
+        violations,
+    })
+}
+
+/// Fixture helper: violations for a source string. An unparseable source is a
+/// test failure, never an empty list.
+fn run_lint(source: &str) -> Vec<LintViolation> {
+    try_lint(source)
+        .unwrap_or_else(|e| panic!("lint source {e}"))
+        .violations
+}
+
+// ---------------------------------------------------------------------------
+// Population: every .rs file under the production roots that holds SQL
+// ---------------------------------------------------------------------------
+
+/// Production roots, relative to the workspace root. A `tests/` or `target/`
+/// directory directly under a crate root (a directory holding `Cargo.toml`)
+/// is cargo's own and is not walked; one anywhere else is walked.
+/// `plugins/` holds wasm components with no database access: it is listed so
+/// that claim is a check, not prose.
+const PRODUCTION_ROOTS: &[&str] = &["libs/mnemra-host", "cmd", "plugins"];
+
+/// A deliberately unscoped read. `function: None` excludes the whole file
+/// (including `UNATTRIBUTED_CONTEXT` SQL); `Some(key)` excludes one function,
+/// keyed `name` or `Type::name`. `sql_literals` is the exact number of SELECT
+/// literals excused: a function that gains a second SELECT fails. Every entry
+/// must still suppress something: one for a renamed or removed file or
+/// function FAILS, never skips.
+struct Exclusion {
+    file: &'static str,
+    function: Option<&'static str>,
+    sql_literals: usize,
+    reason: &'static str,
+}
+
+/// Outcome of a scan over a root set.
+#[derive(Debug, Default)]
+struct ScanOutcome {
+    /// Relative paths of every file holding SQL, sorted.
+    population: Vec<String>,
+    /// `(file, context, reason)` not covered by any exclusion.
+    violations: Vec<(String, String, String)>,
+    /// Exclusions that suppressed nothing, or the wrong number of sites or
+    /// literals.
+    stale: Vec<String>,
+    /// `(file, context, reason)` for every site an exclusion covered.
+    excluded: Vec<(String, String, &'static str)>,
+}
+
+fn collect_rs_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| format!("cannot read dir {}: {e}", dir.display()))?;
+    let is_crate_root = dir.join("Cargo.toml").is_file();
+    for entry in entries {
+        let path = entry
+            .map_err(|e| format!("dir entry in {}: {e}", dir.display()))?
+            .path();
+        if path.is_dir() {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if is_crate_root && (name == "tests" || name == "target") {
                 continue;
             }
+            collect_rs_files(&path, out)?;
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
 
-            // 2. Body contains SELECT keyword
-            let func_block = &func.block;
-            let body_tokens = format!("{}", quote::quote!(#func_block));
-            let body_lower = body_tokens.to_lowercase();
-            if !body_lower.contains("select") {
-                continue;
-            }
+/// Scan every `.rs` file under `roots` (relative to `base`). Fails closed: a
+/// missing root, an unreadable file or an unparseable file is an `Err`, never
+/// a skip.
+fn scan(base: &Path, roots: &[&str], exclusions: &[Exclusion]) -> Result<ScanOutcome, String> {
+    let mut files = Vec::new();
+    for root in roots {
+        collect_rs_files(&base.join(root), &mut files)?;
+    }
+    files.sort();
 
-            // This is a read-path host-fn. Check for the WHERE-clause.
-            // The clause must be `workspace_id = ctx.workspace_id`.
-            // In token form (quote!), field access `ctx.workspace_id` becomes
-            // `ctx . workspace_id` (spaces around the dot).
-            // We check both forms to be robust.
-            // The WHERE-clause check scans the body token string only (syn strips comments
-            // during parsing, so body_tokens is comment-free).
-            //
-            // Discriminator: the body must reference `ctx.workspace_id` (field access or
-            // method call) — the only way to thread the workspace identity through to the
-            // query. This fires if the workspace ctx is not used at all in the body.
-            //
-            // `quote!` renders field access `ctx.workspace_id` as `ctx . workspace_id`
-            // (space-separated tokens). Method call `ctx.workspace_id()` renders as
-            // `ctx . workspace_id ()`.
-            // We check both field-access and method-call forms.
-            //
-            // NOTE: We do NOT use source.contains(...) as a fallback — source includes
-            // comments; a comment mentioning the pattern would cause a false negative.
-            let has_clause = body_tokens.contains("ctx . workspace_id")
-                || body_tokens.contains("ctx.workspace_id");
+    let mut out = ScanOutcome::default();
+    let mut suppressed_sites = vec![0usize; exclusions.len()];
+    let mut suppressed_literals = vec![0usize; exclusions.len()];
 
-            if !has_clause {
-                violations.push(LintViolation {
-                    fn_name: fn_name.clone(),
-                    reason: format!(
-                        "read-path host-fn `{}` contains SELECT but does not reference \
-                        `ctx.workspace_id` — missing workspace_id WHERE-clause (R-0006-d, R-0018-d)",
-                        fn_name
-                    ),
-                });
+    for path in &files {
+        let rel = path
+            .strip_prefix(base)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {rel}: {e}"))?;
+        let report = try_lint(&src).map_err(|e| format!("{rel} {e}"))?;
+        if report.sql_literals == 0 {
+            continue;
+        }
+        out.population.push(rel.clone());
+        for v in report.violations {
+            let hit = exclusions.iter().position(|e| {
+                e.file == rel
+                    && match e.function {
+                        None => true,
+                        Some(f) => f == v.fn_name && v.fn_name != UNATTRIBUTED_CONTEXT,
+                    }
+            });
+            match hit {
+                Some(i) => {
+                    suppressed_sites[i] += 1;
+                    suppressed_literals[i] += v.sql_literals;
+                    out.excluded
+                        .push((rel.clone(), v.fn_name, exclusions[i].reason));
+                }
+                None => out.violations.push((rel.clone(), v.fn_name, v.reason)),
             }
         }
     }
 
-    violations
+    for (i, e) in exclusions.iter().enumerate() {
+        let label = format!("{}::{}", e.file, e.function.unwrap_or("*"));
+        if !out.population.iter().any(|p| p == e.file) {
+            out.stale.push(format!(
+                "{label}: file is absent or holds no SQL SELECT — renamed, removed or migrated"
+            ));
+        } else if e.function.is_some() && suppressed_sites[i] != 1 {
+            out.stale.push(format!(
+                "{label}: suppressed {} site(s), must be exactly 1 (0 = the function was \
+                renamed, or its SELECTs are gone or now read a trusted workspace — confirm the \
+                read is really scoped before deleting the entry; >1 = the matching key \
+                collided and the exclusion widened)",
+                suppressed_sites[i]
+            ));
+        } else if suppressed_literals[i] == 0 {
+            out.stale.push(format!(
+                "{label}: whole-file exclusion suppressed nothing — the file is now compliant"
+            ));
+        } else if suppressed_literals[i] != e.sql_literals {
+            out.stale.push(format!(
+                "{label}: excuses {} SELECT literal(s) but {} are unscoped now — a SELECT was \
+                added or removed; review the new one for workspace scoping, then update \
+                `sql_literals`",
+                e.sql_literals, suppressed_literals[i]
+            ));
+        }
+    }
+    Ok(out)
+}
+
+/// `Some(message)` when the population size differs from the pin.
+fn population_pin_error(actual: usize, pinned: usize) -> Option<String> {
+    (actual != pinned).then(|| {
+        format!(
+            "SQL-bearing population is {actual} files, pinned at {pinned} — a file gained or lost \
+            its SQL. Review it for workspace scoping, then bump EXPECTED_SQL_FILE_COUNT in the \
+            same commit"
+        )
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Caller tripwires: production call sites of trusted-identity and no-caller
+// functions
+// ---------------------------------------------------------------------------
+
+/// What a `CallPin` counts.
+#[derive(Clone, Copy)]
+enum PinKind {
+    /// `<path>(...)`: the last segment followed by a call group, preceded by
+    /// the earlier segments joined with `::` (a method call needs only the
+    /// last). A definition (`fn name(`) is not a call.
+    Call,
+    /// Every occurrence of the single ident.
+    Ident,
+}
+
+/// A pinned production call-site count. An exclusion whose reason is "no
+/// production caller", or that rests on its callers passing a trusted
+/// workspace, is only as good as that fact: this makes the first new caller
+/// fail loudly instead of inheriting the exclusion.
+struct CallPin {
+    path: &'static [&'static str],
+    kind: PinKind,
+    expected: usize,
+    why: &'static str,
+}
+
+/// Occurrences of the pinned symbol in a token stream.
+fn count_symbol(ts: TokenStream, pin: &CallPin) -> usize {
+    let tokens: Vec<TokenTree> = ts.into_iter().collect();
+    let last = pin.path[pin.path.len() - 1];
+    let mut n = 0;
+    let mut i = 0;
+    while i < tokens.len() {
+        if let Some(next) = attribute_end(&tokens, i) {
+            i = next;
+            continue;
+        }
+        match &tokens[i] {
+            TokenTree::Group(g) => n += count_symbol(g.stream(), pin),
+            TokenTree::Ident(id) if id == last => match pin.kind {
+                PinKind::Ident => n += 1,
+                PinKind::Call => {
+                    let is_call = matches!(
+                        tokens.get(i + 1),
+                        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis
+                    );
+                    let is_def =
+                        i > 0 && matches!(&tokens[i - 1], TokenTree::Ident(f) if f == "fn");
+                    let mut pos = i;
+                    let mut path_ok = true;
+                    for seg in pin.path[..pin.path.len() - 1].iter().rev() {
+                        let sep = pos >= 3
+                            && matches!(&tokens[pos - 1], TokenTree::Punct(p) if p.as_char() == ':')
+                            && matches!(&tokens[pos - 2], TokenTree::Punct(p) if p.as_char() == ':')
+                            && matches!(&tokens[pos - 3], TokenTree::Ident(s) if s == seg);
+                        if !sep {
+                            path_ok = false;
+                            break;
+                        }
+                        pos -= 3;
+                    }
+                    if is_call && !is_def && path_ok {
+                        n += 1;
+                    }
+                }
+            },
+            TokenTree::Ident(_) | TokenTree::Punct(_) | TokenTree::Literal(_) => {}
+        }
+        i += 1;
+    }
+    n
+}
+
+/// Occurrences of each pin over every `.rs` under `roots`, in pin order.
+fn count_pins(base: &Path, roots: &[&str], pins: &[CallPin]) -> Result<Vec<usize>, String> {
+    let mut files = Vec::new();
+    for root in roots {
+        collect_rs_files(&base.join(root), &mut files)?;
+    }
+    let mut counts = vec![0usize; pins.len()];
+    for path in &files {
+        let src = std::fs::read_to_string(path)
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        let ts = syn::parse_file(&src)
+            .map_err(|e| format!("{} does not parse: {e}", path.display()))?
+            .to_token_stream();
+        for (i, pin) in pins.iter().enumerate() {
+            counts[i] += count_symbol(ts.clone(), pin);
+        }
+    }
+    Ok(counts)
 }
 
 /// Format lint violations for display (non-zero = failure, names offending fns).
@@ -270,16 +767,14 @@ pub fn artifact_get(
     // Correct: ctx.workspace_id is used to scope the query to the workspace (R-0006-d).
     // In real sqlx usage, this binds ctx.workspace_id() as a WHERE clause parameter.
     let workspace_scope = ctx.workspace_id;
-    let _query = sqlx_stub_select_with_workspace(workspace_scope, "some-id");
+    let _query = sqlx::query("SELECT id, body FROM artifacts WHERE workspace_id = $1 AND id = $2")
+        .bind(ctx.workspace_id)
+        .bind(_id);
     todo!()
-}
-
-fn sqlx_stub_select_with_workspace(workspace_id: Uuid, _id: &str) -> String {
-    format!("SELECT id, body FROM artifacts WHERE workspace_id = '{}' AND id = $1", workspace_id)
 }
 "#;
 
-/// A non-read-path host-fn (write path, no SELECT, no Option/Vec return).
+/// A non-read-path host-fn (write path, no SELECT).
 /// The lint must NOT classify this as a read-path fn (no false positives).
 const NON_READ_PATH_FIXTURE: &str = r#"
 use uuid::Uuid;
@@ -364,8 +859,7 @@ fn write_path_fixture_not_classified_as_read_path() {
 
     assert!(
         violations.is_empty(),
-        "Lint must NOT flag write-path host-fns (no SELECT in relevant position, \
-        or no Option/Vec return). Found violations:\n{}",
+        "Lint must NOT flag write-path host-fns (no SELECT literal). Found violations:\n{}",
         format_violations(&violations)
     );
 }
@@ -490,18 +984,17 @@ fn builtin_ctx_threaded_read_path_passes() {
 /// `workspace_id: Uuid`.
 ///
 /// This test pins two things so a future change can't silently fold bootstrap
-/// into the type-threaded set or drop the carve-out:
+/// into the type-threaded set or widen the carve-out:
 ///
-/// 1. `builtins/authentication.rs` is NOT in the lint's scanned set (so bootstrap
-///    is never classified / flagged). A future edit that adds it to the scanned
-///    list of `scan_real_host_fn_files_no_where_clause_violations` would break
-///    this expectation — and bootstrap would be flagged, surfacing the change.
+/// 1. `bootstrap` is the ONLY entry in `EXCLUSIONS` for
+///    `builtins/authentication.rs`. A second unscoped read in that file must
+///    fail the production scan, not ride on this carve-out.
 /// 2. `bootstrap` still exists with a raw `workspace_id: Uuid` parameter and is
 ///    NOT threaded by `&WorkspaceCtx` — documenting the carve-out at the source.
 ///
 /// If a future task threads `WorkspaceCtx` into bootstrap (impossible without a
-/// pre-existing token), or adds `authentication.rs` to the lint scope, this test
-/// fails and forces an explicit decision rather than a silent drift.
+/// pre-existing token), this test fails and forces an explicit decision rather
+/// than a silent drift.
 #[test]
 fn bootstrap_is_the_single_pre_token_carve_out() {
     // R-0006-e carve-out
@@ -512,6 +1005,17 @@ fn bootstrap_is_the_single_pre_token_carve_out() {
         .unwrap_or_else(|e| panic!("cannot read {}: {}", auth_path.display(), e));
 
     let ast = syn::parse_file(&src).expect("builtins/authentication.rs must parse");
+
+    let auth_exclusions: Vec<_> = EXCLUSIONS
+        .iter()
+        .filter(|e| e.file == "libs/mnemra-host/builtins/authentication.rs")
+        .collect();
+    assert_eq!(
+        auth_exclusions.len(),
+        1,
+        "builtins/authentication.rs must carry exactly the bootstrap exclusion (R-0006-e)"
+    );
+    assert_eq!(auth_exclusions[0].function, Some("bootstrap"));
 
     // Locate `pub async fn bootstrap` and inspect its first non-pool parameter.
     let mut found_bootstrap = false;
@@ -595,77 +1099,788 @@ fn host_fns_defines_no_local_workspace_ctx_stub() {
     );
 }
 
-/// R-0006-d, R-0018-d, R-0006-e: run the WHERE-clause lint against the real
-/// source files. All read-path host-fns must include the WHERE-clause.
+/// Workspace root: the directory holding the root `Cargo.toml`.
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Count of production files holding SQL, pinned exactly (the repo's count-pin
+/// convention). A new SQL-bearing file, or one that loses its SQL, moves it.
+const EXPECTED_SQL_FILE_COUNT: usize = 20;
+
+/// Deliberately unscoped reads, or reads scoped by an identity other than a
+/// `WorkspaceCtx` argument. One line of reason each; see `Exclusion`.
 ///
-/// # T13.3 / R-0006-e RED state (this is the failing production-scan assertion)
+/// Adding an entry is a tenancy decision with the same review as a new read
+/// path, and a read of tenant data with no workspace filter is a bug to fix,
+/// never an entry here. The entries are NOT uniformly safe, and the register
+/// says so rather than claiming it:
+/// - Groups 1-2 read with no workspace predicate by design (token identity,
+///   global tables, probes). `rotate` reads a tenant table (`admin_tokens`)
+///   by id alone: that is a known gap (#4014), held only by its caller pin.
+/// - Group 3 carries a `workspace_id` predicate in the SQL, keyed on a value
+///   the function does not receive as a trusted type. Each rests on a fact
+///   about its callers, which `CALL_PINS` makes loud when it changes.
 ///
-/// The `abi/*` files still have `todo!()` bodies with no SELECT, so they
-/// contribute zero violations. But the builtins read-paths now in the scanned
-/// set (`agents::list_by_workspace`, `sessions::list_active_by_workspace`,
-/// `projects::list_by_workspace`) DO issue a `SELECT ... WHERE workspace_id = $N`
-/// that binds a RAW `workspace_id: Uuid` and never references `ctx.workspace_id`.
-/// Under the position-independent classifier they are read-paths, and the missing
-/// clause makes this test FAIL — naming those functions. That failure IS the RED
-/// for T13.3 / R-0006-e: it proves the lint catches the real tenancy bypass in
-/// the live builtins, exactly the contract R-0006-e asks the lint to enforce. The
-/// `projects.rs` entry in particular closes the silent-omission false-green the
-/// security audit flagged.
-///
-/// The green phase (Forge) threads `&WorkspaceCtx` and binds
-/// `ctx.workspace_id()`, after which this test passes for the right reason.
+/// `sql_literals` is the exact number of SELECT literals each entry excuses.
+const EXCLUSIONS: &[Exclusion] = &[
+    // --- Group 1: token identity. The workspace is the OUTPUT of the lookup.
+    Exclusion {
+        file: "libs/mnemra-host/auth/token.rs",
+        function: Some("lookup_by_hash"),
+        sql_literals: 1,
+        reason: "pre-auth token lookup by hash; yields the workspace, cannot consume one",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/auth/token.rs",
+        function: Some("rotate"),
+        sql_literals: 1,
+        reason: "UNSCOPED read of admin_tokens by id (gap, #4014); no production caller, held by CALL_PINS",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/builtins/authentication.rs",
+        function: Some("bootstrap"),
+        sql_literals: 1,
+        reason: "R-0006-e pre-token carve-out: runs before any ctx exists; SQL filters workspace_id = $1",
+    },
+    // --- Group 2: tables that are not per-workspace, and probes that return nothing.
+    Exclusion {
+        file: "libs/mnemra-host/builtins/users.rs",
+        function: Some("get"),
+        sql_literals: 1,
+        reason: "users is a global identity table with no workspace_id column; no production caller, held by CALL_PINS",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/builtins/users.rs",
+        function: Some("list"),
+        sql_literals: 1,
+        reason: "users is a global identity table with no workspace_id column; no production caller, held by CALL_PINS",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/builtins/workspaces.rs",
+        function: Some("list"),
+        sql_literals: 1,
+        reason: "workspaces is the tenant registry itself; no production caller, held by CALL_PINS",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/schema/migrations.rs",
+        function: Some("apply"),
+        sql_literals: 1,
+        reason: "reads schema_migrations, a global bookkeeping table",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/builtins.rs",
+        function: Some("init_all"),
+        sql_literals: 6,
+        reason: "startup readiness probe: COUNT(*) over tenant tables, unscoped, result discarded; only table existence is checked",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/schema/init.rs",
+        function: Some("health_snapshot"),
+        sql_literals: 3,
+        reason: "/health probe: SELECT 1, pg_extension and the default workspace row; no tenant data",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/schema/init.rs",
+        function: Some("create_least_privilege_roles"),
+        sql_literals: 1,
+        reason: "DDL: the SELECT is a pg_roles existence guard inside a DO block",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/projection/fixture_projection.rs",
+        function: Some("create_echo_fixture_projection"),
+        sql_literals: 1,
+        reason: "DDL for a fixture matview that aggregates ALL workspaces with no workspace dimension; tests only, held by CALL_PINS",
+    },
+    // --- Group 3: SQL filters workspace_id; the value arrives by a route the type check cannot see.
+    Exclusion {
+        file: "libs/mnemra-host/builtins/actors.rs",
+        function: Some("resolve_or_create_in_txn"),
+        sql_literals: 1,
+        reason: "takes a raw workspace_id from its callers (ctx or CoordinationTxn derived); SQL filters workspace_id = $1; callers held by CALL_PINS",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/plugin/component.rs",
+        function: Some("HostState::artifact_get"),
+        sql_literals: 1,
+        reason: "workspace is self.workspace_id, bound from the authenticated ctx by set_workspace_id (held by CALL_PINS); the guest's WitWorkspaceCtx is ignored by design; SQL filters workspace_id = $2",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/plugin/component.rs",
+        function: Some("HostState::artifact_list"),
+        sql_literals: 4,
+        reason: "workspace is self.workspace_id, bound from the authenticated ctx by set_workspace_id (held by CALL_PINS); the guest's WitWorkspaceCtx is ignored by design; SQL filters workspace_id = $1",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/storage/postgres.rs",
+        function: Some("PostgresTransaction::get"),
+        sql_literals: 1,
+        reason: "scoped by the WorkspaceId bound at begin(), which is a forgeable pub Uuid; no production caller, held by CALL_PINS; SQL filters workspace_id = $1",
+    },
+    Exclusion {
+        file: "libs/mnemra-host/storage/postgres.rs",
+        function: Some("PostgresTransaction::list"),
+        sql_literals: 1,
+        reason: "scoped by the WorkspaceId bound at begin(), which is a forgeable pub Uuid; no production caller, held by CALL_PINS; SQL filters workspace_id = $1",
+    },
+    // --- #[cfg(test)] unit test inside a production file: not compiled into the host.
+    Exclusion {
+        file: "libs/mnemra-host/plugin/sql_observe.rs",
+        function: Some("list_sql_capture_round_trips"),
+        sql_literals: 1,
+        reason: "cfg(test) unit test; the SELECT is a string it hands to a capture seam, never executed",
+    },
+];
+
+/// Production call-site counts that the exclusions above rest on. A first new
+/// caller fails here, so it gets reviewed before it inherits an exclusion.
+const CALL_PINS: &[CallPin] = &[
+    CallPin {
+        path: &["token", "rotate"],
+        kind: PinKind::Call,
+        expected: 0,
+        why: "rotate reads admin_tokens by id with no workspace predicate (#4014)",
+    },
+    CallPin {
+        path: &["users", "get"],
+        kind: PinKind::Call,
+        expected: 0,
+        why: "users::get reads a global table by id",
+    },
+    CallPin {
+        path: &["users", "list"],
+        kind: PinKind::Call,
+        expected: 0,
+        why: "users::list returns every user",
+    },
+    CallPin {
+        path: &["workspaces", "list"],
+        kind: PinKind::Call,
+        expected: 0,
+        why: "workspaces::list returns every tenant",
+    },
+    CallPin {
+        path: &["create_echo_fixture_projection"],
+        kind: PinKind::Call,
+        expected: 0,
+        why: "the fixture matview aggregates across all workspaces",
+    },
+    CallPin {
+        path: &["PostgresStorage"],
+        kind: PinKind::Ident,
+        expected: 6,
+        why: "PostgresTransaction is scoped by a forgeable WorkspaceId; every mention of its store is counted (2 in mnemra_host.rs, which holds it unused; 4 in its own module)",
+    },
+    CallPin {
+        path: &["resolve_or_create_in_txn"],
+        kind: PinKind::Call,
+        expected: 3,
+        why: "takes a raw workspace_id; each caller must derive it from a trusted ctx or txn",
+    },
+    CallPin {
+        path: &["set_workspace_id"],
+        kind: PinKind::Call,
+        expected: 1,
+        why: "binds HostState.workspace_id, the scope for artifact_get/artifact_list; the one caller derives it from the authenticated ctx",
+    },
+];
+
+/// One error line per pin whose measured count differs from its pin.
+fn pin_errors(counts: &[usize], pins: &[CallPin]) -> Vec<String> {
+    pins.iter()
+        .zip(counts)
+        .filter(|(p, n)| p.expected != **n)
+        .map(|(p, n)| {
+            format!(
+                "CALL PIN `{}` is {n} in production, pinned at {} — a new (or removed) caller. \
+                Review it against: {}. Then update the pin in the same commit",
+                p.path.join("::"),
+                p.expected,
+                p.why
+            )
+        })
+        .collect()
+}
+
+/// R-0006-d, R-0018-d, R-0006-e: the WHERE-clause lint over the real
+/// production tree, default-deny. Every `.rs` file under the production roots
+/// is parsed; every one holding SQL is scanned; anything not covered by
+/// `EXCLUSIONS` is a violation.
 #[test]
-fn scan_real_host_fn_files_no_where_clause_violations() {
-    // R-0006-d, R-0018-d, R-0006-e
-    // RED today: the builtins read-paths bind a raw workspace_id and do not
-    // reference ctx.workspace_id, so this scan FAILS naming them. Green clears it.
+fn scan_real_production_tree_no_unscoped_read() {
+    let outcome = scan(&workspace_root(), PRODUCTION_ROOTS, EXCLUSIONS)
+        .unwrap_or_else(|e| panic!("WHERE-clause lint cannot evaluate (fails closed): {e}"));
+    let counts = count_pins(&workspace_root(), PRODUCTION_ROOTS, CALL_PINS)
+        .unwrap_or_else(|e| panic!("call-site pins cannot evaluate (fails closed): {e}"));
 
-    let files = vec![
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("abi/host_fns.rs"),
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("abi.rs"),
-        // T13.3 / R-0006-e: builtins read-paths are now in the lint's scanned set.
-        // RED today (raw workspace_id, no ctx.workspace_id); GREEN once Forge
-        // threads &WorkspaceCtx and binds ctx.workspace_id().
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins/agents.rs"),
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins/sessions.rs"),
-        // R-0006-e expansion: the security audit (dispatch 1073) flagged that
-        // `builtins/projects.rs` was SILENTLY omitted from this set while it
-        // contains the exact raw-`workspace_id` SELECT shape the lint exists to
-        // catch (`projects::list_by_workspace`, `projects::exists`) — a false
-        // green over a live R-0006-e bypass. Adding it makes this scan RED until
-        // the green phase threads `&WorkspaceCtx` and binds `ctx.workspace_id()`
-        // (an enumerate-the-permitted control: the scanned set must list every
-        // tenant-table builtin source, not just the ones already threaded).
-        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"))).join("builtins/projects.rs"),
-    ];
-
-    let mut all_violations: Vec<(String, LintViolation)> = Vec::new();
-
-    for path in &files {
-        let src = match std::fs::read_to_string(path) {
-            Ok(s) => s,
-            Err(e) => {
-                // File absent at red phase is acceptable for supplementary files
-                eprintln!("lint: skipping {} (not found: {})", path.display(), e);
-                continue;
-            }
-        };
-
-        let violations = run_lint(&src);
-        for v in violations {
-            all_violations.push((path.display().to_string(), v));
-        }
+    eprintln!("population ({}):", outcome.population.len());
+    for p in &outcome.population {
+        eprintln!("  {p}");
     }
+    eprintln!("excluded ({}):", outcome.excluded.len());
+    for (file, ctx, reason) in &outcome.excluded {
+        eprintln!("  [{file}] {ctx}: {reason}");
+    }
+    eprintln!("call pins: {counts:?}");
+    let mut problems = Vec::new();
+    for (file, ctx, reason) in &outcome.violations {
+        problems.push(format!("  [{file}] LINT FAIL [{ctx}]: {reason}"));
+    }
+    for s in &outcome.stale {
+        problems.push(format!("  STALE EXCLUSION {s}"));
+    }
+    if let Some(m) = population_pin_error(outcome.population.len(), EXPECTED_SQL_FILE_COUNT) {
+        problems.push(format!("  {m}"));
+    }
+    for e in pin_errors(&counts, CALL_PINS) {
+        problems.push(format!("  {e}"));
+    }
+    assert!(
+        problems.is_empty(),
+        "WHERE-clause lint found {} problem(s) (R-0006-d, R-0018-d):\n{}",
+        problems.len(),
+        problems.join("\n")
+    );
+}
 
-    if !all_violations.is_empty() {
-        let msg: Vec<String> = all_violations
-            .iter()
-            .map(|(file, v)| format!("  [{}] LINT FAIL [{}]: {}", file, v.fn_name, v.reason))
-            .collect();
-        panic!(
-            "WHERE-clause lint found {} violation(s) (R-0006-d, R-0018-d):\n{}",
-            all_violations.len(),
-            msg.join("\n")
+// ---------------------------------------------------------------------------
+// Seeded can-fail proofs: each control below is shown to go red on the
+// violation it exists to catch, against a throwaway tree.
+// ---------------------------------------------------------------------------
+
+/// Build a throwaway workspace root holding the given `(relative path, source)`
+/// files, with every production root present.
+fn seeded_tree(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("tempdir");
+    for root in PRODUCTION_ROOTS {
+        std::fs::create_dir_all(dir.path().join(root)).expect("mkdir root");
+    }
+    for (rel, src) in files {
+        let path = dir.path().join(rel);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&path, src).expect("write seeded file");
+    }
+    dir
+}
+
+const SEEDED_UNFILTERED_FREE_FN: &str = r#"
+pub async fn leak_everything(pool: &PgPool) -> Result<(), E> {
+    sqlx::query("SELECT id, body FROM artifacts").fetch_all(pool).await?;
+    Ok(())
+}
+"#;
+
+const SEEDED_COMPLIANT: &str = r#"
+pub async fn scoped(pool: &PgPool, ctx: &WorkspaceCtx) -> Result<(), E> {
+    sqlx::query("SELECT id FROM artifacts WHERE workspace_id = $1")
+        .bind(ctx.workspace_id())
+        .fetch_all(pool)
+        .await?;
+    Ok(())
+}
+"#;
+
+/// A control that has never been seen to fire proves nothing: an unfiltered
+/// read in a file the old hand-written list never named must be red, and a
+/// scoped read beside it must stay green.
+#[test]
+fn seeded_unfiltered_read_in_a_new_file_is_red() {
+    let tree = seeded_tree(&[
+        ("libs/mnemra-host/brand_new.rs", SEEDED_UNFILTERED_FREE_FN),
+        ("libs/mnemra-host/scoped.rs", SEEDED_COMPLIANT),
+        ("cmd/mnemra/cmd/also_new.rs", SEEDED_UNFILTERED_FREE_FN),
+    ]);
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &[]).expect("seeded tree scans");
+    assert_eq!(
+        out.population,
+        [
+            "cmd/mnemra/cmd/also_new.rs",
+            "libs/mnemra-host/brand_new.rs",
+            "libs/mnemra-host/scoped.rs"
+        ]
+    );
+    let flagged: Vec<(&str, &str)> = out
+        .violations
+        .iter()
+        .map(|(f, c, _)| (f.as_str(), c.as_str()))
+        .collect();
+    assert_eq!(
+        flagged,
+        [
+            ("cmd/mnemra/cmd/also_new.rs", "leak_everything"),
+            ("libs/mnemra-host/brand_new.rs", "leak_everything")
+        ],
+        "both new unfiltered reads must be named; the scoped one must not be"
+    );
+}
+
+/// Positions the old lint never inspected: impl methods, trait default
+/// methods, fns inside a `mod`, and a return type that is neither `Option`
+/// nor `Vec`.
+#[test]
+fn seeded_unfiltered_read_in_impl_trait_and_mod_positions_is_red() {
+    let src = r#"
+pub struct Repo;
+impl Repo {
+    pub async fn all(&self, pool: &PgPool) -> Result<usize, E> {
+        let rows = sqlx::query("SELECT id FROM artifacts").fetch_all(pool).await?;
+        Ok(rows.len())
+    }
+}
+pub trait Reader {
+    async fn peek(&self, pool: &PgPool) -> bool {
+        sqlx::query("SELECT 1 FROM agents").fetch_optional(pool).await.is_ok()
+    }
+}
+pub mod inner {
+    pub async fn deep(pool: &PgPool) -> () {
+        let _ = sqlx::query("SELECT id FROM sessions").fetch_all(pool).await;
+    }
+}
+"#;
+    let tree = seeded_tree(&[("libs/mnemra-host/positions.rs", src)]);
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &[]).expect("seeded tree scans");
+    let mut keys: Vec<&str> = out.violations.iter().map(|(_, c, _)| c.as_str()).collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["Reader::peek", "Repo::all", "deep"]);
+}
+
+/// The scope is trusted by declared TYPE, never by receiver name. Each of
+/// these reads `.workspace_id` from a binding that is not a `WorkspaceCtx` or
+/// `CoordinationTxn` and must be red. The first is the guest-supplied WIT ctx,
+/// the exact cross-tenant breach `plugin/trap_recovery.rs` forbids.
+#[test]
+fn seeded_untrusted_receivers_are_red_whatever_they_are_called() {
+    let cases = [
+        (
+            "guest-supplied WIT ctx, ctx-suffixed name",
+            "fn artifact_get(&mut self, _ctx: WitWorkspaceCtx, id: String) {\n\
+             let w = _ctx.workspace_id; sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "a `tx` of another type",
+            "fn f(tx: &mut AuditRecord) { let w = tx.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "a `ctx` of another type",
+            "fn f(ctx: &Foo) { let w = ctx.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "a type that merely ends in the trusted name",
+            "fn f(ctx: &MyWorkspaceCtx) { let w = ctx.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "an untyped row field",
+            "fn f(pool: &PgPool) { let row = load(); let w = row.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "an untyped local named ctx",
+            "fn f(pool: &PgPool) { let ctx = make(); let w = ctx.workspace_id(); \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+    ];
+    for (name, src) in cases {
+        let v = run_lint(src);
+        assert_eq!(v.len(), 1, "must be red: {name}");
+    }
+}
+
+/// The two trusted types pass, however the receiver is named and wherever the
+/// declaration sits (fn parameter, path-qualified type, closure parameter).
+#[test]
+fn seeded_trusted_receivers_are_green() {
+    let cases = [
+        (
+            "WorkspaceCtx parameter",
+            "fn f(pool: &PgPool, ctx: &WorkspaceCtx) { let w = ctx.workspace_id(); \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "CoordinationTxn parameter",
+            "async fn f(tx: &mut CoordinationTxn) { let w = tx.workspace_id(); \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "path-qualified type, unrelated name",
+            "fn f(scope: crate::auth::workspace_ctx::WorkspaceCtx) { let w = scope.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "closure parameter",
+            "fn f(store: &Store) { store.run(move |tx: &mut CoordinationTxn| { \
+             let w = tx.workspace_id(); sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }); }",
+        ),
+    ];
+    for (name, src) in cases {
+        let v = run_lint(src);
+        assert!(v.is_empty(), "must be green: {name}: {v:?}");
+    }
+}
+
+/// An inner `fn` must not lend its trusted receiver to an outer unscoped
+/// SELECT.
+#[test]
+fn seeded_nested_fn_does_not_lend_its_scoping_to_the_outer_read() {
+    let src = r#"
+pub async fn outer(pool: &PgPool, ctx: &Other) {
+    fn helper(ctx: &WorkspaceCtx) -> uuid::Uuid { ctx.workspace_id() }
+    let _ = sqlx::query("SELECT id FROM artifacts").fetch_all(pool).await;
+}
+"#;
+    let report = try_lint(src).expect("parses");
+    assert_eq!(report.violations.len(), 1);
+    assert_eq!(report.violations[0].fn_name, "outer");
+}
+
+/// SQL that no fn body owns cannot be scoping-checked; it is a violation, and
+/// only a whole-file exclusion (never a per-function one) may cover it.
+#[test]
+fn seeded_sql_outside_any_fn_body_is_red_and_not_function_excludable() {
+    let src = r#"
+const LEAK: &str = "SELECT id FROM artifacts";
+pub fn uses_it() -> &'static str { LEAK }
+"#;
+    let tree = seeded_tree(&[("libs/mnemra-host/consts.rs", src)]);
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &[]).expect("seeded tree scans");
+    assert_eq!(out.violations.len(), 1);
+    assert_eq!(out.violations[0].1, UNATTRIBUTED_CONTEXT);
+
+    // A per-function exclusion that names the sentinel must not cover it.
+    let by_fn = [Exclusion {
+        file: "libs/mnemra-host/consts.rs",
+        function: Some(UNATTRIBUTED_CONTEXT),
+        sql_literals: 1,
+        reason: "seeded",
+    }];
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &by_fn).expect("seeded tree scans");
+    assert_eq!(
+        out.violations.len(),
+        1,
+        "a function exclusion covered unattributed SQL"
+    );
+    assert_eq!(out.stale.len(), 1);
+
+    // A whole-file exclusion does.
+    let whole = [Exclusion {
+        file: "libs/mnemra-host/consts.rs",
+        function: None,
+        sql_literals: 1,
+        reason: "seeded",
+    }];
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &whole).expect("seeded tree scans");
+    assert!(out.violations.is_empty());
+    assert!(out.stale.is_empty());
+}
+
+/// An exclusion whose file or function is gone, or that no longer suppresses
+/// anything, is stale and must be reported, never silently ignored.
+#[test]
+fn seeded_stale_exclusions_are_red() {
+    let tree = seeded_tree(&[
+        ("libs/mnemra-host/brand_new.rs", SEEDED_UNFILTERED_FREE_FN),
+        ("libs/mnemra-host/scoped.rs", SEEDED_COMPLIANT),
+    ]);
+    let stale = [
+        // File no longer exists.
+        Exclusion {
+            file: "libs/mnemra-host/renamed_away.rs",
+            function: Some("leak_everything"),
+            sql_literals: 1,
+            reason: "seeded",
+        },
+        // File exists, function does not.
+        Exclusion {
+            file: "libs/mnemra-host/brand_new.rs",
+            function: Some("renamed_fn"),
+            sql_literals: 1,
+            reason: "seeded",
+        },
+        // File exists and is compliant: a whole-file exclusion suppresses nothing.
+        Exclusion {
+            file: "libs/mnemra-host/scoped.rs",
+            function: None,
+            sql_literals: 1,
+            reason: "seeded",
+        },
+    ];
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &stale).expect("seeded tree scans");
+    assert_eq!(out.stale.len(), 3, "stale report: {:?}", out.stale);
+    // The real finding is still reported: a stale entry covers nothing.
+    assert_eq!(out.violations.len(), 1);
+}
+
+/// A live exclusion is quiet: positive control for the stale check above.
+#[test]
+fn seeded_live_exclusion_is_green() {
+    let tree = seeded_tree(&[("libs/mnemra-host/brand_new.rs", SEEDED_UNFILTERED_FREE_FN)]);
+    let live = [Exclusion {
+        file: "libs/mnemra-host/brand_new.rs",
+        function: Some("leak_everything"),
+        sql_literals: 1,
+        reason: "seeded",
+    }];
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &live).expect("seeded tree scans");
+    assert!(out.violations.is_empty());
+    assert!(out.stale.is_empty());
+    assert_eq!(out.excluded.len(), 1);
+}
+
+/// An exclusion excuses exactly the SELECTs it was written for. A second
+/// unscoped SELECT added to an excluded function must go red, not ride along.
+#[test]
+fn seeded_second_select_in_an_excluded_function_is_red() {
+    let src = r#"
+pub async fn probe(pool: &PgPool) {
+    let _ = sqlx::query("SELECT COUNT(*) FROM agents").fetch_one(pool).await;
+    let _ = sqlx::query("SELECT id, body FROM artifacts").fetch_all(pool).await;
+}
+"#;
+    let tree = seeded_tree(&[("libs/mnemra-host/probe.rs", src)]);
+    let one = [Exclusion {
+        file: "libs/mnemra-host/probe.rs",
+        function: Some("probe"),
+        sql_literals: 1,
+        reason: "seeded: written when probe held one SELECT",
+    }];
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &one).expect("seeded tree scans");
+    assert_eq!(
+        out.stale.len(),
+        1,
+        "the second SELECT must surface: {:?}",
+        out.stale
+    );
+
+    let two = [Exclusion {
+        sql_literals: 2,
+        ..one_exclusion_for("probe")
+    }];
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &two).expect("seeded tree scans");
+    assert!(out.stale.is_empty() && out.violations.is_empty());
+}
+
+fn one_exclusion_for(function: &'static str) -> Exclusion {
+    Exclusion {
+        file: "libs/mnemra-host/probe.rs",
+        function: Some(function),
+        sql_literals: 1,
+        reason: "seeded",
+    }
+}
+
+/// The population pin goes red on a drift in either direction.
+#[test]
+fn seeded_population_count_pin_is_red_on_drift() {
+    assert!(population_pin_error(20, 20).is_none());
+    assert!(
+        population_pin_error(21, 20).is_some(),
+        "a new SQL file must trip the pin"
+    );
+    assert!(
+        population_pin_error(19, 20).is_some(),
+        "a file losing its SQL must trip the pin"
+    );
+}
+
+/// Fail closed: a file that does not parse, or a root that does not exist, is
+/// an error, never a skip.
+#[test]
+fn seeded_unparseable_file_and_missing_root_fail_closed() {
+    let tree = seeded_tree(&[("libs/mnemra-host/broken.rs", "pub fn oops( {")]);
+    let err = scan(tree.path(), PRODUCTION_ROOTS, &[]).expect_err("must not pass");
+    assert!(err.contains("broken.rs"), "error must name the file: {err}");
+
+    let tree = seeded_tree(&[]);
+    let err =
+        scan(tree.path(), &["libs/mnemra-host", "cmd", "gone"], &[]).expect_err("must not pass");
+    assert!(err.contains("gone"), "error must name the root: {err}");
+}
+
+/// Only cargo's own `tests/` and `target/` (directly under a crate root) are
+/// skipped; the same names anywhere else are walked, so a source directory
+/// cannot hide SQL by being called `tests`.
+#[test]
+fn seeded_only_crate_level_tests_and_target_dirs_are_skipped() {
+    let tree = seeded_tree(&[
+        ("libs/mnemra-host/Cargo.toml", "[package]\n"),
+        (
+            "libs/mnemra-host/tests/skipped.rs",
+            SEEDED_UNFILTERED_FREE_FN,
+        ),
+        (
+            "libs/mnemra-host/target/skipped2.rs",
+            SEEDED_UNFILTERED_FREE_FN,
+        ),
+        (
+            "libs/mnemra-host/net/tests/walked.rs",
+            SEEDED_UNFILTERED_FREE_FN,
+        ),
+    ]);
+    let out = scan(tree.path(), PRODUCTION_ROOTS, &[]).expect("seeded tree scans");
+    assert_eq!(out.population, ["libs/mnemra-host/net/tests/walked.rs"]);
+}
+
+/// The classifier treats every `select` word as SQL except enumerated prose,
+/// and sees through raw strings, escapes and forms the earlier heuristic
+/// missed.
+#[test]
+fn sql_literal_classifier_cases() {
+    // Each case is lexed to a real literal token first, so the escape and
+    // raw-string handling in `string_literal_content` is part of the proof.
+    let classify = |src: &str| -> bool {
+        let lit = src
+            .parse::<TokenStream>()
+            .expect("lexes")
+            .into_iter()
+            .find_map(|t| match t {
+                TokenTree::Literal(l) => Some(l),
+                _ => None,
+            })
+            .expect("one literal");
+        string_literal_content(&lit).is_some_and(|c| is_sql_select(&c))
+    };
+    for sql in [
+        "\"SELECT id FROM t\"",
+        "\"select id from t\"",
+        "\"\\nSELECT 1\"",
+        "r#\"\n  SELECT id FROM t\"#",
+        "\"SELECT EXISTS (SELECT 1 FROM t)\"",
+        "\"WITH x AS (SELECT id FROM t) SELECT id FROM x\"",
+        "\"CREATE MATERIALIZED VIEW v AS SELECT 1\"",
+        "\"IF NOT EXISTS (SELECT FROM pg_roles) THEN\"",
+        // Forms the earlier heuristic missed.
+        "\"-- hint\\nSELECT id FROM t\"",
+        "\"/* hint */ SELECT id FROM t\"",
+        "\"EXPLAIN ANALYZE SELECT id FROM t\"",
+        "\"DECLARE c CURSOR FOR SELECT id FROM t\"",
+        "\"INSERT INTO t (a) SELECT a FROM u\"",
+        // A GRANT that also holds a query is still SQL.
+        "\"GRANT SELECT ON t TO r; SELECT 1\"",
+    ] {
+        assert!(classify(sql), "must classify as SQL: {sql}");
+    }
+    for prose in [
+        "\"artifact_get SELECT failed\"",
+        "\"keyset SELECT canceled by statement_timeout\"",
+        "\"GRANT SELECT ON workspaces TO r\"",
+        "\"GRANT SELECT, INSERT, UPDATE ON ALL TABLES TO r\"",
+        "\"REVOKE SELECT ON t FROM r\"",
+        "\"selection\"",
+        "\"preselect_id\"",
+    ] {
+        assert!(!classify(prose), "must NOT classify as SQL: {prose}");
+    }
+}
+
+/// The trusted-receiver collector reads declarations from the token shapes
+/// the real tree uses.
+#[test]
+fn trusted_receiver_collector_shapes() {
+    let mut out = HashSet::new();
+    let ts: TokenStream = "a: &WorkspaceCtx, b: &mut CoordinationTxn, c: x::y::WorkspaceCtx, \
+        d: &'a mut z::CoordinationTxn, e: Other, f: WitWorkspaceCtx, g::h"
+        .parse()
+        .expect("lexes");
+    collect_trusted_receivers(ts, &mut out);
+    let mut got: Vec<&str> = out.iter().map(String::as_str).collect();
+    got.sort_unstable();
+    assert_eq!(got, ["a", "b", "c", "d"]);
+}
+
+/// The call-site counter counts calls (path-qualified where the pin is), not
+/// definitions, and counts a bare ident when asked.
+#[test]
+fn seeded_call_pin_counts_calls_not_definitions() {
+    let src: TokenStream = "fn rotate() {} fn set_workspace_id(&mut self) {} \
+        fn x() { token::rotate(a); other::rotate(b); y.rotate(c); \
+        s.set_workspace_id(1); let p = PostgresStorage::new(); }"
+        .parse()
+        .expect("lexes");
+    let call = |path: &'static [&'static str]| CallPin {
+        path,
+        kind: PinKind::Call,
+        expected: 0,
+        why: "seeded",
+    };
+    assert_eq!(count_symbol(src.clone(), &call(&["token", "rotate"])), 1);
+    assert_eq!(count_symbol(src.clone(), &call(&["set_workspace_id"])), 1);
+    let ident = CallPin {
+        path: &["PostgresStorage"],
+        kind: PinKind::Ident,
+        expected: 0,
+        why: "seeded",
+    };
+    assert_eq!(count_symbol(src, &ident), 1);
+}
+
+/// A new caller of a pinned function goes red, and a pin that matches is quiet.
+#[test]
+fn seeded_new_caller_trips_the_call_pin() {
+    let pins = [CallPin {
+        path: &["workspaces", "list"],
+        kind: PinKind::Call,
+        expected: 0,
+        why: "seeded",
+    }];
+    let quiet = seeded_tree(&[("libs/mnemra-host/a.rs", "fn a() { let _ = 1; }")]);
+    let counts = count_pins(quiet.path(), PRODUCTION_ROOTS, &pins).expect("counts");
+    assert!(pin_errors(&counts, &pins).is_empty());
+
+    let caller = seeded_tree(&[(
+        "libs/mnemra-host/a.rs",
+        "async fn a(pool: &PgPool) { let _ = builtins::workspaces::list(pool).await; }",
+    )]);
+    let counts = count_pins(caller.path(), PRODUCTION_ROOTS, &pins).expect("counts");
+    assert_eq!(pin_errors(&counts, &pins).len(), 1);
+}
+
+/// Positive control for every zero this lint reports: with no exclusions the
+/// real tree is red on EXACTLY the excluded functions, so a green production
+/// scan is the exclusions' doing and not a scan that saw nothing.
+#[test]
+fn real_tree_is_red_without_its_exclusions() {
+    let out = scan(&workspace_root(), PRODUCTION_ROOTS, &[]).expect("real tree scans");
+    let flagged: std::collections::BTreeSet<(String, String)> = out
+        .violations
+        .iter()
+        .map(|(f, c, _)| (f.clone(), c.clone()))
+        .collect();
+    let excluded: std::collections::BTreeSet<(String, String)> = EXCLUSIONS
+        .iter()
+        .map(|e| {
+            (
+                e.file.to_string(),
+                e.function.expect("function entry").to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        flagged, excluded,
+        "violations with no exclusions must equal the exclusion register exactly"
+    );
+}
+
+/// An exclusion is a reviewed tenancy decision: each carries a reason and no
+/// entry appears twice.
+#[test]
+fn exclusions_are_unique_and_carry_a_reason() {
+    for (i, e) in EXCLUSIONS.iter().enumerate() {
+        assert!(
+            !e.reason.trim().is_empty(),
+            "{}::{:?} has no reason",
+            e.file,
+            e.function
+        );
+        assert!(
+            EXCLUSIONS[i + 1..]
+                .iter()
+                .all(|o| !(o.file == e.file && o.function == e.function)),
+            "duplicate exclusion {}::{:?}",
+            e.file,
+            e.function
         );
     }
 }
