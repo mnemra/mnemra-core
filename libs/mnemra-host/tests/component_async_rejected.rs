@@ -21,9 +21,17 @@
 //! the fixture's shape is valid when synchronous; it does not rule out other
 //! fixture faults in the async fixture. The exact gate message does that: any
 //! other fault would produce a different message. A stackful (`async` without
-//! `callback`) fixture is deliberately absent: its rejection would carry the
-//! stackful gate message, a different code path. RUSTSEC-2026-0327 is the
-//! callback path, so there is no coverage loss for it.
+//! `callback`) fixture is deliberately absent, for a reason about the
+//! regression, not about messages. With async off, a stackful fixture gets the
+//! same message as the callback one: wasmparser's function-type gate
+//! (`create_function_type`, validator/component.rs:3151) runs before the
+//! lift-option stackful gate (:386). With async on, wasmtime 48.0.6 enables
+//! only `CM_ASYNC` (config.rs:2558); `CM_ASYNC_STACKFUL` stays default-off
+//! (wasmparser features.rs:289) and is set only by an explicit
+//! `wasm_component_model_async_stackful(true)`-style opt-in (config.rs:1312).
+//! So under the async-on regression a stackful fixture is still rejected by its
+//! own gate and cannot fail on it. RUSTSEC-2026-0327 is the callback path, so
+//! there is no coverage loss for it.
 
 use mnemra_host::plugin::limits::build_engine;
 use wasmtime::component::Component;
