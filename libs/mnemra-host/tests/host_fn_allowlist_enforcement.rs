@@ -16,7 +16,8 @@
 //! - an unknown key under `[host_fns]` fails the load instead of silently
 //!   forking the grant;
 //! - the shipped manifest still verifies against the embedded root, which is
-//!   the check `MnemraMcpServer::new` applies to the embedded verb-gate copy.
+//!   check `startup::populate_verified_pool_from_dir` applies (the verb gate
+//!   reads the pool's verified grants; no embedded manifest copy remains).
 //!
 //! # Why a load-time refusal satisfies "cannot call it"
 //!

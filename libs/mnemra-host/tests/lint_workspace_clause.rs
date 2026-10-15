@@ -27,10 +27,14 @@
 //!    methods, functions inside `mod`s and nested in other functions' statement
 //!    lists, whatever the return type. A unit whose body holds a SQL `SELECT`
 //!    literal must read `.workspace_id` from a binding the unit DECLARES as a
-//!    `WorkspaceCtx` or `CoordinationTxn` (parameter or closure parameter;
-//!    last path segment, exactly). Trust follows the declared type, never the
-//!    name: the guest-supplied `WitWorkspaceCtx`, a `tx` of another type and a
-//!    row's `workspace_id` field all fail. Presence only: whether the value
+//!    `WorkspaceCtx` or `CoordinationTxn` (parameter or closure parameter).
+//!    Trust follows the declared type, never the receiver's name, and a type
+//!    is matched by its last segment AND its path: a bare name, or a path
+//!    whose leading segments are the host's own module path
+//!    (`TRUSTED_WORKSPACE_TYPES`). The guest-supplied `WitWorkspaceCtx`, a
+//!    `tx` of another type, a row's `workspace_id` field, and the bindgen
+//!    record spelled `mnemra::host::types::WorkspaceCtx` or
+//!    `types::WorkspaceCtx` all fail. Presence only: whether the value
 //!    reaches the WHERE clause correctly is the semantic half, #1656.
 //! 3. **Reconciliation.** The per-function SQL count must sum to the whole-file
 //!    count. SQL that no function body owns (a module `const`, a `macro_rules!`
@@ -48,9 +52,10 @@
 //!
 //! ## What counts as SQL
 //!
-//! A string literal holding the word `select`, except the enumerated prose
-//! forms (`GRANT`/`REVOKE` before it; ` failed` / ` canceled` after it). Every
-//! other `select` is SQL, so an unforeseen form fails closed.
+//! A string literal holding the word `select`, except `GRANT`/`REVOKE` directly
+//! before it and the whole-literal allow-list `PROSE_LITERALS` (log and panic
+//! messages, each matched in full). Every other `select` is SQL, so an
+//! unforeseen form fails closed.
 //!
 //! ## Not covered (named, not claimed)
 //!
@@ -63,10 +68,20 @@
 //! - Nested `fn` items inside inner blocks (an `if` arm, a closure): they stay
 //!   part of the enclosing function's unit.
 //! - `WorkspaceCtx::new` is `pub` (#1774): a forged `WorkspaceCtx` passes.
-//!   A WIT binding type literally named `WorkspaceCtx` (rather than aliased)
-//!   would pass the last-segment match.
-//! - Call pins match path suffixes, not resolved items: a `use` alias hides a
-//!   caller.
+//! - Type trust is a token match, not name resolution. A bare `WorkspaceCtx`
+//!   passes whatever it resolves to, so a host file that imported the bindgen
+//!   record under that bare name would pass. That route is closed by pins, not
+//!   by the type check: `host::types` occurs in production exactly where the
+//!   aliasing re-export and the plugin sit, and `WitWorkspaceCtx` only in its
+//!   alias and its guest-ignored parameters.
+//! - A trusted name re-bound in the same unit (`let ctx = untrusted();`)
+//!   stays trusted, because the declaration is collected and the re-binding
+//!   is not.
+//! - Two-segment `Call` pins (`users::get`, `users::list`, `workspaces::list`,
+//!   `token::rotate`) match the written path, not the resolved item: a caller
+//!   that `use`s the function and calls it bare, or passes it as a value
+//!   (`.map(users::get)`), is not counted. The distinctive names are pinned as
+//!   `Ident`, which counts every mention including `use` lines.
 //! - `tests/` and `target/` directly under a crate root are skipped; the same
 //!   names elsewhere are walked.
 //! - `#[cfg(test)]` code is scanned like any other; the one unit test that
@@ -101,11 +116,52 @@ const UNATTRIBUTED_CONTEXT: &str = "<unattributed>";
 /// `WorkspaceCtx` (built once at the authenticated dispatch site) and
 /// `CoordinationTxn` (its `workspace_id` field is private and is set in one
 /// place, `PgCoordinationStore::run_write`, from `ctx.workspace_id()`).
-/// Matched on the LAST path segment of a declared type, exactly. A receiver is
-/// trusted by what it is declared to be, never by what it is called: the
-/// guest-supplied `WitWorkspaceCtx` (`wit/host.wit` `workspace-ctx`) must not
-/// pass, nor any `tx` or `ctx` of another type.
-const TRUSTED_WORKSPACE_TYPES: &[&str] = &["WorkspaceCtx", "CoordinationTxn"];
+///
+/// A receiver is trusted by what it is declared to be, never by what it is
+/// called. A declared type is trusted when its last segment is the name AND
+/// either it is bare (the host's `use crate::auth::workspace_ctx::WorkspaceCtx`
+/// produces that everywhere) or its leading segments are exactly one of the
+/// listed prefixes. The path matters because bindgen generates the GUEST
+/// record as the literal `mnemra::host::types::WorkspaceCtx` (no `with:`
+/// remap; only the `WitWorkspaceCtx` alias in `plugin/component.rs` keeps it
+/// out), so the last segment alone is not an identity. A `mnemra::host::types::…`
+/// or `types::…` path matches no prefix and is denied, as is any `tx` or `ctx`
+/// of another type.
+const TRUSTED_WORKSPACE_TYPES: &[(&str, &[&[&str]])] = &[
+    (
+        "WorkspaceCtx",
+        &[
+            &["crate", "auth", "workspace_ctx"],
+            &["auth", "workspace_ctx"],
+            &["workspace_ctx"],
+        ],
+    ),
+    (
+        "CoordinationTxn",
+        &[
+            &["crate", "coordination", "write_path"],
+            &["coordination", "write_path"],
+            &["write_path"],
+        ],
+    ),
+];
+
+/// True if a declared type path (`segments`, the last being the type) is
+/// trusted under `TRUSTED_WORKSPACE_TYPES`.
+fn is_trusted_type_path(segments: &[String]) -> bool {
+    let Some((last, leading)) = segments.split_last() else {
+        return false;
+    };
+    TRUSTED_WORKSPACE_TYPES
+        .iter()
+        .filter(|(name, _)| last == name)
+        .any(|(_, prefixes)| {
+            leading.is_empty()
+                || prefixes
+                    .iter()
+                    .any(|p| p.iter().copied().eq(leading.iter().map(String::as_str)))
+        })
+}
 
 /// A lint finding: SQL that reads a table outside a function that threads a
 /// trusted workspace identity.
@@ -160,9 +216,20 @@ fn string_literal_content(lit: &proc_macro2::Literal) -> Option<String> {
 /// Words that, directly before `select`, make it prose rather than a query
 /// (`GRANT SELECT ON ...`).
 const PROSE_BEFORE_SELECT: &[&str] = &["grant", "revoke"];
-/// Phrases that, directly after `select`, make it a log or panic message
-/// (`"artifact_get SELECT failed"`, `"keyset SELECT canceled by ..."`).
-const PROSE_AFTER_SELECT: &[&str] = &[" failed", " canceled"];
+/// Whole string literals (inner text, quotes excluded) that are log or panic
+/// messages mentioning `SELECT`, matched in FULL and nothing wider. A phrase
+/// match after `select` (` failed`, ` canceled`) fails open on
+/// `SELECT failed_at FROM t` or `select failed, id FROM t`; an exact literal
+/// cannot. All six sit in `plugin/component.rs`. A new message is a loud false
+/// positive to add here.
+const PROSE_LITERALS: &[&str] = &[
+    "artifact_get SELECT failed — fail closed (T13-g)",
+    "artifact_get SELECT failed: {e}",
+    "artifact_list keyset SELECT canceled by statement_timeout (57014) — scan-cost backstop fired (R-0020-d)",
+    "artifact_list keyset SELECT canceled by statement_timeout (R-0020-d)",
+    "artifact_list SELECT failed — fail closed (T13-g)",
+    "artifact_list SELECT failed: {e}",
+];
 
 /// True if the literal holds a SQL `SELECT`. Inverted, fail-closed polarity:
 /// EVERY word-boundary `select` in a string literal is SQL, except the
@@ -171,6 +238,9 @@ const PROSE_AFTER_SELECT: &[&str] = &[" failed", " canceled"];
 /// comment, `EXPLAIN ANALYZE SELECT`, `DECLARE c CURSOR FOR SELECT`,
 /// `INSERT ... SELECT`) is caught by construction.
 fn is_sql_select(content: &str) -> bool {
+    if PROSE_LITERALS.iter().any(|p| content == format!("\"{p}\"")) {
+        return false;
+    }
     let lower = content.to_lowercase();
     let bytes = lower.as_bytes();
     let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
@@ -193,11 +263,7 @@ fn is_sql_select(content: &str) -> bool {
             .into_iter()
             .rev()
             .collect();
-        let prose = PROSE_BEFORE_SELECT.contains(&prev_word.as_str())
-            || PROSE_AFTER_SELECT
-                .iter()
-                .any(|p| lower[end..].starts_with(p));
-        if !prose {
+        if !PROSE_BEFORE_SELECT.contains(&prev_word.as_str()) {
             return true;
         }
     }
@@ -247,7 +313,7 @@ fn count_sql_literals(ts: TokenStream) -> usize {
 }
 
 /// Collect every binding declared `name: [&] [mut] path::Type` whose type's
-/// last path segment is a `TRUSTED_WORKSPACE_TYPES` entry: function
+/// path is a `TRUSTED_WORKSPACE_TYPES` entry (`is_trusted_type_path`): function
 /// parameters and closure parameters alike (both lex as `name : type`).
 fn collect_trusted_receivers(ts: TokenStream, out: &mut HashSet<String>) {
     let tokens: Vec<TokenTree> = ts.into_iter().collect();
@@ -272,10 +338,10 @@ fn collect_trusted_receivers(ts: TokenStream, out: &mut HashSet<String>) {
                         _ => break,
                     }
                 }
-                // Walk `a :: b :: C`, keeping the last segment.
-                let mut last: Option<String> = None;
+                // Walk `a :: b :: C`, keeping every segment.
+                let mut segments: Vec<String> = Vec::new();
                 while let Some(TokenTree::Ident(seg)) = tokens.get(j) {
-                    last = Some(seg.to_string());
+                    segments.push(seg.to_string());
                     let is_path_sep = matches!(tokens.get(j + 1), Some(TokenTree::Punct(p)) if p.as_char() == ':')
                         && matches!(tokens.get(j + 2), Some(TokenTree::Punct(p)) if p.as_char() == ':');
                     if is_path_sep {
@@ -284,7 +350,7 @@ fn collect_trusted_receivers(ts: TokenStream, out: &mut HashSet<String>) {
                         break;
                     }
                 }
-                if last.is_some_and(|l| TRUSTED_WORKSPACE_TYPES.contains(&l.as_str())) {
+                if is_trusted_type_path(&segments) {
                     out.insert(name.to_string());
                 }
             }
@@ -1261,9 +1327,9 @@ const CALL_PINS: &[CallPin] = &[
     },
     CallPin {
         path: &["create_echo_fixture_projection"],
-        kind: PinKind::Call,
-        expected: 0,
-        why: "the fixture matview aggregates across all workspaces",
+        kind: PinKind::Ident,
+        expected: 1,
+        why: "the fixture matview aggregates across all workspaces; the one mention is its own definition, so any caller, `use` or value reference adds one",
     },
     CallPin {
         path: &["PostgresStorage"],
@@ -1272,16 +1338,40 @@ const CALL_PINS: &[CallPin] = &[
         why: "PostgresTransaction is scoped by a forgeable WorkspaceId; every mention of its store is counted (2 in mnemra_host.rs, which holds it unused; 4 in its own module)",
     },
     CallPin {
-        path: &["resolve_or_create_in_txn"],
-        kind: PinKind::Call,
+        path: &["_storage"],
+        kind: PinKind::Ident,
         expected: 3,
-        why: "takes a raw workspace_id; each caller must derive it from a trusted ctx or txn",
+        why: "mnemra_host.rs holds the PostgresStorage in `_storage` (field, drop, constructor), unused. Wiring it to a caller (`_storage.begin(WorkspaceId(raw))`) must rename or touch this field, which trips this pin without adding a `PostgresStorage` token; review the caller's workspace derivation",
+    },
+    CallPin {
+        path: &["WorkspaceId"],
+        kind: PinKind::Call,
+        expected: 1,
+        why: "WorkspaceId is a forgeable `pub Uuid` newtype that scopes PostgresTransaction; the one match is the tuple-struct definition in storage.rs, so every construction or destructuring site adds one",
+    },
+    CallPin {
+        path: &["resolve_or_create_in_txn"],
+        kind: PinKind::Ident,
+        expected: 6,
+        why: "takes a raw workspace_id; each caller must derive it from a trusted ctx or txn (3 uses, 2 `use` lines, 1 definition)",
     },
     CallPin {
         path: &["set_workspace_id"],
-        kind: PinKind::Call,
-        expected: 1,
-        why: "binds HostState.workspace_id, the scope for artifact_get/artifact_list; the one caller derives it from the authenticated ctx",
+        kind: PinKind::Ident,
+        expected: 2,
+        why: "binds HostState.workspace_id, the scope for artifact_get/artifact_list; the one caller derives it from the authenticated ctx (1 caller, 1 definition)",
+    },
+    CallPin {
+        path: &["types"],
+        kind: PinKind::Ident,
+        expected: 5,
+        why: "`mnemra::host::types` is the bindgen module whose WorkspaceCtx is the GUEST-supplied record. Host side it appears only as the aliasing re-exports and the Host impl in plugin/component.rs (3) and in the plugin's own import (1), plus the unrelated wasmtime::component::types (1). A glob or new import of it would let a bare `WorkspaceCtx` name the guest record and pass the type check",
+    },
+    CallPin {
+        path: &["WitWorkspaceCtx"],
+        kind: PinKind::Ident,
+        expected: 6,
+        why: "the alias that keeps the guest record out of the trusted names: 1 re-export and 5 guest-ignored parameters in plugin/component.rs. A re-alias of it `as WorkspaceCtx` adds a mention",
     },
 ];
 
@@ -1478,6 +1568,21 @@ fn seeded_untrusted_receivers_are_red_whatever_they_are_called() {
              sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
         ),
         (
+            "the bindgen guest record, spelled in full",
+            "fn f(ctx: mnemra::host::types::WorkspaceCtx) { let w = ctx.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "the bindgen guest record, through its module",
+            "fn f(ctx: types::WorkspaceCtx) { let w = ctx.workspace_id; \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
+            "a trusted name under a foreign module path",
+            "fn f(tx: &mut other::CoordinationTxn) { let w = tx.workspace_id(); \
+             sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
+        ),
+        (
             "an untyped local named ctx",
             "fn f(pool: &PgPool) { let ctx = make(); let w = ctx.workspace_id(); \
              sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }",
@@ -1519,6 +1624,19 @@ fn seeded_trusted_receivers_are_green() {
         let v = run_lint(src);
         assert!(v.is_empty(), "must be green: {name}: {v:?}");
     }
+}
+
+/// The named residual, pinned so the header's claim is exactly what is
+/// measured: a trusted name re-bound by `let` in the same unit stays trusted,
+/// because only declarations are collected.
+#[test]
+fn shadowed_trusted_name_is_a_named_residual() {
+    let src = "fn f(ctx: &WorkspaceCtx) { let ctx = untrusted(); let w = ctx.workspace_id; \
+               sqlx::query(\"SELECT id FROM t WHERE workspace_id = $1\"); }";
+    assert!(
+        run_lint(src).is_empty(),
+        "residual changed: shadowing is now detected; update the header's Not-covered list"
+    );
 }
 
 /// An inner `fn` must not lend its trusted receiver to an outer unscoped
@@ -1759,12 +1877,22 @@ fn sql_literal_classifier_cases() {
         "\"INSERT INTO t (a) SELECT a FROM u\"",
         // A GRANT that also holds a query is still SQL.
         "\"GRANT SELECT ON t TO r; SELECT 1\"",
+        // A phrase after `select` is not prose: only the whole literals are.
+        "\"SELECT failed_at FROM t\"",
+        "\"SELECT canceled FROM t\"",
+        "\"select failed, id FROM t\"",
+        "\"artifact_get SELECT failed — fail closed (T13-g) FROM t\"",
+        "\"artifact_get SELECT failed\"",
     ] {
         assert!(classify(sql), "must classify as SQL: {sql}");
     }
+    for prose in PROSE_LITERALS {
+        assert!(
+            !classify(&format!("\"{prose}\"")),
+            "must NOT classify as SQL: {prose}"
+        );
+    }
     for prose in [
-        "\"artifact_get SELECT failed\"",
-        "\"keyset SELECT canceled by statement_timeout\"",
         "\"GRANT SELECT ON workspaces TO r\"",
         "\"GRANT SELECT, INSERT, UPDATE ON ALL TABLES TO r\"",
         "\"REVOKE SELECT ON t FROM r\"",
@@ -1780,14 +1908,96 @@ fn sql_literal_classifier_cases() {
 #[test]
 fn trusted_receiver_collector_shapes() {
     let mut out = HashSet::new();
-    let ts: TokenStream = "a: &WorkspaceCtx, b: &mut CoordinationTxn, c: x::y::WorkspaceCtx, \
-        d: &'a mut z::CoordinationTxn, e: Other, f: WitWorkspaceCtx, g::h"
+    let ts: TokenStream = "a: &WorkspaceCtx, b: &mut CoordinationTxn, \
+        c: crate::auth::workspace_ctx::WorkspaceCtx, \
+        d: &'a mut coordination::write_path::CoordinationTxn, e: Other, \
+        f: WitWorkspaceCtx, g::h, h: x::y::WorkspaceCtx, \
+        i: mnemra::host::types::WorkspaceCtx, j: types::WorkspaceCtx"
         .parse()
         .expect("lexes");
     collect_trusted_receivers(ts, &mut out);
     let mut got: Vec<&str> = out.iter().map(String::as_str).collect();
     got.sort_unstable();
     assert_eq!(got, ["a", "b", "c", "d"]);
+}
+
+/// A file whose only SQL is a `select <phrase>` query stays in the population:
+/// the old after-phrase exception removed it, so the file count never moved.
+#[test]
+fn seeded_phrase_after_select_does_not_hide_a_file_from_the_population() {
+    for sql in [
+        "SELECT failed_at FROM t",
+        "SELECT canceled FROM t",
+        "select failed, id FROM t",
+    ] {
+        let src = format!("pub fn leak(pool: &PgPool) {{ sqlx::query(\"{sql}\"); }}");
+        let tree = seeded_tree(&[("libs/mnemra-host/a.rs", &src)]);
+        let out = scan(tree.path(), PRODUCTION_ROOTS, &[]).expect("scans");
+        assert_eq!(out.population, ["libs/mnemra-host/a.rs"], "{sql}");
+        assert_eq!(out.violations.len(), 1, "{sql}");
+    }
+}
+
+/// The real pin whose path is exactly `path`.
+fn real_pin(path: &[&str]) -> &'static CallPin {
+    CALL_PINS
+        .iter()
+        .find(|p| p.path == path)
+        .unwrap_or_else(|| panic!("no pin {path:?}"))
+}
+
+/// Every shape a new caller or import would take is counted by the pin that
+/// exists to catch it, so the first one fails the real-tree test.
+#[test]
+fn seeded_wiring_and_import_shapes_trip_their_pins() {
+    let count =
+        |path: &[&str], src: &str| count_symbol(src.parse().expect("lexes"), real_pin(path));
+    // Wiring the held PostgresStorage to a caller, with no new
+    // `PostgresStorage` token.
+    let wiring = "async fn h(&self, raw: Uuid) { \
+        let tx = self._storage.as_ref().unwrap().begin(WorkspaceId(raw)).await; }";
+    assert_eq!(count(&["_storage"], wiring), 1);
+    assert_eq!(count(&["WorkspaceId"], wiring), 1);
+    assert_eq!(
+        count(&["PostgresStorage"], wiring),
+        0,
+        "the old pin is blind"
+    );
+    // Importing the guest record under the trusted bare name.
+    assert_eq!(count(&["types"], "use mnemra::host::types::*;"), 1);
+    assert_eq!(
+        count(&["types"], "use mnemra::host::{types::WorkspaceCtx};"),
+        1
+    );
+    assert_eq!(
+        count(
+            &["WitWorkspaceCtx"],
+            "use c::WitWorkspaceCtx as WorkspaceCtx;"
+        ),
+        1
+    );
+    // A `use` then a bare call, or a value reference: Ident pins see both.
+    assert_eq!(
+        count(
+            &["create_echo_fixture_projection"],
+            "use p::create_echo_fixture_projection; fn f() { create_echo_fixture_projection(pool); }"
+        ),
+        2
+    );
+    assert_eq!(
+        count(
+            &["set_workspace_id"],
+            "fn f() { xs.map(HostState::set_workspace_id); }"
+        ),
+        1
+    );
+    assert_eq!(
+        count(
+            &["resolve_or_create_in_txn"],
+            "use a::resolve_or_create_in_txn; fn f() { g(resolve_or_create_in_txn); }"
+        ),
+        2
+    );
 }
 
 /// The call-site counter counts calls (path-qualified where the pin is), not

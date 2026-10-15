@@ -99,6 +99,12 @@ impl VerbAllowlist {
 /// `component::build_linker` take this type and nothing weaker, so no caller
 /// outside the crate can hand them a list compiled from unsigned bytes.
 /// [`VerifiedGrants::deny_all`] is the only other source, and it grants nothing.
+///
+/// "Verified" means signed against the trust anchor the caller of
+/// `PluginRuntime::load` passed, not against the embedded root as such: `load`
+/// takes the anchor as a parameter. Only the production startup path
+/// (`mnemra_host.rs`, `populate_verified_pool_from_dir(.., ROOT)`) passes the
+/// embedded `ROOT`, and nothing pins that.
 #[derive(Debug, Clone)]
 pub struct VerifiedGrants {
     host_fns: HostFnAllowlist,
