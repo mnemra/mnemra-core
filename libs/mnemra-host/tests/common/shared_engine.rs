@@ -24,7 +24,9 @@
 //! panics) — so teardown fires on both (Scenario S6).
 
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Once, OnceLock};
+use std::time::{Duration, Instant};
 use tokio::sync::OnceCell;
 
 static ENGINE: OnceCell<EmbeddedEngine> = OnceCell::const_new();
@@ -43,6 +45,29 @@ static BOOT_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// Panics if the engine fails to start — there is no meaningful fallback for
 /// a test binary whose engine never came up.
 pub async fn shared_engine() -> &'static EmbeddedEngine {
+    let engine = acquire_engine().await;
+    // Armed only AFTER boot returns: the `atexit` teardown is registered
+    // inside boot, so a watchdog that could fire mid-boot would `exit(101)`
+    // with no teardown registered and orphan the postmaster. Cost: a hang
+    // inside boot itself is not covered by the watchdog.
+    start_watchdog_once();
+    touch();
+    engine
+}
+
+/// Write one line to the process's real stderr, bypassing libtest output
+/// capture. `eprintln!` goes to the capture buffer of the test that spawned
+/// the calling thread (libtest's spawn hook makes child threads inherit it),
+/// and that buffer is never printed for a thread that ends the process. The
+/// watchdog and teardown lines come from such threads.
+macro_rules! emit {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr(), $($arg)*);
+    }};
+}
+
+async fn acquire_engine() -> &'static EmbeddedEngine {
     ENGINE
         .get_or_try_init(|| async {
             let engine = EmbeddedEngine::start().await?;
@@ -52,7 +77,7 @@ pub async fn shared_engine() -> &'static EmbeddedEngine {
             // subscriber is a silent no-op; this line must actually land in
             // the flake-runner log
             // (scratch/flake-runs/<bin>_run<i>_t<threads>.log) unconditionally.
-            eprintln!("FIXTURE_BOOT engine_boot_number={n}");
+            emit!("FIXTURE_BOOT engine_boot_number={n}");
             // Single-boot invariant, checked through the same observable the
             // R-0026 AC3 test reads, so `boot_count` has a production caller in
             // every including binary (no dead-code suppression needed).
@@ -72,6 +97,109 @@ pub async fn shared_engine() -> &'static EmbeddedEngine {
         })
         .await
         .expect("shared embedded engine failed to start")
+}
+
+// ---------------------------------------------------------------------------
+// Hang backstops (#3987)
+// ---------------------------------------------------------------------------
+//
+// # The hazard these bound
+//
+// The engine's sqlx pools are shared by every `#[tokio::test]` in a binary,
+// and each of those tests runs on its OWN short-lived Tokio runtime. A pooled
+// connection's socket is registered with the I/O driver of the runtime that
+// created it; once that runtime is dropped, an await on that connection from
+// a later test's runtime neither completes nor errors. MEASURED (#3987): a
+// connection created on one runtime, then queried from a second after the
+// first was dropped, was still pending after a 5 s bound, with no error
+// raised. The engine's `before_acquire` guard (`ping_within_timeout`) catches
+// such a connection at ACQUIRE time, by a 200 ms timing heuristic. An await
+// made AFTER acquire is unbounded, so a stale connection that gets past the
+// guard parks the test thread with no timer registered. That is the
+// 2026-10-14 hang: 0% CPU, 40+ minutes, no failure, `verify-test` never
+// finishing. INFERRED: the guard was slipped; that slip was not reproduced.
+//
+// Two bounds, both in-process so a trip is a loud failure and not an external
+// kill (an external SIGTERM orphans the postmaster; an in-process panic or
+// `process::exit` runs the `atexit` teardown below and reaps it):
+//
+// - `bounded` (in `common/await_bound.rs`, included only by binaries that use
+//   it): per-await, names the await. Use it on a pool await in a test. A
+//   trip is an ordinary test failure naming WHICH await hung.
+// - the watchdog: per-binary backstop for every consumer that does NOT wrap
+//   its awaits. Armed when the first `shared_engine()` call returns (after
+//   boot, so the teardown is registered), reset by every later call; when
+//   nothing has called `shared_engine()` for [`WATCHDOG_IDLE_LIMIT`], it prints `FIXTURE_WATCHDOG` and exits 101.
+//   It is a floor, not a diagnosis: it cannot say which await hung.
+//
+// Neither fixes the cause. The cause is pools whose connections outlive the
+// runtime that registered them; see #3987 for the structural options.
+
+/// Idle limit for the watchdog: how long the process may go without any call
+/// to [`shared_engine`] before it is declared hung. Overridable for the
+/// watchdog's own test via `MNEMRA_FIXTURE_WATCHDOG_SECS`.
+pub const WATCHDOG_IDLE_LIMIT: Duration = Duration::from_secs(600);
+
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
+static LAST_TOUCH_MS: AtomicU64 = AtomicU64::new(0);
+static WATCHDOG: Once = Once::new();
+
+fn now_ms() -> u64 {
+    u64::try_from(
+        PROCESS_START
+            .get_or_init(Instant::now)
+            .elapsed()
+            .as_millis(),
+    )
+    .unwrap_or(u64::MAX)
+}
+
+fn touch() {
+    LAST_TOUCH_MS.store(now_ms(), Ordering::SeqCst);
+}
+
+fn start_watchdog_once() {
+    WATCHDOG.call_once(|| {
+        assert!(
+            ENGINE.get().is_some(),
+            "FIXTURE_WATCHDOG armed before boot completed (#3987)"
+        );
+        // A set-but-bad override panics: silently falling back to the default
+        // would leave the caller believing a different limit is armed.
+        let limit = match std::env::var("MNEMRA_FIXTURE_WATCHDOG_SECS") {
+            Err(std::env::VarError::NotPresent) => WATCHDOG_IDLE_LIMIT,
+            Err(e) => panic!("MNEMRA_FIXTURE_WATCHDOG_SECS is not valid unicode: {e}"),
+            Ok(v) => match v.parse::<u64>() {
+                Ok(secs) if secs > 0 => Duration::from_secs(secs),
+                _ => panic!("MNEMRA_FIXTURE_WATCHDOG_SECS must be a positive integer, got {v:?}"),
+            },
+        };
+        touch();
+        let limit_ms = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
+        let spawned = std::thread::Builder::new()
+            .name("fixture-watchdog".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(Duration::from_millis(250));
+                    let last = LAST_TOUCH_MS.load(Ordering::SeqCst);
+                    if now_ms().saturating_sub(last) >= limit_ms {
+                        emit!(
+                            "FIXTURE_WATCHDOG no shared_engine() call for {limit:?} \
+                             (last call at +{last} ms of process time): a test is hung; \
+                             exiting 101; the atexit teardown (registered at boot, which \
+                             has completed by the time this thread is armed) reaps the \
+                             postmaster (#3987)"
+                        );
+                        // Runs the `atexit` teardown registered at boot.
+                        std::process::exit(101);
+                    }
+                }
+            });
+        // Fail loud, not open: an unarmed watchdog must not look armed.
+        if let Err(e) = spawned {
+            panic!("FIXTURE_WATCHDOG failed to start: {e}");
+        }
+    });
 }
 
 /// Programmatic boot-count observable for R-0026 AC3's concurrent-acquisition
@@ -163,10 +291,10 @@ extern "C" fn teardown_shared_engine() {
             }));
 
             match outcome {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => eprintln!("FIXTURE_TEARDOWN engine shutdown failed: {e}"),
+                Ok(Ok(())) => emit!("FIXTURE_TEARDOWN engine shutdown complete"),
+                Ok(Err(e)) => emit!("FIXTURE_TEARDOWN engine shutdown failed: {e}"),
                 Err(panic_payload) => {
-                    eprintln!(
+                    emit!(
                         "FIXTURE_TEARDOWN engine shutdown panicked: {}",
                         panic_message(&*panic_payload)
                     );
@@ -183,7 +311,7 @@ extern "C" fn teardown_shared_engine() {
             let deadline = std::time::Instant::now() + TEARDOWN_WAIT_DEADLINE;
             while !TEARDOWN_DONE.load(Ordering::SeqCst) {
                 if std::time::Instant::now() >= deadline {
-                    eprintln!(
+                    emit!(
                         "FIXTURE_TEARDOWN deadline ({TEARDOWN_WAIT_DEADLINE:?}) exceeded waiting \
                          for teardown thread — abandoning wait and exiting; postmaster/temp-dir \
                          may leak (accepted A-12-class residual)"
@@ -194,7 +322,7 @@ extern "C" fn teardown_shared_engine() {
             }
         }
         Err(e) => {
-            eprintln!("FIXTURE_TEARDOWN failed to spawn teardown thread: {e}");
+            emit!("FIXTURE_TEARDOWN failed to spawn teardown thread: {e}");
         }
     }
 }
