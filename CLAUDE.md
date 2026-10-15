@@ -130,8 +130,9 @@ locally on the same machine, so treat it as network-dependent rather than fixed.
   calls an hour against roughly 6 per cold install, so a second run within the hour used to fail
   mid-chain on a 403. The gate stops up front instead. Mint a short-lived rate-limit-only token
   per run: `GITHUB_TOKEN="$(sigil-helper token --rate-limit-only mnemra/mnemra-core)" just ci-full`
-  (metadata:read on one repo, valid 1 hour; `#4002`). Both source repos are public, so it buys only
-  the authenticated rate limit. ⛔ Never `gh auth token` or any broad token: the recipe's environment is
+  (metadata:read on one repo, valid 1 hour; `#4002`). Without sigil, export a fine-grained personal
+  access token with no permissions and no repository access as `GITHUB_TOKEN`. Both source repos are
+  public, so either buys only the authenticated rate limit. ⛔ Never `gh auth token` or any broad token: the recipe's environment is
   inherited by the Postgres binaries, which run before their own hash check (`#3616`).
 - ⛔ **`just check` is not the gate either**, even though `README.md` names it. It is orphaned from
   CI parity.

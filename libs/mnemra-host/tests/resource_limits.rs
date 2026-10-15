@@ -683,10 +683,17 @@ fn register_module_bounds_a_looping_start_function() {
         let slots = pool.slot_count(TEST_PLUGIN_ID);
         let _ = tx.send((outcome, elapsed, slots));
     });
-    let (outcome, elapsed, slots) = rx.recv_timeout(std::time::Duration::from_secs(30)).expect(
-        "register_module did not return within 30 s: the instance-setup fuel/epoch \
-             bound is lost, so a never-returning (start) function hangs registration",
-    );
+    let (outcome, elapsed, slots) = match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+        Ok(received) => received,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => panic!(
+            "register_module did not return within 30 s: the instance-setup fuel/epoch \
+             bound is lost, so a never-returning (start) function hangs registration"
+        ),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => panic!(
+            "the register_module worker thread panicked before sending a result; \
+             see its panic output above"
+        ),
+    };
 
     let msg =
         outcome.expect_err("a never-returning start function must be cut off by the setup budget");
