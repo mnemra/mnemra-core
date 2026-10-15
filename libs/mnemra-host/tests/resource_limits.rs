@@ -43,6 +43,7 @@
 //!   - fuel path: `ResourceBudget { fuel: <small>, epoch_deadline: <large> }`
 //!     — a short CPU-burn exhausts the small fuel budget in milliseconds before
 //!     the large epoch deadline can fire.
+//!
 //! Each test asserts its `limit_type` so a wrong-limit trap (e.g. the "epoch"
 //! store running out of fuel first) fails the test LOUDLY — fail-shut on fixture
 //! correctness (the Task-22 analog of "fixtures must pass verify first").

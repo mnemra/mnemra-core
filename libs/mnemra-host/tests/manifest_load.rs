@@ -196,25 +196,14 @@ core = true
 /// The `public_key` field is set to `hex(verifying_key)` — Interpretation B
 /// cross-check requires this to equal `hex(root_material)` at the call site.
 /// In every fixture that passes verification, `verifying_key` IS the root key.
+/// `unsigned` is the body from `manifest_bytes_unsigned_ext`, which `sig_bytes`
+/// must have been computed over.
 fn manifest_with_signature_ext(
-    name: &str,
-    version: &str,
-    schema_version: u64,
-    verbs: &[&str],
-    required_fns: &[&str],
-    optional_fns: &[&str],
+    unsigned: &[u8],
     verifying_key: &VerifyingKey,
     sig_bytes: &[u8],
 ) -> Vec<u8> {
-    let unsigned = manifest_bytes_unsigned_ext(
-        name,
-        version,
-        schema_version,
-        verbs,
-        required_fns,
-        optional_fns,
-    );
-    let unsigned_str = String::from_utf8(unsigned).unwrap();
+    let unsigned_str = String::from_utf8(unsigned.to_vec()).unwrap();
 
     let pubkey_hex = hex_encode(verifying_key.as_bytes());
     let sig_hex = hex_encode(sig_bytes);
@@ -252,16 +241,7 @@ fn signed_manifest_standard(
         optional_fns,
     );
     let sig = sign_manifest(signing_key, &unsigned);
-    manifest_with_signature_ext(
-        "echo",
-        "0.0.1",
-        schema_version,
-        verbs,
-        required_fns,
-        optional_fns,
-        &vk,
-        &sig,
-    )
+    manifest_with_signature_ext(&unsigned, &vk, &sig)
 }
 
 // ===========================================================================

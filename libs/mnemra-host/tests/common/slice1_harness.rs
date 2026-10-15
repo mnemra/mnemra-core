@@ -87,7 +87,7 @@ pub async fn slice1_echo_harness(pg_pool: sqlx::PgPool) -> Slice1Harness {
     )
     .bind(token_hash.as_bytes())
     .bind(workspace_id)
-    .bind(&vec!["admin".to_owned()])
+    .bind(vec!["admin".to_owned()])
     .execute(&pg_pool)
     .await
     .expect("seed admin token");
