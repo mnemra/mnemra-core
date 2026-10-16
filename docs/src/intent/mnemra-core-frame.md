@@ -606,6 +606,10 @@ boundary is unambiguous:
 
 ## Changelog
 
+- **2026-10-16** — Disclosure-wording erratum (#3377): the increment-sequence table rows for
+  `0.12.0` and `0.13.0` and the Tier-A P-0002 slot note are rewritten to generic
+  capability-family wording under the standing public-surface disclosure ruling. No
+  direction, slot or reconciliation changed; a wording erratum, not a design change.
 - **2026-06-09** — Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
   out of the project-ADR layer**. The maintainer dispositioned escalation E1 by separating
   observability **generation** from **storage**: the server EMITS telemetry (stdout structured

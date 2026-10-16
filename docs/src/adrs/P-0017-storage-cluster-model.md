@@ -146,6 +146,10 @@ Binding rules:
 - Pro: smallest change; no new organizing concept.
 - Con: index / RLS / retention / projection / promotion policy is restated per table and drifts; a policy change ripples across every table by hand. The taxonomy exists precisely to give that policy a single attachment point (P-MinBlastRadius).
 
+## Amendment 2026-10-16 — Disclosure-wording erratum
+
+A disclosure-wording erratum was applied on 2026-10-16 (#3377) under the standing public-surface disclosure ruling: the state-bearing row's example content types in the D-CM table are rewritten to generic capability-family wording. The four-shape taxonomy, the per-shape policies, the source-of-truth principle and the column-promotion policy are unchanged. A wording erratum, not a design change; this record is not superseded.
+
 ## More Information
 
 **Reconciliations flagged for maintainer confirmation at the review gate:**

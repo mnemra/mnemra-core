@@ -117,6 +117,10 @@ These increments have verbs that operate on content rows (CRUD, query, projectio
 - Con: Forfeits the signed-plugin invariant for work-verb capabilities; `core: true` plugin proof-of-concept deferred to V0.1+.
 - Con: The plugin ABI (host-fn surface, manifest schema) is unvalidated against real capability families before third-party install activates.
 
+## Amendment 2026-10-16 — Disclosure-wording erratum
+
+A disclosure-wording erratum was applied on 2026-10-16 (#3377) under the standing public-surface disclosure ruling: the two single-increment rows of the core-plugin table are rewritten to generic capability-family wording. The partition (4 `core: true` plugins + 7 builtins), the verb-on-content criterion, the increment assignments and every consequence above are unchanged. A wording erratum, not a design change; this record is not superseded.
+
 ## More Information
 
 - Frame open ADR slot: `{{P-CorePluginPartition}}` ([Frame](../intent/mnemra-core-frame.md), Tier A table). This ADR resolves that slot.
