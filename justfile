@@ -150,7 +150,7 @@ PG_TEST_FLAGS := "--test actors_entity --test admin_token --test admin_token_beh
 # via NONPG_TEST_FLAGS (verify-coverage-membership consistency). Deliberate
 # double-run, not an accident — 0.24s cost, two independent reasons to keep
 # it in both places.
-NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test content_hash_binding --test coordination_message_types --test health_listener --test lint_engine_construction --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
+NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseline --test component_async_rejected --test content_hash_binding --test coordination_message_types --test health_listener --test lint_engine_construction --test lint_workspace_clause --test llm_key_allowlist --test manifest_load --test mcp_feature_guard --test no_test_seams --test permissions --test plugin_output_validation --test resource_limits --test signing_chain --test startup_run_ordering --test storage_contract --test workspace_ctx"
 
 # Verify: compile-check (type-level correctness)
 verify-type:
@@ -477,8 +477,8 @@ verify-coverage-membership:
         echo "membership check FAIL: PG_TEST_FLAGS has $pg_count members, expected 23 (update this pin if the variable's membership intentionally changed)"
         fail=1
     fi
-    if [[ "$nonpg_count" -ne 19 ]]; then
-        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 19 (update this pin if the variable's membership intentionally changed)"
+    if [[ "$nonpg_count" -ne 20 ]]; then
+        echo "membership check FAIL: NONPG_TEST_FLAGS has $nonpg_count members, expected 20 (update this pin if the variable's membership intentionally changed)"
         fail=1
     fi
 
@@ -496,7 +496,7 @@ verify-coverage-membership:
         echo "GATE coverage-membership FAIL"
         exit 1
     fi
-    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [19], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
+    echo "GATE coverage-membership PASS (union(verify-coverage-pg, verify-coverage-rest) == pre-shard selector set: PG_TEST_FLAGS [23], NONPG_TEST_FLAGS [20], -p mnemra-host --lib, --workspace --exclude mnemra-host; no drop, no dup)"
 
 # ---------------------------------------------------------------------------
 # Supply-chain advisory scan (brain #3566; related #3617, #2278, #3604).
@@ -581,41 +581,6 @@ verify-advisories:
         echo "verify-advisories: cargo-deny is not available to \`cargo deny\` (checked via \`cargo deny --version\`, not raw PATH — cargo also resolves a subcommand through \$CARGO_HOME/bin, which a plain \`command -v cargo-deny\` would miss). Install it: cargo install --locked cargo-deny --version 0.19.0 (the version .github/workflows/ci.yml pins)."
         echo "GATE advisories FAIL (apparatus — cargo-deny missing)"
         exit 1
-    fi
-    # Pin check (#3646): the RUSTSEC-2026-0327 ignore in deny.toml is valid ONLY
-    # while Cargo.lock holds wasmtime exactly 45.0.2 (async lifts are rejected
-    # there; from 46.0.0 the feature defaults on and the advisory is reachable).
-    # Nothing in cargo-deny fires between 46.0.3 and the fixed releases, so this
-    # asserts it directly. Fails closed: an unreadable deny.toml, or a lock with
-    # no single `name = "wasmtime"` package block / unparseable version, is a
-    # FAIL, never a pass. The block is matched by exact `name` line, so
-    # wasmtime-environ and friends cannot match. (A cargo-deny [bans] version
-    # range does not work for this: on 0.19.0 it silently misses 45.0.2.)
-    # Armed by the ID appearing ANYWHERE in deny.toml, comments included, not by
-    # one syntax: cargo-deny honours a bare string, `{ reason = .., id = .. }`,
-    # single quotes and [[advisories.ignore]] too, and a text-form match would
-    # skip them (fail open). A leftover mention keeps the check armed, which is
-    # the intended direction. Residual: a TOML \u escape of the ID is honoured
-    # by cargo-deny and evades this; only deliberate evasion writes that, and
-    # such a person could edit this recipe, so a TOML parser is not worth it.
-    set +e
-    grep -qF 'RUSTSEC-2026-0327' deny.toml
-    ignore_code=$?
-    set -e
-    if [[ "$ignore_code" -gt 1 ]]; then
-        echo "verify-advisories: cannot read deny.toml to check the RUSTSEC-2026-0327 pin — failing closed (#3646)"
-        echo "GATE advisories FAIL (pin check — deny.toml unreadable)"
-        exit 1
-    fi
-    if [[ "$ignore_code" -eq 0 ]]; then
-        set +e
-        wasmtime_versions="$(awk '$0 == "name = \"wasmtime\"" { getline; print }' Cargo.lock 2>/dev/null)"
-        set -e
-        if [[ "$wasmtime_versions" != 'version = "45.0.2"' ]]; then
-            echo "verify-advisories: deny.toml ignores RUSTSEC-2026-0327, which holds ONLY on wasmtime 45.0.2, but Cargo.lock's wasmtime package block reads: '${wasmtime_versions:-<none found or unparseable>}'. After a wasmtime bump the advisory can be reachable: remove the RUSTSEC-2026-0327 ignore and the stale -0269/-0222 ones, and take wasmtime to >=48.0.4,<49 or >=49.0.2 with component-model-async explicitly off (#3646)."
-            echo "GATE advisories FAIL (pin check — RUSTSEC-2026-0327 ignore without wasmtime 45.0.2, #3646)"
-            exit 1
-        fi
     fi
     set +e
     output="$(cargo deny --color never --locked check 2>&1)"
@@ -832,9 +797,9 @@ verify-cold-start:
         echo "verify-cold-start: GITHUB_TOKEN is unset — refusing before any network call."
         echo "  This gate needs a token ONLY to reach GitHub's authenticated API rate limit"
         echo "  (5000/hr vs 60/hr unauthenticated); it exercises no read or write capability."
-        echo "  Create a fine-grained personal access token with NO permissions and NO"
-        echo "  repository access (the two repos this gate downloads from are public), then:"
-        echo "    export GITHUB_TOKEN=<the token>"
+        echo "  Mint a short-lived rate-limit-only token (metadata:read on one repo, valid 1"
+        echo "  hour; the two repos this gate downloads from are public), then run the gate with:"
+        echo "    GITHUB_TOKEN=\"\$(sigil-helper token --rate-limit-only mnemra/mnemra-core)\" just ci-full"
         echo "  Do NOT use \`gh auth token\` or any broad personal token: this recipe's full"
         echo "  environment is inherited by the downloaded Postgres binary's initdb, which"
         echo "  runs BEFORE this gate's own hash-pin check (brain #3616)."

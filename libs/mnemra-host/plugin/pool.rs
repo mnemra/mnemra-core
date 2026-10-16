@@ -301,14 +301,25 @@ impl PluginPool {
     ///
     /// Builds a `Store<HostState>` whose data carries the shared fenced artifact
     /// store + the memory limiter (unbound to a workspace until the dispatch site
-    /// sets it, R-0006-b), then instantiates the component world. Budget
-    /// (fuel/epoch) is applied per-invocation, not here.
+    /// sets it, R-0006-b), then instantiates the component world. The
+    /// per-invocation budget is applied at invocation time and replaces the
+    /// setup budget given here.
+    ///
+    /// Since wasmtime 46 instance setup runs as compiled code and is metered:
+    /// a fuel-enabled store with no fuel traps `OutOfFuel` during
+    /// instantiation. Setup is therefore bounded by the same policy ceilings
+    /// as an invocation (`FUEL_LIMIT`, `EPOCH_DEADLINE`), not left unbounded.
     fn instantiate_live_slot(
         &self,
         component: &Component,
         linker: &Linker<HostState>,
     ) -> Result<LiveSlot, Box<dyn std::error::Error>> {
         let mut store = component::new_store(&self.engine);
+        // INTERIM, no ruling: the setup budget is a placeholder pending the design
+        // question filed as #4008. Bounded by tests/resource_limits.rs
+        // (`register_module_bounds_a_looping_start_function`).
+        store.set_fuel(FUEL_LIMIT)?;
+        store.set_epoch_deadline(EPOCH_DEADLINE);
         let instance = component::instantiate(&mut store, component, linker)?;
         Ok(LiveSlot { store, instance })
     }
