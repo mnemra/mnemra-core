@@ -85,24 +85,12 @@ unmaintained = "all"
 
 # A stale ignore — one whose ID no longer matches anything in the tree,
 # because the advisory cleared or the ID was mistyped — fails the gate
-# instead of sitting here looking honoured forever. This is the mechanical
-# trip-wire for the four wasmtime exceptions below: once the wasmtime major
-# bump (#3646) lands and clears RUSTSEC-2026-0269 / -0222 / -0316 / -0327, this
-# setting turns the now-unmatched `ignore` entries into a gate failure until
-# they are removed.
+# instead of sitting here looking honoured forever.
 unused-ignored-advisory = "deny"
 
-# Every advisory a patch-level bump could clear was cleared in Cargo.lock
-# instead of ignored here (task #3566, landed alongside this section):
-# crossbeam-epoch (#2278), rustls (#3604), h2, anyhow, event-listener,
-# chacha20 and spin. These four remain because wasmtime is pinned to the exact
-# release `=45.0.2` (docs/src/adrs/P-0012, P-0013, P-0019;
-# docs/specs/2026-07-07-plugin-distribution.md) and no 45.x release fixes
-# any of them — the fix is a major-version bump, R-0007-i-gated and
-# tracked as its own task, #3646.
-ignore = [
-    { id = "RUSTSEC-2026-0269", reason = "wasmtime filesystem sandbox escape via wasmtime-wasi/cap-std (GHSA-vqjp-4c8c-hfgg). Neither crate is in this dependency tree and every WASI import traps unresolved (libs/mnemra-host/plugin/component.rs); triaged brain #3617, 2026-09-17. No fix exists on the pinned wasmtime =45.0.2 line. Exit condition: the wasmtime major bump, #3646." },
-    { id = "RUSTSEC-2026-0222", reason = "wasmtime store/engine type-index confusion (GHSA-hgjw-h833-99q9), triggerable only across multiple Engine instances; this host constructs exactly one for its process lifetime (libs/mnemra-host/plugin/pool.rs); triaged brain #3617, 2026-09-17. No fix exists on the pinned wasmtime =45.0.2 line. Exit condition: the wasmtime major bump, #3646." },
-    { id = "RUSTSEC-2026-0316", reason = "wasmtime dynamic record lifting allocates beyond the hostcall fuel limit (GHSA-jqpg-j7w6-42pr). REACHABLE, by a root-signed component only: define_unknown_imports_as_traps (libs/mnemra-host/plugin/component.rs) -> func_new dynamic Val lifting allocates record field names with no hostcall-fuel charge. Impact is a low-severity host memory DoS. Ruled 2026-10-14. Exit condition: the wasmtime major bump, #3646." },
-    { id = "RUSTSEC-2026-0327", reason = "wasmtime component async-lifted callback result count unvalidated (GHSA-32h6-97mm-8q3c). NOT reachable on wasmtime 45.x ONLY: 45's Config::features() never sets component-model-async and build_engine (libs/mnemra-host/plugin/limits.rs) sets only fuel and epoch interruption, so async lifts are rejected at Component::from_binary validation. From 46.0.0 async defaults on from the cargo feature, so this exception is pinned to wasmtime 45.0.2 by the verify-advisories assertion in the justfile, which fails if this entry is present and Cargo.lock's wasmtime is anything else. Ruled 2026-10-14. Exit condition: the wasmtime major bump, #3646 (target >=48.0.4,<49 or >=49.0.2, with async explicitly off)." },
-]
+# No advisory exceptions. Every advisory was cleared by a version bump rather
+# than ignored: the patch-level ones in #3566 (crossbeam-epoch, rustls, h2,
+# anyhow, event-listener, chacha20, spin) and the four wasmtime ones by the
+# wasmtime 48.x bump in #3646, which also keeps component-model async off
+# (libs/mnemra-host/Cargo.toml, plugin/limits.rs; tests/component_async_rejected.rs).
+ignore = []

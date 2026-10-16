@@ -8,7 +8,7 @@
 //!   `store.set_epoch_deadline(500)`. Epoch counter is incremented by the
 //!   supervised tick thread every 10ms → 5 s wall-clock deadline.
 //! - **Memory ceiling:** 64 MiB via `ResourceLimiter` (R-0007-c). In
-//!   wasmtime 45.x, per-instance memory caps on the on-demand allocator are
+//!   wasmtime 48.x, per-instance memory caps on the on-demand allocator are
 //!   enforced at the `Store` level via a `ResourceLimiter` implementation.
 //!   The `PluginResourceLimiter` struct below implements this.
 //!
@@ -43,7 +43,7 @@ pub const MEMORY_MAX_BYTES: usize = 64 * 1024 * 1024;
 /// `memory_growing` method before any linear-memory growth; returning `false`
 /// traps the guest and prevents growth beyond the ceiling.
 ///
-/// This is the correct approach for the on-demand allocator in wasmtime 45.x.
+/// This is the correct approach for the on-demand allocator in wasmtime 48.x.
 /// The pooling allocator has `PoolingAllocationConfig::max_memory_size`, but
 /// mnemra uses the on-demand allocator at V0.
 pub struct PluginResourceLimiter;
@@ -88,13 +88,22 @@ impl ResourceLimiter for PluginResourceLimiter {
 /// - `epoch_interruption(true)` — enables epoch-based deadline; the
 ///   `EpochTickThread` increments the counter on a 10ms interval.
 ///
+/// - `concurrency_support(false)` — component-model async is OFF. A component
+///   with an async lift (or `stream` / `future` / async builtins) fails
+///   validation at `Component::from_binary`. Defence in depth with
+///   `default-features = false` in `Cargo.toml`, which compiles the async
+///   machinery out; this line holds if a feature is later re-enabled by
+///   feature unification. RUSTSEC-2026-0327 is reachable only with async on.
+///   Pinned by `tests/component_async_rejected.rs`.
+///
 /// # R-0007-i: Wasmtime version pinned
 ///
 /// `wasmtime` is pinned to an exact version in `Cargo.toml` (no open caret).
-/// Major/minor upgrades require an explicit plan AC (R-0007-i).
+/// Version changes require an explicit plan AC (R-0007-i).
 pub fn build_engine() -> Result<Engine, wasmtime::Error> {
     let mut config = Config::new();
     config.consume_fuel(true);
     config.epoch_interruption(true);
+    config.concurrency_support(false);
     Engine::new(&config)
 }

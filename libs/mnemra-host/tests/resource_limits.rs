@@ -638,6 +638,71 @@ fn register_module_pre_instantiates_pool_max_live_instances() {
     );
 }
 
+/// Setup-budget bound (brain #3646, design question #4008) — instance setup is
+/// metered, so a component whose core `(start)` function never returns must make
+/// `register_module` return `Err`, not hang.
+///
+/// The control is `EPOCH_LOOP_WAT`: the same shape without a start loop
+/// registers (see `register_module_pre_instantiates_pool_max_live_instances`),
+/// so the `Err` here is the start loop being cut off, not a fixture fault.
+/// Which ceiling cuts it off (fuel or epoch) is deliberately not asserted: the
+/// setup budget is interim; only that a funded budget bounds it is pinned.
+#[test]
+fn register_module_bounds_a_looping_start_function() {
+    const START_LOOP_WAT: &str = r#"(component
+  (core module $m
+    (func $spin (loop $forever br $forever))
+    (start $spin)
+    (func (export "run")))
+  (core instance $i (instantiate $m))
+  (func (export "run") (canon lift (core func $i "run"))))"#;
+
+    // Registration runs on its own thread so a lost setup bound fails this test
+    // by timeout instead of hanging the suite (ci.yml sets no timeout-minutes).
+    // The thread owns the pool and reduces the non-Send error to a string chain.
+    // 30 s is several multiples of the 5 s epoch ceiling. On timeout the stuck
+    // thread is left detached; the panic ends the test.
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let pool = PluginPool::new().expect("pool must initialise");
+        let component = compile_fixture(&pool, START_LOOP_WAT);
+        let started = std::time::Instant::now();
+        let result = pool.register_module(TEST_PLUGIN_ID, TEST_PLUGIN_VERSION, &component);
+        let elapsed = started.elapsed();
+        let outcome = result.map_err(|err| {
+            // The trap is the root cause; the outer error is only backtrace context.
+            let mut msg = err.to_string();
+            let mut source = err.source();
+            while let Some(cause) = source {
+                msg.push_str(&format!(" | {cause}"));
+                source = cause.source();
+            }
+            msg
+        });
+        let slots = pool.slot_count(TEST_PLUGIN_ID);
+        let _ = tx.send((outcome, elapsed, slots));
+    });
+    let (outcome, elapsed, slots) = rx.recv_timeout(std::time::Duration::from_secs(30)).expect(
+        "register_module did not return within 30 s: the instance-setup fuel/epoch \
+             bound is lost, so a never-returning (start) function hangs registration",
+    );
+
+    let msg =
+        outcome.expect_err("a never-returning start function must be cut off by the setup budget");
+    // An unfunded store fails in milliseconds with OutOfFuel before the loop
+    // runs; a funded one burns through a real budget (ceilings are 10^10 fuel /
+    // 5 s epoch). Over 1 s tells the two apart without pinning which ceiling won.
+    assert!(
+        elapsed > std::time::Duration::from_secs(1),
+        "start loop was cut off in {elapsed:?}: the store was unfunded, not budget-bounded"
+    );
+    assert!(
+        msg.contains("all fuel consumed") || msg.contains("interrupt"),
+        "registration must fail on a budget trap (fuel or epoch), not another fault; got: {msg}"
+    );
+    assert_eq!(slots, 0, "a failed registration must leave no live slots");
+}
+
 /// T10 AC(c), R-0016-a — `register_module` rejects a duplicate `plugin_name`
 /// and leaves the pool state intact.
 ///
