@@ -1195,7 +1195,7 @@ fn scan_real_test_tree_no_engine_construction_outside_fixture() {
     // (PG_TEST_FLAGS/NONPG_TEST_FLAGS). Adding or removing a `.rs` file under
     // tests/ means bumping this pin in the same commit; a drift in either
     // direction is a scan whose population changed without anyone saying so.
-    const EXPECTED_TEST_FILE_COUNT: usize = 57;
+    const EXPECTED_TEST_FILE_COUNT: usize = 58;
     assert_eq!(
         files.len(),
         EXPECTED_TEST_FILE_COUNT,
