@@ -18,8 +18,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "d8f8a6b062724c25daa28ce5a649e94ef464bdfc71d6e1e43638152665f2af66",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "117fadda85d83a3bb71ccbfc4e38697f29525292e0034ca9e619186ba1ddbc89",
+      "translated_at": "2026-10-18T19:24:45Z"
     },
     "adrs/P-0003-plugin-manifest.md": {
       "primary_audience": "agent",
@@ -123,8 +123,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "1d7b5d5bd473cc6f310974c59716fbee8000d48108e1ea9f562e0e76ff8acca3",
-      "translated_at": "2026-07-03T18:08:41Z"
+      "source_sha256": "20fca87b8a732c5a4ed7b486d4eac826f45be9fdeb71ff5644fb7bbaf7d61e41",
+      "translated_at": "2026-10-18T19:24:45Z"
     },
     "adrs/P-0018-core-entity-manifest.md": {
       "primary_audience": "agent",
@@ -186,8 +186,8 @@
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "800b2185cab3336bdf391ed4fd1b6bd749b4f00c2384f87f035a937ef1f186a2",
-      "translated_at": "2026-07-11T13:00:14Z"
+      "source_sha256": "da01962f5a90cf6eddce22a228fe92f9c6254f84baa5763baa3b062e04ea2fd7",
+      "translated_at": "2026-10-18T19:24:45Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
@@ -214,15 +214,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "fe75a6d47286bfa6bdd67758ba3620cc1152cf7e48614276eb23212acdb4cbf9",
-      "translated_at": "2026-09-17T11:27:56Z"
+      "source_sha256": "6329ec3e2c9ba7a4cddaa06cec1f507ac19e84f8cb38ac6326343463fc1aeeb4",
+      "translated_at": "2026-10-18T19:24:45Z"
     },
     "intent/mnemra-core.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "4d0b38b7d41d3de97fa437f650998897b55dc40f273f8583faa4652feee199bd",
-      "translated_at": "2026-09-17T11:27:56Z"
+      "source_sha256": "042d2c8eb34aa199fbb5151a26c0c548a2c2c22d898366f37f1d8506bb686e77",
+      "translated_at": "2026-10-18T19:24:45Z"
     },
     "intro.md": {
       "primary_audience": "human",

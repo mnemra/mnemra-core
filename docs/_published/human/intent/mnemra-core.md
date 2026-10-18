@@ -470,10 +470,10 @@ can be reordered cheaply at the intake-exit gate without restructuring entries.
   `proposed`. Provenance: as `0.1.0`.
 - **`0.11.0`: Scope-violation log.** The append-only scope-denial stream. *Order:
   self-contained, low-complexity.* Tier: `proposed`. Provenance: as `0.1.0`.
-- **`0.12.0`: A further artifact family.** *Order: a distinct domain, lower coupling to the orchestration core.* Tier:
-  `proposed`. Provenance: as `0.1.0`.
-- **`0.13.0`: An additional capability family.** *Order: smallest and most isolated of the capability families.*
-  Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.12.0`: A further artifact family.** *Order: a distinct domain, lower coupling to
+  the orchestration core.* Tier: `proposed`. Provenance: as `0.1.0`.
+- **`0.13.0`: An additional capability family.** *Order: smallest and most isolated of the
+  capability families.* Tier: `proposed`. Provenance: as `0.1.0`.
 - **`0.14.0`: Content-corpus migration.** The prior markdown content corpus (the
   maintained knowledge subdirectories) → stored as files with frontmatter metadata, limited
   indexing (no full-text/vector; that's `idea` D1). *Order: placed after the
@@ -856,6 +856,10 @@ unsettled scope are named, not papered over.
 
 ## Changelog
 
+- **2026-10-16**: Disclosure-wording erratum (#3377). **Register:** MODIFIED the `0.12.0`
+  and `0.13.0` entries to generic capability-family wording under the standing
+  public-surface disclosure ruling. Tier, order rationale and provenance are unchanged. It's a
+  wording erratum, not a design change.
 - **2026-09-17**: Durability amendment approved at the maintainer's gate (ruling
   2026-09-17). **Register:** ADDED the `idea`-tier entry for an external Postgres server as
   the substrate engine. The entry the 2026-09-15 changelog carried as a draft is now a real

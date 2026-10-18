@@ -6,15 +6,15 @@ primary-audience: human
 
 # Architecture Decision Records
 
-Architectural decisions in mnemra-core use the [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
+Architectural decisions for mnemra-core, in [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format. Vocabulary: `../glossary.md`.
 
 ## What is an ADR?
 
-An ADR captures a single architectural decision, its context, and its rationale. Immutable once accepted — not edited to reflect changing opinions; superseded by newer ADRs when decisions evolve.
+One ADR = one architectural decision plus its context and rationale. Accepted ADRs are immutable: never edited to reflect changed opinion; superseded by a newer ADR when the decision evolves.
 
 ## ADR Lifecycle
 
-ADR statuses:
+Statuses:
 
 | Status | Meaning |
 |--------|---------|
@@ -26,22 +26,22 @@ ADR statuses:
 
 ## G/P Prefix Projection Pattern
 
-Two-tier identifier convention reflecting where a decision originates and how it propagates:
+Two-tier identifiers, keyed on where a decision originates and how it propagates (see `../glossary.md#g--adr`, `../glossary.md#p--adr`, `../glossary.md#defaultsmd`).
 
-- **G-NNNN (general)** — workspace-wide architecture decisions. Not stored as individual files here; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot recording each general standard as a concise entry without the full rationale chain. Frozen at projection time — upstream changes to a G-* decision do not auto-sync into this file.
-- **P-NNNN (project)** — project-specific architecture decisions, stored as individual `P-NNNN-*.md` files in this directory. Two sub-categories:
-  - *Project-specific:* no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.
-  - *Override:* a deviation from a `DEFAULTS.md` baseline entry, named explicitly in the Status field (e.g., `Status: accepted, Overrides G-0017`).
+- **G-NNNN (general)** — workspace-wide decisions. No individual files in this directory; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot with one concise entry per general standard and no rationale chain. Frozen at projection; upstream G-* changes do not auto-sync.
+- **P-NNNN (project)** — project-specific decisions, one `P-NNNN-*.md` file each in this directory. Two sub-categories:
+  - *Project-specific:* no workspace-wide analog; a constraint or tradeoff unique to mnemra-core.
+  - *Override:* deviation from a `DEFAULTS.md` baseline entry. The Status field names the overridden default explicitly (e.g., `Status: accepted, Overrides G-0017`).
 
 *The default is the starting point; any deviation is a new P-ADR.*
 
 ## Using the Template
 
-New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill in all frontmatter fields, write the body sections. Overrides of a `DEFAULTS.md` entry are stated explicitly in the Status section.
+New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill every frontmatter field, write the body sections. An override of a `DEFAULTS.md` entry says so explicitly in the Status section.
 
 ## Current ADRs
 
-Nine Tier-A ADRs authored in WS-E-2 Stage 3; the storage substrate/engine ADR ([P-0010](P-0010-storage-substrate-engine.md)), folded in 2026-06-08 from a post-spec-lock storage-engine evaluation; the logging-facade ADR ([P-0011](P-0011-logging-facade.md)), recording the `tracing` facade-from-binary choice merged 2026-06-17; the plugin-runtime + MCP-SDK ADR ([P-0012](P-0012-plugin-runtime-and-mcp-sdk.md)), recording the raw-Wasmtime-over-Extism runtime choice (retroactive; shipped Tasks 20–22) and the official-`rmcp`-SDK-over-hand-rolled-MCP protocol choice (forward; implemented by Task 23) — correcting both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition — generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR. Its decisions live in the [observability baseline](../architecture/overview.md#observability); the original observability ADR [P-0004](P-0004-observability-shape.md) is `deprecated` (no successor ADR). P-0011 is not an observability-shape ADR — a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract), and the plumbing foundation under that baseline. All Tier-A placeholder slots resolved (see [`placeholder-resolution.md`](placeholder-resolution.md) for full status). The three retrieval-cluster ADRs ([P-0014](P-0014-retrieval-architecture.md)/[P-0015](P-0015-provenance-envelope-source-roles.md)/[P-0016](P-0016-edge-schema.md), authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster's Frame slots; `accepted` 2026-07-02, at the retrieval-cluster spec-exit gate. The two reporting-engine ADRs ([P-0020](P-0020-report-execution-context.md)/[P-0021](P-0021-report-definition-type.md), authored 2026-07-04 at the reporting-engine Stage 3) resolve that cluster's Frame slots; `accepted` 2026-07-04, at the reporting-engine spec-exit gate. The single coordination-cluster ADR ([P-0022](P-0022-coordination-cluster.md), authored 2026-07-07 at the coordination-wedge Stage 3) resolves that cluster's one Frame slot (`{{P-CoordinationCluster}}` — a single slot, not a split); `accepted` 2026-07-07, at the coordination-wedge spec-exit gate, part of the Stage-3 package reviewed alongside [the cluster spec](../../specs/2026-07-06-coordination-wedge.md). The distribution ADR ([P-0023](P-0023-plugin-distribution.md), authored 2026-07-07 at the plugin-distribution Stage 3) resolves that Frame's `{{P-PluginDistribution}}` slot; `accepted` 2026-07-11, at the plugin-distribution spec-exit gate, part of the Stage-3 package reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md).
+Nine Tier-A ADRs from WS-E-2 Stage 3, plus: P-0010 (storage substrate/engine; folded in 2026-06-08 from a post-spec-lock storage-engine evaluation); P-0011 (logging facade: `tracing` facade-from-binary, merged 2026-06-17); P-0012 (plugin runtime + MCP SDK: raw Wasmtime over Extism, retroactive, shipped Tasks 20–22; official `rmcp` SDK over hand-rolled MCP, forward, implemented by Task 23). P-0012 corrects both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed on both halves without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition: generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR; its decisions live in the [observability baseline](../architecture/overview.md#observability); the original observability ADR P-0004 is `deprecated`, no successor ADR. P-0011 is *not* an observability-shape ADR: it is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract) and the plumbing foundation under that baseline. All Tier-A placeholder slots resolved; full status in [`placeholder-resolution.md`](placeholder-resolution.md). Cluster ADRs, each resolving its cluster's Frame slots and each `accepted` at that cluster's spec-exit gate: retrieval P-0014/P-0015/P-0016 (authored at the retrieval-cluster Stage 3 and accepted, both 2026-07-02); reporting-engine P-0020/P-0021 (authored at the reporting-engine Stage 3 and accepted, both 2026-07-04); coordination P-0022 (authored 2026-07-07 at the coordination-wedge Stage 3; resolves the one slot `{{P-CoordinationCluster}}`, a single slot, not a split; accepted 2026-07-07 as part of the Stage-3 package the gate reviewed alongside [the cluster spec](../../specs/2026-07-06-coordination-wedge.md)); distribution P-0023 (authored 2026-07-07 at the plugin-distribution Stage 3; resolves `{{P-PluginDistribution}}`; accepted 2026-07-11 as part of the Stage-3 package the gate reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md)).
 
 | ADR | Summary |
 |-----|---------|
