@@ -49,9 +49,13 @@
 set -uo pipefail
 
 # Derive REPO from the repo root (portable to the GitHub runner).
-# Order: $MNEMRA_CORE env override -> git rev-parse from script dir -> hardcoded fallback.
+# Order: $MNEMRA_CORE env override -> git rev-parse from script dir -> exit 2 (no guessed path).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${MNEMRA_CORE:-$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)}"
+if [ -z "$REPO" ]; then
+    echo "FATAL: cannot resolve the repo root: MNEMRA_CORE is unset and git rev-parse failed from $SCRIPT_DIR. Set MNEMRA_CORE to the mnemra-core checkout path." >&2
+    exit 2
+fi
 MANIFEST="$REPO/Cargo.toml"
 OUTDIR="$REPO/scratch/flake-runs"
 mkdir -p "$OUTDIR"
