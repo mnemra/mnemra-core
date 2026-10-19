@@ -67,3 +67,13 @@ Numbers are reserved in Frame Tier-A order for paused slots; authored slots fill
 | P-0014 | `{{P-0014}}` (retrieval-cluster Frame §8) | authored |
 | P-0015 | `{{P-0015}}` (retrieval-cluster Frame §8) | authored |
 | P-0016 | `{{P-0016}}` (retrieval-cluster Frame §8) | authored |
+| P-0017 – P-0025 | *(storage-cluster model, core-entity manifest, plugin contract, report execution context, report definition type, coordination cluster, plugin distribution, ingest pipeline shape, job queue)* | authored — files present; entered in this ledger 2026-10-19 when the next reservation was made, since the ledger had stopped at P-0016 |
+| P-0026 | *(no placeholder — control-class ADR 1, DB connection authentication and transport; #4018 gate ruling 7793)* | authored `proposed` and accepted 2026-10-19 — [P-0026-db-connection-authentication-transport.md](P-0026-db-connection-authentication-transport.md) |
+| P-0027 | *(control-class ADR 2, DB authorization and role separation)* | authored `proposed` and accepted 2026-10-19 — [P-0027-db-authorization-role-separation.md](P-0027-db-authorization-role-separation.md) |
+| P-0028 | *(control-class ADR 3, requirements-check integrity)* | authored `proposed` and accepted 2026-10-19 — [P-0028-requirements-check-integrity.md](P-0028-requirements-check-integrity.md) |
+| P-0029 | *(control-class ADR 4, secrets management for the DB credential files)* | authored `proposed` and accepted 2026-10-19 — [P-0029-db-credential-files.md](P-0029-db-credential-files.md) |
+| P-0030 | *(control-class ADR 5, delegated-policy inventory and supply chain)* | authored `proposed` and accepted 2026-10-19 — [P-0030-delegated-policy-inventory-supply-chain.md](P-0030-delegated-policy-inventory-supply-chain.md) |
+| P-0031 | *(control-class ADR 6, test-substrate isolation)* | authored `proposed` and accepted 2026-10-19 — [P-0031-test-substrate-isolation.md](P-0031-test-substrate-isolation.md) |
+| P-0032 | *(control-class ADR 7, probe and readiness surface)* | **reserved** 2026-10-19 — written with the HTTPS shared-service transport amendment, tracker #4127 (ruling 7793: "Probe surface (with transport)") |
+
+Collision check before the 2026-10-19 reservations: `ls docs/src/adrs/ | grep -oE 'P-00[0-9]{2}'` returned P-0001 – P-0025 and `grep -rnoE 'P-00(2[6-9]|3[0-9])' docs/` returned no live reference (one draft note in P-0010 naming a hypothetical `P-0026` for the supersession alternative was removed in the same change).

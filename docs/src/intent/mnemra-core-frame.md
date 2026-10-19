@@ -196,7 +196,7 @@ backup-scoped and not part of the steady-state trust topology):
 | `TB-human` | The operator invoking the admin CLI | The admin CLI's local IPC to the running mnemra-core server, or a direct admin token over MCP |
 | `TB-mnemra-host` | The mnemra-core server process itself | Crosses MCP transport, admin CLI IPC, Postgres connection, filesystem secrets reads |
 | `TB-plugin-sandbox` | The Wasmtime sandbox running plugin code | All cross-boundary calls are host-fn-mediated; plugin core is IO-free |
-| `TB-postgres` | The Postgres process | SQL connection from mnemra-core host; no agent or plugin code reaches Postgres directly |
+| `TB-postgres` | The Postgres process *(Amended 2026-10-19 r2, #4018 — retyped in place: the **operator-run PostgreSQL instance, the operator's zone**, which may hold other principals; P-0010 §Amendment 2026-10-19)* | SQL connection from mnemra-core host; no agent or plugin code reaches Postgres directly *(r2: two credentials — the serving role for host-fns, the instance check and `check-db`; the owner role for `mnemra init` only — over peer-authenticated sockets with a peer-uid check or `verify-full` TLS; the operator's own setup-SQL DDL inbound; the overview's TB table is canonical)* |
 | `TB-fs-secrets` | Filesystem-stored secrets (mode 600) | Admin token and (per the open ADR slot for signing-key custody) plugin-signing key material; read by host code only |
 | `TB-build-pipeline` | Conceptual — the signing authority at build time | Signed plugin artifacts are what crosses into runtime; runtime sees signatures, not the key |
 | `TB-external-llm` | The external LLM provider hosting embeddings (out-of-deployment) | Per-embedding-batch HTTPS call from host functions; the LLM-API-key configuration surface (`0.1.0`) and a hostname allowlist gate the egress |
@@ -226,7 +226,10 @@ The content and projection layer the host owns directly.
 - **Storage substrate.** PostgreSQL ratified on merits, behind an engine-agnostic
   swappable `Storage` trait (one implementation) — [P-0010](../adrs/P-0010-storage-substrate-engine.md)
   D1 + D5. **V0 engine: embedded Postgres** (`postgresql_embedded` + bundled `pgvector`
-  for V0.1+ vector retrieval), shipping with the single binary. TimescaleDB is demoted off
+  for V0.1+ vector retrieval), shipping with the single binary. *(Amended 2026-10-19, #4018,
+  approved 2026-10-19 (#4018 activity 7800): the V0 engine becomes a **separate, operator-run PostgreSQL
+  instance** reached by connection configuration — P-0010 §Amendment 2026-10-19; the host
+  verifies its requirements on the instance before serving (spec R-0117–R-0121).)* TimescaleDB is demoted off
   the V0 stack (D8) — the V0 timeseries shape is plain timestamped Postgres tables, with
   TimescaleDB held behind a latency/storage trip-wire. The **storage-shape model** is the
   alignment-doc round-4 four-shape model: content / timeseries / log / state-config — but
@@ -412,7 +415,14 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   swappable `Storage` trait (one implementation) — [P-0010](../adrs/P-0010-storage-substrate-engine.md)
   D1 + D5. The **V0 engine is embedded Postgres** (`postgresql_embedded` + bundled
   `pgvector`), shipping with the single self-hosted binary — not an operator-provisioned
-  external Postgres server.
+  external Postgres server. *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800) —
+  SUPERSEDED: the V0 engine is a **separate, vanilla PostgreSQL instance the operator installs
+  and runs**, with `pgvector` installed by the operator and verified by the host, reached by
+  connection configuration ([P-0010](../adrs/P-0010-storage-substrate-engine.md) §Amendment
+  2026-10-19, DE1). The host owns no cluster: no download, no `initdb`/`pg_ctl`, no data
+  directory, no `CREATE EXTENSION`. The 2026-09-15 ruling that kept the external server a
+  future engine is superseded on new evidence and recorded in P-0010 as the rejected
+  alternative with the reason it lost.)*
 - **V0 stack is A1-clean** ([P-0010](../adrs/P-0010-storage-substrate-engine.md) D2):
   pgvector HNSW + native FTS + recursive CTEs + JSONB. Extensions beyond pgvector are
   adopted only on named trip-wires (keyword/BM25-fidelity → D3; graph/AGE → D4;
@@ -444,7 +454,43 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   acceptance. An
   operator-provisioned external Postgres server is not a V0 engine (durability would then
   be that server's responsibility); the V0 engine remains embedded Postgres per
-  [P-0010](../adrs/P-0010-storage-substrate-engine.md).
+  [P-0010](../adrs/P-0010-storage-substrate-engine.md). *(Amended 2026-10-19, #4018, pending
+  the maintainer's gate — this bullet is re-derived against the operator-run instance.
+  **What stays:** stored content survives a host stop and restart, clean or hard kill (spec
+  R-0121-a), verified by an out-of-process restart acceptance (R-0121-c). **What moves:**
+  the data directory, its placement, locking and version guard were the host's and are now
+  the instance's — placement on persistent storage is a named operator obligation (R-0117-j),
+  and the durable-commit settings the embedded design wrote are now **requirements the host
+  verifies on every start and retry, failing closed** (R-0117-d). **What is dropped, with
+  reason:** the "hard kill of the storage engine" scenario — the host cannot kill an instance
+  it does not own; crash recovery is PostgreSQL's under the verified settings (R-0121-b).
+  **Correction, not benefit:** the persistence defect (#3565) was mnemra's own
+  `.temporary(true)`, not a property of embedding (maintainer, 2026-10-18); the move removes
+  the site of the defect, it does not solve durability — the requirement does. The
+  no-stored-secret socket design (R-0116-e) is replaced by R-0119: no password in the URL or
+  environment, a descriptor-checked file when one is needed, peer authentication over a socket
+  (after a peer-uid check) recommended for a bare host, `verify-full` TLS required on every TCP
+  connection, loopback included, and a password only ever sent over such a connection (r2, after
+  the security review). Quality-attribute scenarios: the
+  companion overview's Reliability / durability axis, re-derived in the same amendment.)*
+- **Startup check, readiness and liveness are three contracts (Amended 2026-10-19, #4018).**
+  The host verifies its requirements on the instance (one check, spec R-0118-a), exposes
+  readiness on `GET /ready` with machine-readable reasons, exposes liveness on `GET /health`
+  with **no dependency on the instance**, and runs the same check out-of-process as
+  `mnemra check-db`. An unmet hard requirement never exits the process: the host stays up,
+  serves nothing (every MCP call answers `host_not_ready` with the reasons; `initialize` and
+  `tools/list` still succeed), retries with backoff (1 s → 30 s cap, unbounded) and on
+  `SIGHUP`. Maintainer ruling 2026-10-19, verbatim: "k8s keeps trying to restart wihch is
+  dumb. better answer is the health check indicates it can't run and why with a way to ensure
+  it occasionally trys again or is forced to try again." The three-way split is his stated
+  view ("i think they are different things"), RULED 2026-10-19 (P-0010 §Amendment AE1,
+  activity 7787; `ready` ⇒ `alive`, never the reverse); no soft class exists at V0 (ruling
+  7771). The shared-service HTTPS transport the maintainer ruled the same day (one host for
+  every session) is the next amendment, #4127, and amends R-0010-a/-e and the daemon model. Probe mapping: liveness → `/health`, readiness → `/ready`, startup
+  → `/health` or none, pre-flight → `check-db`; exec probes at V0 while the listener is
+  loopback-only. Anchors: V-Reliability (graceful degradation over crash-restart),
+  P-ReliabilityTarget (readiness read from the consumer's side), P-CheckCoversTheClaim
+  (liveness checks liveness).
 - **The detailed layout of a single logical artifact across the four shapes** (whether a
   task lives in one row, in multiple tables in the content substrate, or fans across
   content + state + log substrates) is the central architectural fork at the Spec stage.
@@ -515,7 +561,7 @@ placeholders beyond the Spec authoring window.
 
 | Candidate ID | Decision | Notes |
 |---|---|---|
-| `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` | The storage **substrate and engine**: which engine (Postgres-on-merits vs unified vs polyglot), the V0 engine shape (embedded vs external), the V0 extension stack, and whether storage sits behind an engine-agnostic swap trait or a Postgres-shaped one | **Fold-added slot (2026-06-08).** The original Frame had *no* substrate slot — the substrate was treated as a hard-locked brief carry-forward. A storage-engine evaluation (ratified 2026-06-07, after the substrate spec lock) re-opened it on merits. **Resolved:** PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (D5, one implementation); V0 embedded Postgres; A1-clean V0 stack (D2); keyword/graph/time-series on named trip-wires (D3/D4/D8); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. P-0001 (layout) sits under this decision. Escalation E1 (D8 vs the observability hypertables) dispositioned 2026-06-09 (re-derive now) → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
+| `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` | The storage **substrate and engine**: which engine (Postgres-on-merits vs unified vs polyglot), the V0 engine shape (embedded vs external), the V0 extension stack, and whether storage sits behind an engine-agnostic swap trait or a Postgres-shaped one | **Fold-added slot (2026-06-08).** The original Frame had *no* substrate slot — the substrate was treated as a hard-locked brief carry-forward. A storage-engine evaluation (ratified 2026-06-07, after the substrate spec lock) re-opened it on merits. **Resolved:** PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (D5, one implementation); V0 embedded Postgres; A1-clean V0 stack (D2); keyword/graph/time-series on named trip-wires (D3/D4/D8); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. P-0001 (layout) sits under this decision. Escalation E1 (D8 vs the observability hypertables) dispositioned 2026-06-09 (re-derive now) → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. **Amended 2026-10-19 (#4018, approved 2026-10-19 (#4018 activity 7800)):** the V0-engine half is amended in place (P-0010 §Amendment 2026-10-19) to a separate, operator-run PostgreSQL instance; D1/D2/D5/D8 unchanged. |
 | `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` | The detailed layout of a single logical artifact across the four storage shapes (single-document vs composite-typed-slots vs multi-substrate-with-joins) | Central architectural fork. **Resolved 2026-05-24: C1 single-document layout.** Whole artifact in one row; JSONB frontmatter + body + system fields; non-breaking C2 evolution path designed into the projection layer. Sits under `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` (the Postgres implementation under the swap trait). |
 | `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` | Cohesion criterion for the V0 core plugin set; partitions the capability-family increments `0.2.0`–`0.14.0` between additional builtins and `core: true` plugins | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)`. **Resolved 2026-05-24:** 4 `core: true` plugins (tasks / repos / two further artifact-family plugins) + 7 builtins. Verb-on-content discriminator. |
 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` | Plugin manifest schema + host-fn ABI surface | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` and `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)`. **Resolved 2026-05-24:** Universal `content.emit` verb shape; `schema_version: 1`; typed host-fn allowlist compiled per-instance from signed manifest. |
@@ -539,7 +585,7 @@ placeholders beyond the Spec authoring window.
 
 | Candidate ID | Decision |
 |---|---|
-| `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) |
+| `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) *(Amended 2026-10-19, #4018: the "which extensions, at what version" half is answered by P-0010 §Amendment 2026-10-19 and spec R-0117-a/-b — `pgvector`, installed by the operator, floor-verified by the host; nothing "ships in the appliance". The "how Postgres, pgvector and the host reach the operator" half is #4019's design item, which may resolve this slot or retire it.)* |
 | `{{P-MCPWriteSemantics}}` | MCP write semantics — concurrent-write conflict resolution, deletion semantics, idempotency keys |
 | `{{P-SigningKeyCustodyHardening}}` | Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`. |
 

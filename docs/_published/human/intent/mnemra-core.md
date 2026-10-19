@@ -119,7 +119,17 @@ marketing-tier labels** denoting product-promise milestones, distinct from Seman
   *(ADDED 2026-09-15, maintainer ruling 2026-09-15: the brief promised persistence without
   defining it, the Frame (the constraint-locking stage of the pipeline) never weighed
   durability, and the V0 substrate spec narrowed "persist" to storage shape, so the promise
-  had no checker. This criterion is the anchor the checker hangs from.)*
+  had no checker. This criterion is the anchor the checker hangs from.)* *(Amended 2026-10-19,
+  #4018, approved 2026-10-19 (#4018 activity 7800): "a hard kill of the embedded storage
+  engine" → the storage engine is now a separate PostgreSQL instance the operator runs (P-0010
+  §Amendment 2026-10-19, where P-0010 is the project-scoped architecture decision record for
+  the storage substrate engine). The criterion's first two stop shapes are the host's to verify
+  (spec R-0121-a/-c; R-codes are stable requirement identifiers defined in the spec). Survival
+  across a crash of the instance itself is PostgreSQL's guarantee, under durability settings
+  the host **verifies as requirements on every start** (R-0117-d) and names as its reliance
+  (R-0121-b). The persistence defect this criterion was written against was mnemra's own
+  `.temporary(true)`, not a property of embedding (maintainer, 2026-10-18). Its removal is a
+  correction, not a benefit of the move.)*
 - Commercial validation thresholds exist but live in the separate internal commercial
   record; they aren't product success criteria and aren't inlined here.
 
@@ -133,13 +143,15 @@ used where the requirement is observable):
 - **An MCP server is a V0 deliverable.** To be clear about intent: the MCP-native constraint is
   satisfied by a running MCP server inside V0 scope, not by a future protocol posture alone.
 - The substrate SHALL be a **single-process Postgres** instance with the `pgvector`
-  extension present. TimescaleDB is demoted off the V0 stack (P-0010 decision D8, where P-0010
-  is a project-scoped architecture decision record). It's absent by decision, not oversight. At
-  V0 only content and state are persisted in in-app Postgres shapes; the former timeseries and
-  log shapes are observability emission surfaces, not in-app storage (telemetry is emitted, not
-  stored, per the architecture-overview observability baseline). So the time-series engine has
-  no V0 store to back. TimescaleDB is held behind a named latency/storage trip-wire for a later
-  version.
+  extension present. *(Amended 2026-10-19, #4018: unchanged in substance, but sharpened. The
+  instance is **separate, vanilla, installed and run by the operator**, with `pgvector`
+  installed by the operator, and the host verifies both before serving (spec R-0117-a/-b). The
+  host embeds no engine. P-0010 §Amendment 2026-10-19.)* TimescaleDB is demoted off the V0
+  stack (P-0010 decision D8). It's absent by decision, not oversight. At V0 only content and
+  state are persisted in in-app Postgres shapes; the former timeseries and log shapes are
+  observability emission surfaces, not in-app storage (telemetry is emitted, not stored, per
+  the architecture-overview observability baseline). So the time-series engine has no V0 store
+  to back. TimescaleDB is held behind a named latency/storage trip-wire for a later version.
 - Plugins SHALL be **WebAssembly Component Model modules** hosted in-process via Wasmtime;
   plugin core logic MUST be IO-free; all plugin IO MUST be mediated by host-provided
   functions. Plugins are leaves: no direct sideways linkage, and cross-plugin calls are
@@ -166,6 +178,12 @@ used where the requirement is observable):
   container in many cases not just an executable. The data should not be stored with the
   executable." An earlier ruling's "persisted on the local filesystem" wording is
   superseded: it meant "not a deleted temp dir", and "local" is not a constraint.)*
+  *(Amended 2026-10-19, #4018: the data this constraint is about now lives in the operator's
+  PostgreSQL instance. So "outside the executable and its image, at a location the operator
+  configures" binds the **instance's** data directory, a named operator obligation the host
+  can't verify and emits as such (spec R-0117-j item 1). The host-side mount requirement and
+  the per-user default have no object. What the host configures is the connection (spec
+  R-0119), which survives restart as environment and a `0600` file.)*
 - **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0:
   NOT NULL, indexed, explicitly passed, and forward-compatible without migration. This is what
   makes deferring tenant-hierarchy/policy enforcement safe. The scoping key ships now; hierarchy
@@ -360,6 +378,18 @@ dropped to what-exists-live.**
   Postgres is a future engine, not V0). *(ADDED 2026-09-17, maintainer ruling 2026-09-17 at
   the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's
   format note, rather than living only in the V0 substrate spec's Out of Scope section.)*
+  *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800): **this entry becomes
+  the V0 engine.** Two maintainer rulings set it, 2026-10-16 ("Operator; mnemra connects") and
+  2026-10-18 ("we are moving to a separate normal postgres instance"). The engine is a separate,
+  vanilla PostgreSQL instance the operator installs and runs, with `pgvector` installed by the
+  operator, reached by connection configuration (P-0010 §Amendment 2026-10-19, spec R-0117
+  through R-0121). The 2026-09-15 reason ("moves the durability problem … rather than solving
+  it") is superseded on new evidence. The durability problem was mnemra's own
+  `.temporary(true)`, and under the amendment the delegated durability settings are
+  **requirements the host verifies, failing closed**, with the unverifiable remainder named
+  (R-0117-d/-j). Tier at the gate: this entry moves from `idea` to `designed` (the designed-tier
+  artifacts, which are the amended P-0010, the Frame and the spec, were approved 2026-10-19,
+  #4018 activity 7800). No tier authorizes a build.)*
 
 ### Proposed
 
@@ -669,25 +699,25 @@ ratified Frame-park entry, beyond what a locked Frame covers.
   #1, the signed inner TOML manifest as the config descriptor, uncompressed-only at V0). The
   package signature is the P-0005 Ed25519 root over the domain-separated outer-manifest digest,
   attached as an OCI 1.1 referrer and verified on fetch under signer-key-pinning (never
-  trust-on-first-use, no unsigned fall-through). Two transports satisfy R-NoExternalHost (R-codes
-  are stable requirement identifiers defined in the spec): an OCI image-layout filesystem for
-  true air-gap, and a self-hosted distribution-API registry for restricted-egress LAN (local area
-  network), both behind one store contract with digest-pinned resolution recomputed over received
-  bytes. The bounds-first verified-fetch pipeline (fetch-within-bounds → verify-package-signature
-  → verify-blob-digests → unpack-within-bounds, fail-closed at every stage) sits behind the locked
-  `PackageVerifier` seam (the TUF (The Update Framework) adapter's slot, fires at R-0005-e). The
-  inner `[[artifacts]]` N≥1 binding complete-mediates every blob at the provenance anchor (P-0003
-  §Amendment 2026-07-07, strictly superseding the single `[component]` hash). A hard cutover
-  retires the bare load path with no legacy accept window. And install is a **working-state →
-  working-state** transition: no failure, crash, or kill point leaves the host's serving or
-  load-eligible state indeterminate, and residue from a failed attempt is inert (R-0092, the
-  maintainer's 2026-07-11 spec-exit-gate ruling; update is forward-bound by the same invariant,
-  its flow deferred). Single-root custody exposure is recorded, never silent (accepted risks
-  R-0008 rollback residual / R-0009 single-root / R-0010 build-time dependency confusion; all
-  tripwired). *Order: Wave-2 design-lane bundle W2-1 (board order); implementation is a
-  committed-tier pickup, gated by base-pin freshness.* Tier: `designed` (full spec-locked).
-  Provenance: plugin-distribution intake (`docs/intent/plugin-distribution.md`, locked
-  2026-07-07, blob `9c8e1577ed345cbcef546ba51d252a0df4db1144`) + plugin-distribution Frame
+  trust-on-first-use, no unsigned fall-through). Two transports satisfy R-NoExternalHost: an OCI
+  image-layout filesystem for true air-gap, and a self-hosted distribution-API registry for
+  restricted-egress LAN (local area network), both behind one store contract with digest-pinned
+  resolution recomputed over received bytes. The bounds-first verified-fetch pipeline
+  (fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds,
+  fail-closed at every stage) sits behind the locked `PackageVerifier` seam (the TUF (The Update
+  Framework) adapter's slot, fires at R-0005-e). The inner `[[artifacts]]` N≥1 binding
+  complete-mediates every blob at the provenance anchor (P-0003 §Amendment 2026-07-07, strictly
+  superseding the single `[component]` hash). A hard cutover retires the bare load path with no
+  legacy accept window. And install is a **working-state → working-state** transition: no
+  failure, crash, or kill point leaves the host's serving or load-eligible state indeterminate,
+  and residue from a failed attempt is inert (R-0092, the maintainer's 2026-07-11
+  spec-exit-gate ruling; update is forward-bound by the same invariant, its flow deferred).
+  Single-root custody exposure is recorded, never silent (accepted risks R-0008 rollback
+  residual / R-0009 single-root / R-0010 build-time dependency confusion; all tripwired).
+  *Order: Wave-2 design-lane bundle W2-1 (board order); implementation is a committed-tier
+  pickup, gated by base-pin freshness.* Tier: `designed` (full spec-locked). Provenance:
+  plugin-distribution intake (`docs/intent/plugin-distribution.md`, locked 2026-07-07, blob
+  `9c8e1577ed345cbcef546ba51d252a0df4db1144`) + plugin-distribution Frame
   (`docs/intent/plugin-distribution-frame.md`, locked 2026-07-08Z, blob
   `60c437c5e569eacbf00329e92cae2e7c42cebba6`) + plugin-distribution spec
   (`docs/specs/2026-07-07-plugin-distribution.md`, locked 2026-07-11, blob
