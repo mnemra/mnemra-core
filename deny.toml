@@ -88,27 +88,49 @@ unmaintained = "all"
 # instead of sitting here looking honoured forever.
 unused-ignored-advisory = "deny"
 
-# Four exceptions, all interim and all for zip 8.6.0 (#4017).
-# zip 8.x is yanked for GHSA-vv5m-jxxh-4627, GHSA-4v9h-p7m9-rh26 and
-# GHSA-4684-h2q9-2vcp (zip-rs/zip2#1075), and postgresql_archive ^8.1.0 has no
-# non-yanked version to move to. RustSec has since imported those GHSAs as
-# RUSTSEC-2026-0367 / -0368 / -0369; the fix is zip >= 9.0.0, blocked until
-# postgresql_archive moves off ^8. The crate entry covers the yanked-crate
-# finding and the three ID entries cover the vulnerability findings. Extended
-# to the IDs on Peter's ruling of 2026-10-18 ("extend it for now").
-# The vulnerable extract() / ZipStreamReader::extract APIs are not called
-# (postgresql_archive's zip_extract walks by_index and writes file names only;
-# INFERRED, not measured). More disclosures are pending. Exit: remove the
-# embedded-Postgres crates (#4018). ⚠ `unused-ignored-advisory = "deny"` fails
-# the gate once zip 8.6.0 leaves the graph, so ALL FOUR lines must be deleted
-# in that change.
+# Three exceptions, all interim (#4017). zip 8.x carries GHSA-vv5m-jxxh-4627,
+# GHSA-4v9h-p7m9-rh26 and GHSA-4684-h2q9-2vcp (zip-rs/zip2#1075), which RustSec
+# imported as RUSTSEC-2026-0367 / -0368 / -0369. They are ID-scoped: an `id`
+# ignore has no version field, so it silences the advisory for any affected zip
+# version in the graph, and nothing bans a second zip from arriving.
+# Extended to the IDs on Peter's ruling of 2026-10-18 ("extend it for now").
+# Exit: remove the embedded-Postgres crates (#4018). `unused-ignored-advisory`
+# fails the gate once zip leaves the graph or all three are fixed, so ALL THREE
+# lines must be deleted in that change.
+# The zip owner yanked 8.6.0 on 2026-10-16 and un-yanked it the same day; the
+# other 8.x versions were un-yanked on 2026-10-17, and on 2026-10-18 the
+# maintainer repealed the policy of yanking known-insecure versions
+# (zip-rs/zip2#1075). The `zip@8.6.0` crate ignore went stale
+# (`yanked-not-detected`) and was removed. Nothing yanks zip now, so this gate
+# no longer sees a vulnerable zip through `yanked`.
+# NOT SEEN BY THIS GATE: GHSA-m665-v7pm-7grj, critical, "Zip Cloaking" parser
+# differential, published on the zip repo 2026-10-17, affects zip <= 9.0.4
+# (8.6.0 included), patched only in 9.0.5. It is in neither RustSec nor GitHub's
+# global advisory database, so neither this gate nor Dependabot reports it.
+# Not reachable here (MEASURED for postgresql_* 0.20.4): it concerns
+# ZipStreamReader and ZipArchive disagreeing on headers, and the only caller,
+# postgresql_archive-0.20.4 src/extractor/zip_extractor.rs (reached through the
+# portal_corp extension in postgresql_extensions 0.20.4), walks
+# ZipArchive::by_index and writes contents by basename; it uses neither
+# ZipStreamReader nor extract(). "No other zip caller in the graph" is
+# INFERRED. All of this goes stale on any postgresql_* bump.
+# Trip-wire: when RustSec imports GHSA-m665-v7pm-7grj this gate goes red on an
+# unchanged tree. That needs a ruling from Peter: a fourth id ignore, or the
+# #4018 exit.
+# Fix target: zip >= 9.0.5 at minimum, with further issues reported against
+# 9.0.5 (zip-rs/zip2#1075); that needs postgresql_archive off ^8.
+# PARKED: the maintainer offered backports to old majors (zip-rs/zip2#1075). If
+# a patched 8.x ships, `cargo update -p zip` within ^8 would fix it and the
+# ignores turn unused, but `unused-ignored-advisory` fires only once all three
+# are fixed, so "blocked until postgresql_archive moves off ^8" can go false
+# with no signal. Check by hand at the maintainer's stated 2026-10-30 backport
+# date.
 # Every other advisory was cleared by a version bump rather than ignored: the
 # patch-level ones in #3566 (crossbeam-epoch, rustls, h2, anyhow,
 # event-listener, chacha20, spin) and the four wasmtime ones by the wasmtime
 # 48.x bump in #3646, which also keeps component-model async off
 # (libs/mnemra-host/Cargo.toml, plugin/limits.rs; tests/component_async_rejected.rs).
 ignore = [
-    { crate = "zip@8.6.0", reason = "yanked 8.x, GHSA-vv5m-jxxh-4627 / -4v9h-p7m9-rh26 / -4684-h2q9-2vcp; exit is #4018" },
     { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0, GHSA-vv5m-jxxh-4627; zip >=9.0.0 needs postgresql_archive off ^8; interim per 2026-10-18 ruling, exit is #4018" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0, GHSA-4v9h-p7m9-rh26; zip >=9.0.0 needs postgresql_archive off ^8; interim per 2026-10-18 ruling, exit is #4018" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0, GHSA-4684-h2q9-2vcp; zip >=9.0.0 needs postgresql_archive off ^8; interim per 2026-10-18 ruling, exit is #4018" },
