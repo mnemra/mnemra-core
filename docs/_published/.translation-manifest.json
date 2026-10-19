@@ -74,8 +74,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "9ef1cc0d2619c00ab9938dfa8935a4e92f8b691cbb83d581fe136a9c2da5f321",
-      "translated_at": "2026-06-28T23:04:52Z"
+      "source_sha256": "dc23e3914169ec1e19b60b0837b09dfa5a50466906d8b3730e1567757707afe3",
+      "translated_at": "2026-10-19T17:42:10Z"
     },
     "adrs/P-0011-logging-facade.md": {
       "primary_audience": "agent",
@@ -182,19 +182,61 @@
       "source_sha256": "0c2e9067a723d1e60faff969c3081aca3711b1cd0426ca47b87dcdea90134fbc",
       "translated_at": "2026-07-18T13:26:03Z"
     },
+    "adrs/P-0026-db-connection-authentication-transport.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "3ad3ed7d543900e89061945c2d7fd2fdc325bb7fd5fe596770365a39753701fc",
+      "translated_at": "2026-10-19T17:42:10Z"
+    },
+    "adrs/P-0027-db-authorization-role-separation.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "623b106239024f44618e1e79dd1ca29963bf5e8bdb3af4b3c96d26c452450640",
+      "translated_at": "2026-10-19T17:42:10Z"
+    },
+    "adrs/P-0028-requirements-check-integrity.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "2d97f1685dd3e6b0788ddba58cb799cfd4b7af2386e2eb86e76c8486a6230d85",
+      "translated_at": "2026-10-19T17:42:10Z"
+    },
+    "adrs/P-0029-db-credential-files.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "a2cdd060936bf7ece65428d288d2bab39f4c7c12df50584fa061bb7605799508",
+      "translated_at": "2026-10-19T17:42:10Z"
+    },
+    "adrs/P-0030-delegated-policy-inventory-supply-chain.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "f19a3ca97d9ce6ded2057097d5fad10affd9ef85ff36c842ebf23602890fa0c4",
+      "translated_at": "2026-10-19T17:42:10Z"
+    },
+    "adrs/P-0031-test-substrate-isolation.md": {
+      "primary_audience": "agent",
+      "prompt_path": "explain-pass.md",
+      "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
+      "source_sha256": "3709169b8c7cbc7d4f03b4f87180fbc7a2fdd8352dff7d418a7ec44550dc751c",
+      "translated_at": "2026-10-19T17:42:10Z"
+    },
     "adrs/README.md": {
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "da01962f5a90cf6eddce22a228fe92f9c6254f84baa5763baa3b062e04ea2fd7",
-      "translated_at": "2026-10-18T19:24:45Z"
+      "source_sha256": "f7f1217c646f38a7b559720452dc011b0c2011f19fcfef557b69602d9e662821",
+      "translated_at": "2026-10-19T17:42:10Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "cbca3b6b06fe305a7dc44ea5461b720981f039ca382f1261fec10f61b9db3857",
-      "translated_at": "2026-07-03T17:27:41Z"
+      "source_sha256": "fabccb234ebed91c535ff96ca82cb2dad52fa0ee4b0626211bec86a63fd900fe",
+      "translated_at": "2026-10-19T17:42:10Z"
     },
     "adrs/template.md": {
       "primary_audience": "agent",
@@ -207,22 +249,22 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "5f63b12df6e59b041a407dd0c3ec0539bfc36cedc81ff2bc78b4dbe3a5bb93f6",
-      "translated_at": "2026-09-17T11:27:56Z"
+      "source_sha256": "f62d16ad92d436517fd0f126c335609d5b84cbce32c5811d20f611246fd662f1",
+      "translated_at": "2026-10-19T17:42:10Z"
     },
     "intent/mnemra-core-frame.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "6329ec3e2c9ba7a4cddaa06cec1f507ac19e84f8cb38ac6326343463fc1aeeb4",
-      "translated_at": "2026-10-18T19:24:45Z"
+      "source_sha256": "8bb5f58e4ddf8532f8f37edfae54e2d122be5b5c9a65f847d07b6f1d3f11646f",
+      "translated_at": "2026-10-19T17:42:10Z"
     },
     "intent/mnemra-core.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "042d2c8eb34aa199fbb5151a26c0c548a2c2c22d898366f37f1d8506bb686e77",
-      "translated_at": "2026-10-18T19:24:45Z"
+      "source_sha256": "a8e5bd428d2ef190925eadf6c9c177064914308574c4cb532dcf152a28f804bb",
+      "translated_at": "2026-10-19T17:42:10Z"
     },
     "intro.md": {
       "primary_audience": "human",

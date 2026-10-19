@@ -117,7 +117,14 @@ identifiers:
   *(ADDED 2026-09-15 — maintainer ruling 2026-09-15: the brief promised persistence without
   defining it, the Frame never weighed durability, and the V0 substrate spec narrowed
   "persist" to storage shape, so the promise had no checker. This criterion is the anchor
-  the checker hangs from.)*
+  the checker hangs from.)* *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800): "a hard
+  kill of the embedded storage engine" → the storage engine is a separate PostgreSQL instance
+  the operator runs (P-0010 §Amendment 2026-10-19). The criterion's first two stop shapes are
+  the host's to verify (spec R-0121-a/-c); survival across a crash of the instance itself is
+  PostgreSQL's guarantee under durability settings the host **verifies as requirements on every
+  start** (R-0117-d) and names as its reliance (R-0121-b). The persistence defect this criterion
+  was written against was mnemra's own `.temporary(true)`, not a property of embedding
+  (maintainer, 2026-10-18); its removal is a correction, not a benefit of the move.)*
 - Commercial validation thresholds exist but live in the separate internal commercial
   record; they are not product success criteria and are not inlined here.
 
@@ -130,7 +137,10 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
 - **An MCP server is a V0 deliverable** — intent-clarity: the MCP-native constraint is
   satisfied by a running MCP server in V0 scope, not merely a future protocol posture.
 - The substrate SHALL be a **single-process Postgres** instance with the `pgvector`
-  extension present. TimescaleDB is demoted off the V0 stack (P-0010 D8) — it is absent by
+  extension present. *(Amended 2026-10-19, #4018: unchanged in substance, sharpened — the
+  instance is **separate, vanilla, installed and run by the operator**, with `pgvector`
+  installed by the operator; the host verifies both before serving (spec R-0117-a/-b). The
+  host embeds no engine. P-0010 §Amendment 2026-10-19.)* TimescaleDB is demoted off the V0 stack (P-0010 D8) — it is absent by
   decision, not oversight, because at V0 only content and state are persisted in-app
   Postgres shapes; the former timeseries and log shapes are observability emission surfaces,
   not in-app storage (telemetry is emitted, not stored — per the architecture-overview
@@ -162,7 +172,13 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   maintainer ruling 2026-09-15, verbatim: "mnemra has to run as a container in many cases
   not just an executable. The data should not be stored with the executable." An earlier
   ruling's "persisted on the local filesystem" wording is superseded: it meant "not a
-  deleted temp dir", and "local" is not a constraint.)*
+  deleted temp dir", and "local" is not a constraint.)* *(Amended 2026-10-19, #4018: the data
+  the constraint is about now lives in the operator's PostgreSQL instance, so "outside the
+  executable and its image, at a location the operator configures" binds the **instance's**
+  data directory — a named operator obligation the host cannot verify and emits as such
+  (spec R-0117-j item 1) — and the host-side mount requirement and per-user default have no
+  object. What the host configures is the connection (spec R-0119), which survives restart as
+  environment and a `0600` file.)*
 - **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0 —
   NOT NULL, indexed, explicitly passed, forward-compatible without migration. This is what
   makes deferring tenant-hierarchy/policy enforcement safe: the scoping key ships now;
@@ -287,7 +303,7 @@ never silently dropped to what-exists-live.**
 - **A newsfeed capability** (working name) — pure thought, no provenance.
 - **A permissions model** — pure thought; explicitly needs research into the approach (see Open Decision OD-B).
 - **Per-user identity machinery** — owner-columns-as-identity, caller identity in the request context, real owner==caller checks. Activates per-user `visibility: owner-only` serving semantics (at V0 owner-only serves no one — the fail-closed enforcement is the V0 semantics) and is the first write/label-capability surface that fires the deferred write-side policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns from day one so this lands as a feature, not an excavation. Provenance: retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
-- **External Postgres server as the substrate engine** — an operator-provisioned Postgres reached over a connection string in place of the embedded engine, behind the same engine-agnostic `Storage` trait (P-0010 D5). When supported, durability of stored context is that server's responsibility, not the host's; the "Durable across restart" success criterion then binds the connection configuration surviving restart, not a host-owned data directory. Not V0: it moves the durability problem to the Postgres server rather than solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment — external Postgres is a future engine, not V0). *(ADDED 2026-09-17 — maintainer ruling 2026-09-17 at the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's format note, rather than living only in the V0 substrate spec's Out of Scope.)*
+- **External Postgres server as the substrate engine** — an operator-provisioned Postgres reached over a connection string in place of the embedded engine, behind the same engine-agnostic `Storage` trait (P-0010 D5). When supported, durability of stored context is that server's responsibility, not the host's; the "Durable across restart" success criterion then binds the connection configuration surviving restart, not a host-owned data directory. Not V0: it moves the durability problem to the Postgres server rather than solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment — external Postgres is a future engine, not V0). *(ADDED 2026-09-17 — maintainer ruling 2026-09-17 at the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's format note, rather than living only in the V0 substrate spec's Out of Scope.)* *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800) — **this entry becomes the V0 engine.** Maintainer rulings 2026-10-16 ("Operator; mnemra connects") and 2026-10-18 ("we are moving to a separate normal postgres instance"): a separate, vanilla PostgreSQL instance the operator installs and runs, with `pgvector` installed by the operator, reached by connection configuration — P-0010 §Amendment 2026-10-19, spec R-0117–R-0121. The 2026-09-15 reason ("moves the durability problem … rather than solving it") is superseded on new evidence: the durability problem was mnemra's own `.temporary(true)`, and under the amendment the delegated durability settings are **requirements the host verifies, failing closed**, with the unverifiable remainder named (R-0117-d/-j). Tier at the gate: this entry moves from `idea` to `designed` (the designed-tier artifacts — amended P-0010, Frame, spec — are approved 2026-10-19, #4018 activity 7800); no tier authorizes a build.)*
 
 ### Proposed
 

@@ -146,7 +146,14 @@ identifiers:
   *(ADDED 2026-09-15 — maintainer ruling 2026-09-15: the brief promised persistence without
   defining it, the Frame never weighed durability, and the V0 substrate spec narrowed
   "persist" to storage shape, so the promise had no checker. This criterion is the anchor
-  the checker hangs from.)*
+  the checker hangs from.)* *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800): "a hard
+  kill of the embedded storage engine" → the storage engine is a separate PostgreSQL instance
+  the operator runs (P-0010 §Amendment 2026-10-19). The criterion's first two stop shapes are
+  the host's to verify (spec R-0121-a/-c); survival across a crash of the instance itself is
+  PostgreSQL's guarantee under durability settings the host **verifies as requirements on every
+  start** (R-0117-d) and names as its reliance (R-0121-b). The persistence defect this criterion
+  was written against was mnemra's own `.temporary(true)`, not a property of embedding
+  (maintainer, 2026-10-18); its removal is a correction, not a benefit of the move.)*
 - Commercial validation thresholds exist but live in the separate internal commercial
   record; they are not product success criteria and are not inlined here.
 
@@ -159,7 +166,10 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
 - **An MCP server is a V0 deliverable** — intent-clarity: the MCP-native constraint is
   satisfied by a running MCP server in V0 scope, not merely a future protocol posture.
 - The substrate SHALL be a **single-process Postgres** instance with the `pgvector`
-  extension present. TimescaleDB is demoted off the V0 stack (P-0010 D8) — it is absent by
+  extension present. *(Amended 2026-10-19, #4018: unchanged in substance, sharpened — the
+  instance is **separate, vanilla, installed and run by the operator**, with `pgvector`
+  installed by the operator; the host verifies both before serving (spec R-0117-a/-b). The
+  host embeds no engine. P-0010 §Amendment 2026-10-19.)* TimescaleDB is demoted off the V0 stack (P-0010 D8) — it is absent by
   decision, not oversight, because at V0 only content and state are persisted in-app
   Postgres shapes; the former timeseries and log shapes are observability emission surfaces,
   not in-app storage (telemetry is emitted, not stored — per the architecture-overview
@@ -191,7 +201,13 @@ Locked technical and integration boundaries (RFC-2119 keywords where observable)
   maintainer ruling 2026-09-15, verbatim: "mnemra has to run as a container in many cases
   not just an executable. The data should not be stored with the executable." An earlier
   ruling's "persisted on the local filesystem" wording is superseded: it meant "not a
-  deleted temp dir", and "local" is not a constraint.)*
+  deleted temp dir", and "local" is not a constraint.)* *(Amended 2026-10-19, #4018: the data
+  the constraint is about now lives in the operator's PostgreSQL instance, so "outside the
+  executable and its image, at a location the operator configures" binds the **instance's**
+  data directory — a named operator obligation the host cannot verify and emits as such
+  (spec R-0117-j item 1) — and the host-side mount requirement and per-user default have no
+  object. What the host configures is the connection (spec R-0119), which survives restart as
+  environment and a `0600` file.)*
 - **Tenancy invariant:** the tenant scoping key (`workspace_id`) is structural from V0 —
   NOT NULL, indexed, explicitly passed, forward-compatible without migration. This is what
   makes deferring tenant-hierarchy/policy enforcement safe: the scoping key ships now;
@@ -316,7 +332,7 @@ never silently dropped to what-exists-live.**
 - **A newsfeed capability** (working name) — pure thought, no provenance.
 - **A permissions model** — pure thought; explicitly needs research into the approach (see Open Decision OD-B).
 - **Per-user identity machinery** — owner-columns-as-identity, caller identity in the request context, real owner==caller checks. Activates per-user `visibility: owner-only` serving semantics (at V0 owner-only serves no one — the fail-closed enforcement is the V0 semantics) and is the first write/label-capability surface that fires the deferred write-side policy-dimension design. The retrieval cluster's new tables carry `owner`/`created_by` columns from day one so this lands as a feature, not an excavation. Provenance: retrieval-cluster frame pre-gate walk item 9 (locked 2026-07-02). *(ADDED 2026-07-02.)*
-- **External Postgres server as the substrate engine** — an operator-provisioned Postgres reached over a connection string in place of the embedded engine, behind the same engine-agnostic `Storage` trait (P-0010 D5). When supported, durability of stored context is that server's responsibility, not the host's; the "Durable across restart" success criterion then binds the connection configuration surviving restart, not a host-owned data directory. Not V0: it moves the durability problem to the Postgres server rather than solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment — external Postgres is a future engine, not V0). *(ADDED 2026-09-17 — maintainer ruling 2026-09-17 at the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's format note, rather than living only in the V0 substrate spec's Out of Scope.)*
+- **External Postgres server as the substrate engine** — an operator-provisioned Postgres reached over a connection string in place of the embedded engine, behind the same engine-agnostic `Storage` trait (P-0010 D5). When supported, durability of stored context is that server's responsibility, not the host's; the "Durable across restart" success criterion then binds the connection configuration surviving restart, not a host-owned data directory. Not V0: it moves the durability problem to the Postgres server rather than solving it. Provenance: maintainer ruling 2026-09-15 (durability amendment — external Postgres is a future engine, not V0). *(ADDED 2026-09-17 — maintainer ruling 2026-09-17 at the durability amendment's gate: the thought takes a Layer-2 `idea` entry per this brief's format note, rather than living only in the V0 substrate spec's Out of Scope.)* *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800) — **this entry becomes the V0 engine.** Maintainer rulings 2026-10-16 ("Operator; mnemra connects") and 2026-10-18 ("we are moving to a separate normal postgres instance"): a separate, vanilla PostgreSQL instance the operator installs and runs, with `pgvector` installed by the operator, reached by connection configuration — P-0010 §Amendment 2026-10-19, spec R-0117–R-0121. The 2026-09-15 reason ("moves the durability problem … rather than solving it") is superseded on new evidence: the durability problem was mnemra's own `.temporary(true)`, and under the amendment the delegated durability settings are **requirements the host verifies, failing closed**, with the unverifiable remainder named (R-0117-d/-j). Tier at the gate: this entry moves from `idea` to `designed` (the designed-tier artifacts — amended P-0010, Frame, spec — are approved 2026-10-19, #4018 activity 7800); no tier authorizes a build.)*
 
 ### Proposed
 
@@ -1236,7 +1252,7 @@ backup-scoped and not part of the steady-state trust topology):
 | `TB-human` | The operator invoking the admin CLI | The admin CLI's local IPC to the running mnemra-core server, or a direct admin token over MCP |
 | `TB-mnemra-host` | The mnemra-core server process itself | Crosses MCP transport, admin CLI IPC, Postgres connection, filesystem secrets reads |
 | `TB-plugin-sandbox` | The Wasmtime sandbox running plugin code | All cross-boundary calls are host-fn-mediated; plugin core is IO-free |
-| `TB-postgres` | The Postgres process | SQL connection from mnemra-core host; no agent or plugin code reaches Postgres directly |
+| `TB-postgres` | The Postgres process *(Amended 2026-10-19 r2, #4018 — retyped in place: the **operator-run PostgreSQL instance, the operator's zone**, which may hold other principals; P-0010 §Amendment 2026-10-19)* | SQL connection from mnemra-core host; no agent or plugin code reaches Postgres directly *(r2: two credentials — the serving role for host-fns, the instance check and `check-db`; the owner role for `mnemra init` only — over peer-authenticated sockets with a peer-uid check or `verify-full` TLS; the operator's own setup-SQL DDL inbound; the overview's TB table is canonical)* |
 | `TB-fs-secrets` | Filesystem-stored secrets (mode 600) | Admin token and (per the open ADR slot for signing-key custody) plugin-signing key material; read by host code only |
 | `TB-build-pipeline` | Conceptual — the signing authority at build time | Signed plugin artifacts are what crosses into runtime; runtime sees signatures, not the key |
 | `TB-external-llm` | The external LLM provider hosting embeddings (out-of-deployment) | Per-embedding-batch HTTPS call from host functions; the LLM-API-key configuration surface (`0.1.0`) and a hostname allowlist gate the egress |
@@ -1266,7 +1282,10 @@ The content and projection layer the host owns directly.
 - **Storage substrate.** PostgreSQL ratified on merits, behind an engine-agnostic
   swappable `Storage` trait (one implementation) — [P-0010](../adrs/P-0010-storage-substrate-engine.md)
   D1 + D5. **V0 engine: embedded Postgres** (`postgresql_embedded` + bundled `pgvector`
-  for V0.1+ vector retrieval), shipping with the single binary. TimescaleDB is demoted off
+  for V0.1+ vector retrieval), shipping with the single binary. *(Amended 2026-10-19, #4018,
+  approved 2026-10-19 (#4018 activity 7800): the V0 engine becomes a **separate, operator-run PostgreSQL
+  instance** reached by connection configuration — P-0010 §Amendment 2026-10-19; the host
+  verifies its requirements on the instance before serving (spec R-0117–R-0121).)* TimescaleDB is demoted off
   the V0 stack (D8) — the V0 timeseries shape is plain timestamped Postgres tables, with
   TimescaleDB held behind a latency/storage trip-wire. The **storage-shape model** is the
   alignment-doc round-4 four-shape model: content / timeseries / log / state-config — but
@@ -1452,7 +1471,14 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   swappable `Storage` trait (one implementation) — [P-0010](../adrs/P-0010-storage-substrate-engine.md)
   D1 + D5. The **V0 engine is embedded Postgres** (`postgresql_embedded` + bundled
   `pgvector`), shipping with the single self-hosted binary — not an operator-provisioned
-  external Postgres server.
+  external Postgres server. *(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800) —
+  SUPERSEDED: the V0 engine is a **separate, vanilla PostgreSQL instance the operator installs
+  and runs**, with `pgvector` installed by the operator and verified by the host, reached by
+  connection configuration ([P-0010](../adrs/P-0010-storage-substrate-engine.md) §Amendment
+  2026-10-19, DE1). The host owns no cluster: no download, no `initdb`/`pg_ctl`, no data
+  directory, no `CREATE EXTENSION`. The 2026-09-15 ruling that kept the external server a
+  future engine is superseded on new evidence and recorded in P-0010 as the rejected
+  alternative with the reason it lost.)*
 - **V0 stack is A1-clean** ([P-0010](../adrs/P-0010-storage-substrate-engine.md) D2):
   pgvector HNSW + native FTS + recursive CTEs + JSONB. Extensions beyond pgvector are
   adopted only on named trip-wires (keyword/BM25-fidelity → D3; graph/AGE → D4;
@@ -1484,7 +1510,43 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   acceptance. An
   operator-provisioned external Postgres server is not a V0 engine (durability would then
   be that server's responsibility); the V0 engine remains embedded Postgres per
-  [P-0010](../adrs/P-0010-storage-substrate-engine.md).
+  [P-0010](../adrs/P-0010-storage-substrate-engine.md). *(Amended 2026-10-19, #4018, pending
+  the maintainer's gate — this bullet is re-derived against the operator-run instance.
+  **What stays:** stored content survives a host stop and restart, clean or hard kill (spec
+  R-0121-a), verified by an out-of-process restart acceptance (R-0121-c). **What moves:**
+  the data directory, its placement, locking and version guard were the host's and are now
+  the instance's — placement on persistent storage is a named operator obligation (R-0117-j),
+  and the durable-commit settings the embedded design wrote are now **requirements the host
+  verifies on every start and retry, failing closed** (R-0117-d). **What is dropped, with
+  reason:** the "hard kill of the storage engine" scenario — the host cannot kill an instance
+  it does not own; crash recovery is PostgreSQL's under the verified settings (R-0121-b).
+  **Correction, not benefit:** the persistence defect (#3565) was mnemra's own
+  `.temporary(true)`, not a property of embedding (maintainer, 2026-10-18); the move removes
+  the site of the defect, it does not solve durability — the requirement does. The
+  no-stored-secret socket design (R-0116-e) is replaced by R-0119: no password in the URL or
+  environment, a descriptor-checked file when one is needed, peer authentication over a socket
+  (after a peer-uid check) recommended for a bare host, `verify-full` TLS required on every TCP
+  connection, loopback included, and a password only ever sent over such a connection (r2, after
+  the security review). Quality-attribute scenarios: the
+  companion overview's Reliability / durability axis, re-derived in the same amendment.)*
+- **Startup check, readiness and liveness are three contracts (Amended 2026-10-19, #4018).**
+  The host verifies its requirements on the instance (one check, spec R-0118-a), exposes
+  readiness on `GET /ready` with machine-readable reasons, exposes liveness on `GET /health`
+  with **no dependency on the instance**, and runs the same check out-of-process as
+  `mnemra check-db`. An unmet hard requirement never exits the process: the host stays up,
+  serves nothing (every MCP call answers `host_not_ready` with the reasons; `initialize` and
+  `tools/list` still succeed), retries with backoff (1 s → 30 s cap, unbounded) and on
+  `SIGHUP`. Maintainer ruling 2026-10-19, verbatim: "k8s keeps trying to restart wihch is
+  dumb. better answer is the health check indicates it can't run and why with a way to ensure
+  it occasionally trys again or is forced to try again." The three-way split is his stated
+  view ("i think they are different things"), RULED 2026-10-19 (P-0010 §Amendment AE1,
+  activity 7787; `ready` ⇒ `alive`, never the reverse); no soft class exists at V0 (ruling
+  7771). The shared-service HTTPS transport the maintainer ruled the same day (one host for
+  every session) is the next amendment, #4127, and amends R-0010-a/-e and the daemon model. Probe mapping: liveness → `/health`, readiness → `/ready`, startup
+  → `/health` or none, pre-flight → `check-db`; exec probes at V0 while the listener is
+  loopback-only. Anchors: V-Reliability (graceful degradation over crash-restart),
+  P-ReliabilityTarget (readiness read from the consumer's side), P-CheckCoversTheClaim
+  (liveness checks liveness).
 - **The detailed layout of a single logical artifact across the four shapes** (whether a
   task lives in one row, in multiple tables in the content substrate, or fans across
   content + state + log substrates) is the central architectural fork at the Spec stage.
@@ -1555,7 +1617,7 @@ placeholders beyond the Spec authoring window.
 
 | Candidate ID | Decision | Notes |
 |---|---|---|
-| `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` | The storage **substrate and engine**: which engine (Postgres-on-merits vs unified vs polyglot), the V0 engine shape (embedded vs external), the V0 extension stack, and whether storage sits behind an engine-agnostic swap trait or a Postgres-shaped one | **Fold-added slot (2026-06-08).** The original Frame had *no* substrate slot — the substrate was treated as a hard-locked brief carry-forward. A storage-engine evaluation (ratified 2026-06-07, after the substrate spec lock) re-opened it on merits. **Resolved:** PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (D5, one implementation); V0 embedded Postgres; A1-clean V0 stack (D2); keyword/graph/time-series on named trip-wires (D3/D4/D8); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. P-0001 (layout) sits under this decision. Escalation E1 (D8 vs the observability hypertables) dispositioned 2026-06-09 (re-derive now) → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
+| `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` | The storage **substrate and engine**: which engine (Postgres-on-merits vs unified vs polyglot), the V0 engine shape (embedded vs external), the V0 extension stack, and whether storage sits behind an engine-agnostic swap trait or a Postgres-shaped one | **Fold-added slot (2026-06-08).** The original Frame had *no* substrate slot — the substrate was treated as a hard-locked brief carry-forward. A storage-engine evaluation (ratified 2026-06-07, after the substrate spec lock) re-opened it on merits. **Resolved:** PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (D5, one implementation); V0 embedded Postgres; A1-clean V0 stack (D2); keyword/graph/time-series on named trip-wires (D3/D4/D8); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. P-0001 (layout) sits under this decision. Escalation E1 (D8 vs the observability hypertables) dispositioned 2026-06-09 (re-derive now) → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. **Amended 2026-10-19 (#4018, approved 2026-10-19 (#4018 activity 7800)):** the V0-engine half is amended in place (P-0010 §Amendment 2026-10-19) to a separate, operator-run PostgreSQL instance; D1/D2/D5/D8 unchanged. |
 | `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` | The detailed layout of a single logical artifact across the four storage shapes (single-document vs composite-typed-slots vs multi-substrate-with-joins) | Central architectural fork. **Resolved 2026-05-24: C1 single-document layout.** Whole artifact in one row; JSONB frontmatter + body + system fields; non-breaking C2 evolution path designed into the projection layer. Sits under `[P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md)` (the Postgres implementation under the swap trait). |
 | `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` | Cohesion criterion for the V0 core plugin set; partitions the capability-family increments `0.2.0`–`0.14.0` between additional builtins and `core: true` plugins | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)`. **Resolved 2026-05-24:** 4 `core: true` plugins (tasks / repos / two further artifact-family plugins) + 7 builtins. Verb-on-content discriminator. |
 | `[P-0003-plugin-manifest](../adrs/P-0003-plugin-manifest.md)` | Plugin manifest schema + host-fn ABI surface | Depends-on `[P-0001-storage-layout](../adrs/P-0001-storage-layout.md)` and `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)`. **Resolved 2026-05-24:** Universal `content.emit` verb shape; `schema_version: 1`; typed host-fn allowlist compiled per-instance from signed manifest. |
@@ -1579,7 +1641,7 @@ placeholders beyond the Spec authoring window.
 
 | Candidate ID | Decision |
 |---|---|
-| `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) |
+| `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) *(Amended 2026-10-19, #4018: the "which extensions, at what version" half is answered by P-0010 §Amendment 2026-10-19 and spec R-0117-a/-b — `pgvector`, installed by the operator, floor-verified by the host; nothing "ships in the appliance". The "how Postgres, pgvector and the host reach the operator" half is #4019's design item, which may resolve this slot or retire it.)* |
 | `{{P-MCPWriteSemantics}}` | MCP write semantics — concurrent-write conflict resolution, deletion semantics, idempotency keys |
 | `{{P-SigningKeyCustodyHardening}}` | Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`. |
 
@@ -1793,6 +1855,7 @@ stage, not under re-derivation.
 | Constraint | Source |
 |---|---|
 | PostgreSQL substrate ratified on merits, behind an engine-agnostic swappable `Storage` trait (Postgres the only implementation); V0 engine is **embedded Postgres** (`postgresql_embedded` + bundled `pgvector`); V0 stack is A1-clean (pgvector HNSW + native FTS + recursive CTEs + JSONB), TimescaleDB **demoted** off the V0 stack to a trip-wire | [P-0010-storage-substrate-engine](../adrs/P-0010-storage-substrate-engine.md) (folds the 2026-06-07 storage-engine evaluation, ratified after the spec lock); supersedes the prior "single-process Postgres + `pgvector` + `timescaledb` extensions present" hard-lock framing (brief Hard constraints; architecture alignment R4) |
+| **(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800) — supersedes the engine clause of the row above.)** V0 engine is a **separate, vanilla PostgreSQL 16 instance the operator installs and runs**, with `pgvector` installed by the operator; the host reaches it by connection configuration, owns no cluster (no download, `initdb`, `pg_ctl`, data directory or `CREATE EXTENSION`), and **verifies its requirements on the instance before serving, failing closed** — server major and minor floor, pgvector floor, serving role not superuser / no `BYPASSRLS` / no `CREATEROLE` / no `CREATEDB` / no `REPLICATION`, `FORCE ROW LEVEL SECURITY` on tenant-scoped tables, `fsync` / `full_page_writes` / `synchronous_commit` / `data_sync_retry` safe on the sessions writers use, `verify-full` TLS on every TCP connection (loopback included) with a password only ever sent over it, peer authentication with a peer-uid check on sockets, `scram-sha-256` password hashing, server-side parameter logging off, UTF8, minor-version floor, schema version, reachability (r2: two roles — owner for `init`, serving for the host; the serving role owns nothing and is a member of nothing); what it cannot verify (data on persistent storage, backups, install supply chain, `max_connections`, the ident map) it names in a list the host emits and the deployment document carries verbatim | [P-0010](../adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE1, DE2); V0 substrate spec R-0117, R-0119; maintainer rulings 2026-10-16/18 (#4018) |
 | WebAssembly Component Model plugin runtime via Wasmtime; plugin core logic IO-free; all plugin IO host-mediated; plugins are leaves (no sideways linkage) | Brief Hard constraints; architecture alignment R2 + R4 |
 | One MCP server with namespaced plugin verbs; stdio at V0; MCP specification 2025-06-18; streamable-HTTP a V0.1+ activation | Brief Hard constraints; architecture alignment R1 |
 | Mnemra is Resource Server only; per-deployment OIDC AS via RFC 9728 protected-resource-metadata | Architecture alignment R5 + R6 |
@@ -1805,6 +1868,8 @@ stage, not under re-derivation.
 | License: Apache-2.0 with future-relicense clause | Brief Hard constraints (license lock 2026-05-20) |
 | Self-hosted-first single-binary deployment posture; immutable image is valid packaging | Brief Hard constraints; architecture alignment R6 |
 | Stored context survives a host stop and restart, including a hard kill of the host or of the embedded engine; data lives outside the executable and its image at an operator-configured location (OS per-user app-data default for a bare binary, overridable; for a container, a volume the operator mounts at the configured location, which the host can be told to require), never a temporary directory or a container's writable layer; whether the location is local or network-backed is the operator's choice; the host reaches the cluster only over a private unix socket by peer authentication, so no cluster credential is held at rest | Brief Success criteria "Durable across restart" + Hard constraints "Data lives outside the executable and its image" (maintainer ruling 2026-09-15); V0 substrate spec R-0116; the Reliability / durability axis below |
+| **(Amended 2026-10-19, #4018, approved 2026-10-19 (#4018 activity 7800) — supersedes the row above.)** Stored context survives a host stop and restart, clean or hard kill (spec R-0121-a, verified out-of-process, R-0121-c); the instance's data directory, placement, locking and version are the operator's and PostgreSQL's — placement on persistent storage (never a container's writable layer or a temporary directory) is a **named operator obligation** (R-0117-j item 1), and the durable-commit settings are **requirements the host verifies on every start and retry** (R-0117-d). Survival across a crash of the instance itself is PostgreSQL's WAL guarantee under those settings; the host names the reliance and does not test it (R-0121-b). The persistence fix is a **correction** of mnemra's own `.temporary(true)` (maintainer 2026-10-18), not a benefit of the move. The credential at rest, where one exists, is a `0600` file under the host uid, never the URL or environment; peer authentication over a socket is the recommended local shape (R-0119) | [P-0010](../adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE5, DE7); V0 substrate spec R-0117-d/-j, R-0119, R-0121; maintainer ruling 2026-10-18 (#4018 activity 7472) |
+| **Startup check, readiness and liveness are three contracts on three surfaces (Amended 2026-10-19, #4018).** An unmet hard requirement on the instance never exits the process: the host stays up, serves nothing, reports why on `GET /ready`, retries with backoff (1 s → 30 s cap) and on `SIGHUP`; `GET /health` reports only process liveness and never depends on the instance; `mnemra check-db` runs the check out-of-process. Probe mapping: liveness → `/health`, readiness → `/ready`, startup → `/health` or none | [P-0010](../adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE3, DE4); spec R-0118; maintainer ruling 2026-10-19 (#4018 activity 7749); the three-contract split RULED 2026-10-19 (activity 7787; `ready` ⇒ `alive`, never the reverse — AE1); no soft class at V0 (ruling 7771) |
 | Workspace cutover from the prior tooling at V0; the prior task-store binary remains available as a rollback path | V0 discovery |
 | Rust-default toolchain; ecosystem-aligned tooling (non-Rust adopted only when no viable in-stack path exists) | Brief Hard constraints; workspace stack-discipline principle |
 | Test-Driven Development pairs on non-trivial work; worktrees mandatory; main is protected | Workspace test/worktree/main-protection principles |
@@ -1910,8 +1975,11 @@ discovery WC.x) rather than scored as its own axis.
 |---|---|
 | Per-verb metrics (emitted) | After a dogfood session, the per-verb metric records emitted to the OTel/stdout surface carry `workspace_id`, `verb`, `outcome`, `duration_ms`; p50 / p95 / p99 per verb are derivable from the emitted `duration_ms` values (computed at the operator-chosen sink — there is no in-app metrics hypertable). |
 | Storage-independent emission | With no persistent observability backend configured, N MCP verb calls produce N observable metric emissions on the OTel/stdout surface; `\d+` shows no metrics/events hypertable and `\dx` does not list `timescaledb`. |
-| Generation at the bare shell | A structured log line appears on stdout and `GET /health` returns a response *before* the embedded Postgres is initialized (health endpoint is the first API). |
-| Health-endpoint shape | A request to `/health` returns a structured detail body identifying which dependency failed (Postgres reachable / `pgvector` loaded / workspace=default exists), e.g. 503 when a dependency is down. The listener binds loopback-only (`127.0.0.1`) at V0, so **loopback IS the gate** — every caller is necessarily on loopback and receives the detail body; there is no admin-token gating at V0. *(Named tripwire: if the `/health` listener ever binds non-loopback, admin-token gating on the detail body becomes required.)* |
+| Generation at the bare shell | A structured log line appears on stdout and `GET /health` returns a response *before* the embedded Postgres is initialized (health endpoint is the first API). *(Amended 2026-10-19, #4018: "before the embedded Postgres is initialized" → "before the first connection to the operator's instance is attempted, and regardless of whether that instance is reachable".)* |
+| Health-endpoint shape | A request to `/health` returns a structured detail body identifying which dependency failed (Postgres reachable / `pgvector` loaded / workspace=default exists), e.g. 503 when a dependency is down. The listener binds loopback-only (`127.0.0.1`) at V0, so **loopback IS the gate** — every caller is necessarily on loopback and receives the detail body; there is no admin-token gating at V0. *(Named tripwire: if the `/health` listener ever binds non-loopback, admin-token gating on the detail body becomes required.)* *(Amended 2026-10-19, #4018 — superseded by the two rows below; the loopback gate and its tripwire carry to both routes.)* |
+| Liveness is independent of the instance (Amended 2026-10-19) | *Stimulus:* the operator's Postgres is stopped for ten minutes while an orchestrator probes `GET /health` every 10 s. *Environment:* the host running under a liveness probe with a restart threshold of three failures. *Response:* every probe returns `200 { "alive": true }`; the handler issues no SQL. *Measure:* zero restarts over the ten minutes; `GET /ready` returns `503` with `reasons[0].reason = "unreachable"` throughout. (Spec R-0118-e/-f.) |
+| Readiness carries the reason and recovers without a restart (Amended 2026-10-19) | *Stimulus:* the instance is started after the host. *Environment:* a host that came up against a stopped instance, with an MCP client already connected over stdio that received `host_not_ready` on its first call. *Response:* the host's scheduled check succeeds, readiness flips to `200`, the same client succeeds on its next call. *Measure:* the host pid is unchanged; the gap between instance start and `ready: true` is ≤ the current backoff interval (≤ 30 s) plus one check duration; a `SIGHUP` closes it within 1 s. (Spec R-0118-b/-c/-d/-h.) |
+| Measured 2026-10-19 at `57cfeca`: one route serves all three questions | `libs/mnemra-host/health.rs:623-639` answers `503 {"ready": false}` until `mark_ready`, then serves `schema::init::health_snapshot` (`schema/init.rs:757`), which runs `SELECT 1` and reports `overall: "down"` on an unreachable instance — and returns HTTP `200` for it (`health.rs:627-629`). A liveness probe on this route restarts the process on a database outage. Recorded as the measured starting point the amendment's split corrects. |
 
 ### Reliability / durability (workspace supporting value — restart survival)
 
@@ -1938,7 +2006,15 @@ decision, not a blank.
 | Two hosts, one directory | *Stimulus:* a second host started against a data directory a live host already owns — on the same machine, or on another machine sharing a network mount. *Environment:* any deployment shape; on a network mount the lock semantics may be local-only, so the lock alone is not the fence. *Response:* the second host exits with a structured `data_dir_in_use` error — on the same machine because the lock is held, on another machine because the `host.lock` holder record carries a foreign hostname and boot id, which is refused without any liveness test; the first host and its postmaster are undisturbed. *Measure:* the first host's writes continue to read back; exactly one postmaster runs against the directory; the holder record is unchanged. |
 | Replace the executable | *Stimulus:* between the stop and the start, the executable is replaced — minimally, the same binary run from a different filesystem path. *Environment:* a bare-binary deployment; the container form (recreate from a different image, same volume) is parked with the image contract in the spec's Out of Scope until an image exists. *Response:* the new host starts against the same data location. *Measure:* every acknowledged pre-stop write reads back equal (spec R-0116-j, locked in the bare-binary form by maintainer ruling 2026-09-17). |
 
-### ABI evolution discipline (mnemra-NFR)
+**Amended 2026-10-19 (#4018, approved 2026-10-19 (#4018 activity 7800)) — re-derived against the operator-run instance.** The reliability target above stands with one change to its breach clause: in operation a host that cannot honour the invariant **refuses to serve and reports why on `GET /ready`** rather than refusing to start. Of the six scenarios above: "Clean stop, then restart" and "Hard kill of the host" carry with the response rewritten below; "Hard kill of the storage engine" is **dropped with reason** (the host cannot kill an instance it does not own; the guarantee is PostgreSQL's under settings the host verifies — spec R-0121-b); "Engine major-version mismatch", "Two hosts, one directory" and "Replace the executable" have no object (no host-owned directory; the version guard becomes R-0117-a/-h; two hosts on one database is superseded by the shared-service HTTPS ruling, the next amendment #4127, and unsupported meanwhile — P-0010 §Amendment AE9). The rows above are retained as the embedded-engine record.
+
+| Refinement (Amended 2026-10-19) | Scenario |
+|---|---|
+| Clean stop, then restart | *Stimulus:* SIGTERM (or stdin EOF) to a host holding N acknowledged artifact writes. *Environment:* the production binary against the operator's instance, `MNEMRA_DATABASE_URL` pointing at one database. *Response:* readiness goes `503 { "draining" }`, the host drains and exits; a new host starts against the same URL, its instance check reports every hard requirement met and no migration pending, and it serves. *Measure:* every one of the N artifacts reads back via `artifact.get` with `frontmatter` semantically equal and `body` byte-equal to the pre-stop read (spec R-0121-a/-c). |
+| Hard kill of the host | *Stimulus:* SIGKILL to the host process. *Environment:* as above. *Response:* the next host start connects, checks, and serves; nothing on the instance needed reconciling, because the host owned no process there. *Measure:* every acknowledged pre-kill write reads back equal; an unacknowledged in-flight write may be absent (R-0121-a). |
+| Durability setting drifts while serving | *Stimulus:* an operator (or a role-level default) sets `synchronous_commit = off` for the host's role. *Environment:* a serving host with the 30 s drift re-check. *Response:* within one interval the check reports `durability_off`, readiness goes `503` naming the setting and value, every MCP call answers `host_not_ready`; after the setting is restored and `SIGHUP` is sent, the host serves again. *Measure:* no write is acknowledged under the weakened setting for longer than 30 s plus one check duration; the host pid is unchanged throughout (R-0117-d, R-0118-c/-d). |
+| Over-privileged role or unforced RLS | *Stimulus:* the configured role is a superuser, holds `BYPASSRLS`, or a tenant-scoped table has `NO FORCE ROW LEVEL SECURITY`. *Environment:* any start or retry. *Response:* not ready with `role_overprivileged { attribute }` or `rls_not_forced { table }`; nothing is served. *Measure:* zero MCP verbs execute while the condition holds; `mnemra check-db` exits `1` naming the clause (R-0117-c/-e; #3591's RLS precondition, verified rather than assumed). |
+| Unverifiable is unmet | *Stimulus:* the role's `SHOW fsync` is denied. *Environment:* an instance whose GUC visibility has been restricted. *Response:* the clause reports `unverifiable`, which the host treats as unmet; not ready, reason names the setting and the error. *Measure:* the host never serves on an assumed value; a unit test over injected facts shows one failing case per clause (R-0118-a). |
 
 Load-bearing once third-party plugin install activates at V0.1+; the V0 work that hardens
 this is the discipline of marking each host function with a stability tier.
@@ -2022,8 +2098,19 @@ TB-mnemra-host: {
   P-backup-handler: {
     label: "P-backup-handler"
   }
-  P-health-handler: {
-    label: "P-health-handler"
+  # Amended 2026-10-19 r2 (#4018): the single P-health-handler is split into liveness and
+  # readiness, with the instance check as the one process that talks to the database.
+  P-liveness-handler: {
+    label: "P-liveness-handler\n(GET /health; non-runtime thread; never touches the DB)"
+  }
+  P-readiness-handler: {
+    label: "P-readiness-handler\n(GET /ready; reads the last completed check)"
+  }
+  P-instance-check: {
+    label: "P-instance-check\n(facts probe + decision; serving role; bounded, supervised)"
+  }
+  P-cli-check-db: {
+    label: "P-cli-check-db\n(mnemra check-db; second credential-holding client)"
   }
   P-plugin-runtime: {
     label: "P-plugin-runtime\n(Wasmtime)"
@@ -2060,8 +2147,11 @@ TB-plugin-sandbox: {
   }
 }
 
+# Amended 2026-10-19 r2 (#4018): TB-postgres is RETYPED IN PLACE from "the single-process
+# cluster the host owns" to "the operator-run instance — the operator's zone". No second
+# boundary is added; the five typed flows into it are kept. The data stores are unchanged.
 TB-postgres: {
-  label: "TB-postgres (single-process)"
+  label: "TB-postgres (operator-run PostgreSQL instance; the operator's zone)"
   shape: rectangle
 
   DS-pg-content: {
@@ -2075,6 +2165,10 @@ TB-postgres: {
   DS-pg-projections: {
     label: "DS-pg-projections"
     shape: cylinder
+  }
+  EE-other-principals: {
+    label: "EE-other-principals\n(other roles, apps or tenants on a shared or managed instance)"
+    shape: oval
   }
 }
 
@@ -2103,6 +2197,16 @@ TB-fs-secrets: {
   }
   DS-mnemra-root-key: {
     label: "DS-mnemra-root-key\n(custody: open ADR slot)"
+    shape: cylinder
+  }
+  # Amended 2026-10-19 r2 (#4018): the two database credentials, each a file under the host uid
+  # (or a root-owned group-readable Secret mount), fstat-checked on every read (spec R-0119-b/-g).
+  DS-db-password-serving: {
+    label: "DS-db-password-serving\n(MNEMRA_DATABASE_PASSWORD_FILE)"
+    shape: cylinder
+  }
+  DS-db-password-owner: {
+    label: "DS-db-password-owner\n(MNEMRA_DATABASE_OWNER_PASSWORD_FILE; init only)"
     shape: cylinder
   }
 }
@@ -2213,8 +2317,22 @@ TB-build-pipeline.EE-mnemra-root -> TB-fs-secrets.DS-mnemra-root-key: "DF-key-cu
 }
 TB-mnemra-host.P-plugin-runtime -> TB-fs-secrets.DS-mnemra-root-key: "DF-signature-verify"
 
-# Health probe
-TB-mnemra-host.P-health-handler -> TB-postgres.DS-pg-content: "DF-health-probe"
+# Instance check (Amended 2026-10-19 r2, #4018): the facts probe is the one process that reaches
+# the database for health; readiness reads its last completed result; liveness reaches nothing.
+TB-mnemra-host.P-instance-check -> TB-postgres.DS-pg-content: "DF-health-probe"
+TB-mnemra-host.P-readiness-handler -> TB-mnemra-host.P-instance-check: "DF-ready-read\n(last completed result; no DB)"
+TB-mnemra-host.P-instance-check -> TB-fs-secrets.DS-db-password-serving: "DF-db-password-read"
+TB-mnemra-host.P-host-fns -> TB-fs-secrets.DS-db-password-serving: "DF-db-password-read"
+
+# Operator (Amended 2026-10-19 r2, #4018): forced retry by signal; the pre-flight CLI as a second
+# credential-holding client; the one-time setup SQL as operator-privileged DDL into the zone;
+# mnemra init (P-migration-handler) under the owner credential.
+TB-human.EE-operator -> TB-mnemra-host.P-instance-check: "DF-sighup\n(forced retry; password reload)"
+TB-human.EE-operator -> TB-mnemra-host.P-cli-check-db: "DF-cli-invoke"
+TB-mnemra-host.P-cli-check-db -> TB-postgres.DS-pg-content: "DF-health-probe"
+TB-mnemra-host.P-cli-check-db -> TB-fs-secrets.DS-db-password-serving: "DF-db-password-read"
+TB-human.EE-operator -> TB-postgres: "DF-setup-sql\n(roles, grants, CREATE EXTENSION; operator's privilege)"
+TB-mnemra-host.P-migration-handler -> TB-fs-secrets.DS-db-password-owner: "DF-db-password-read"
 ```
 
 ### Notes on the diagram
@@ -2324,6 +2442,9 @@ Critical/High/Medium/Low. Mitigation column references the Frame's Open ADR Slot
 | `P-backup-handler` | D | An adversary triggers continuous backups (CLI-exposed or scheduled-job-exposed) to exhaust disk space, taking the substrate read-only and the host degraded. | Low | 60 | `{{P-BackupRestore}}` (backup-trigger rate-limit; disk-space precondition check) |
 | `P-health-handler` | I | A health-endpoint detail body leaks substrate state to an unauthenticated probe (extension list, table presence, workspace count). | Medium | 70 | [observability baseline](#observability) (health response shape: the listener binds loopback-only at V0, so **loopback IS the gate** — no non-loopback caller can reach the detail body; named tripwire: if the listener ever binds non-loopback, admin-token gating on the detail body becomes required) |
 | `P-health-handler` | S | The health endpoint is unauthenticated and shares a transport with MCP; a load-balancer probe could be fabricated and used as an oracle for substrate state. | Low | 55 | [observability baseline](#observability) (separate handler binding for `/health`, the first API on a dedicated loopback-only listener; not on MCP transport at V0 since transport is stdio) |
+| *(Amended 2026-10-19 r3, #4018 — the two `P-health-handler` rows above are retargeted, not orphaned: the element is split (see the r2 retype subsection).)* `P-readiness-handler` | I | The same leak as the first row, now on `GET /ready`'s `checks` body (clause statuses, reasons, guidance). | Medium | 70 | Loopback-only bind is still the gate; the MCP surface gets only the coarse `host_not_ready` (spec R-0118-h); the non-loopback tripwire carries (R-0004-g) |
+| `P-liveness-handler`, `P-readiness-handler` | S | The same fabricated-probe oracle as the second row, now on two routes. | Low | 55 | Loopback-only listener; `/health` carries no substrate state at all (R-0118-e), so the oracle value of a fabricated liveness probe is nil |
+| `P-instance-check` | I | The check's `instance_check` log record carries clause statuses and guidance to the structured-log sink. | Low | 60 | Never carries credentials or the URL's secrets (R-0117-i `detail` rule, R-0119-a logging rule); the sink is the operator's (R-0004-d) |
 | `P-plugin-runtime` | T | A WASM module exploits a Wasmtime sandbox-escape primitive (rare, but the load-bearing assumption — sandbox integrity — is exactly what plugin-IO-free buys); host invariants violated. | High | 50 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` + `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Wasmtime version pinning under SBOM; `core: true` only at V0; supply-chain review on Wasmtime upgrades); see also `{{P-SigningKeyCustodyHardening}}` for production-grade supply-chain hardening |
 | `P-plugin-runtime` | E | A plugin whose signature verification was skipped under a load-time error path (e.g., "key not loaded yet, defer to background") gets executed before verification completes. | Critical | 70 | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (verification is synchronous on plugin load; load fails closed; no "verify-async" path) |
 | `P-plugin-runtime` | D | A plugin infinite-loops or allocates without bound; absent kill-and-replace from the pool, the host hangs the verb. | Medium | 70 | `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` (per-instance fuel/memory budget; pool kill-and-replace; per-verb timeout) |
@@ -2399,6 +2520,7 @@ the Frame's TB table and this one disagree, this one wins.
 | `TB-human` ↔ `TB-mnemra-host` | `DF-cli-invoke` (admin CLI local IPC); `DF-token-read` (token-file read by CLI handler) | bidirectional (CLI invocation; structured responses) | UNIX UID match for CLI invocation; admin token mandatory for destructive operations. | Admin scope only — agent-facing CRUD does not route through the CLI. Schema-driven dynamic subcommands generated from plugin manifests; `core: true` plugins shipped at V0. | `EE-operator`/S,R; `P-cli-handler`/S,T,E; `DS-admin-token`/I,T,R |
 | `TB-mnemra-host` ↔ `TB-plugin-sandbox` | `DF-plugin-invoke` (host → plugin); `DF-host-fn-call` (plugin → host) | host-mediated; cross-plugin calls always traverse the host | Plugin identity is the signed-manifest identity (signature verified at load); host derives session context at invocation. Plugin core is IO-free; ambient capability is the empty set. | Per-plugin host-fn allowlist compiled into the per-instance binding from the signed manifest; `workspace_id` is host-derived from the calling session, NEVER a plugin parameter on write paths; sampling, network, and filesystem are manifest-declared. | `P-plugin-instance`/E,T,I; `DF-host-fn-call`/T,I; `DF-sampling-up`/T,I; `P-plugin-runtime`/T,E,D,R |
 | `TB-mnemra-host` ↔ `TB-postgres` | `DF-substrate-rw`, `DF-projection-rebuild`, `DF-migration-write`, `DF-backup-read`, `DF-health-probe` | bidirectional (host issues queries; receives result sets) | Host-process DB user; ideally **role-separated per host process** (host-fns role, migration role, backup role, health-probe role) with least-privilege grants. | RLS column-shape ships V0 (`workspace_id` NOT NULL, indexed); RLS **policy enforcement** is V0.1+ — at V0 the host-side WHERE-clause discipline is the structural barrier (lint-enforced). | `P-host-fns`/T,I,E; `DS-pg-content`/T,I,R,D; `DS-pg-state`/T; `DS-pg-projections`/I; `DF-host-fn-call`/I |
+| **(Amended 2026-10-19 r2, #4018 — retypes the row above in place; `TB-postgres` is now the operator's zone.)** `TB-mnemra-host` ↔ `TB-postgres` | the same five flows, now issued by two credentials: `DF-substrate-rw`, `DF-projection-rebuild`, `DF-health-probe` (serving role: `P-host-fns`, `P-instance-check`, `P-cli-check-db`); `DF-migration-write` (owner role: `mnemra init` only); `DF-backup-read` (no object — backup is the operator's, spec R-0117-j item 2) | bidirectional; plus `DF-setup-sql` inbound from `EE-operator` (operator-privileged DDL) and `DF-sighup` from `EE-operator` to `P-instance-check` | **Serving role:** peer authentication over a unix socket after a peer-uid and socket-directory check, or SCRAM over `verify-full` TLS (loopback included) with the password from `DS-db-password-serving`; **owner role:** the same two shapes with `DS-db-password-owner`, held only by `init`. Options built from a closed allowlist; `PG*` and `~/.pgpass` inert; cleartext/MD5 auth requests refused (implementation-time mechanism, named). Spec R-0117-f, R-0119. | **Serving role:** DML only, owns nothing, member of nothing, none of `SUPERUSER`/`BYPASSRLS`/`CREATEROLE`/`CREATEDB`/`REPLICATION` — verified on every check, transitively (R-0117-c); **owner role** owns the schema and runs migrations under an advisory lock (R-0117-h). RLS is **in V0** (#3591 ruling 7262; policy template per 7289) with `FORCE ROW LEVEL SECURITY` verified against the manifest and the catalog (R-0117-e). `EE-other-principals` are bounded by the instance's own grants, not by the host (accepted risk `AR-0013`). | `P-host-fns`/T,I,E; `DS-pg-content`/T,I,R,D; `DS-pg-state`/T; `DS-pg-projections`/I; `DF-host-fn-call`/I; **`DF-health-probe`/S (local transports), `DS-db-password-serving`/I, `DS-db-password-owner`/I, `P-instance-check`/D, `DF-setup-sql`/T, `EE-other-principals`/I,E — see the r2 typed-elements subsection** |
 | `TB-mnemra-host` → `TB-obs-sink` | `DF-telemetry-emit` (stdout structured logs + OTel metrics/events egress) | outbound from host (emission only; no read-back) | None at the egress itself; the external sink is operator-chosen and operator-secured. The host's emission boundary enforces redaction + no-content. | Emission carries `workspace_id` on every tenant-scoped record and never artifact bodies; the operator's sink partitions/retains. *(Re-derived 2026-06-09 — generation⊥storage, per the [observability baseline](#observability): telemetry is emitted, not stored in-app; the former `DS-ts-*`/`DS-pg-logs` in-app storage threats are now emission-surface threats — `DS-ts-metrics`/I, `DS-ts-events`/T,I, `DS-pg-logs`/I — carried in the threats-by-element table.)* | `P-host-fns`/I (no-leak at emission); `DF-telemetry-emit`/I |
 | `TB-mnemra-host` ↔ `TB-fs-secrets` | `DF-token-read` (CLI handler reads admin token); `DF-signature-verify` (plugin-runtime reads signing key/cert) | inbound to host (filesystem reads) | Filesystem ACLs (mode 600) + OS-uid match. **No second factor at V0.** | The host is the sole reader. Secrets are read lazily on-demand; file-mode invariant check at startup; modification fail-shut. | `DS-admin-token`/I,T,R; `DS-mnemra-root-key`/I,T; `P-plugin-runtime`/E (verify-async path) |
 | `TB-mnemra-host` ↔ `TB-fs-source` | `DF-migration-read` (one-shot read of prior tooling state) | inbound to host (read-only by intent) | OS-side: read-as-host-process-uid; logical: migration handler is invoked from CLI under admin token. | Migration handler is the sole reader; source is **never** written-back; migration manifest is mnemra-side. | `DS-source-taskdb`/T; `DS-source-corpus`/I; `P-migration-handler`/T,I,D |
@@ -2413,7 +2535,12 @@ inline:
   column-shape ships V0 but **policy enforcement is V0.1+** — at V0 the WHERE-clause
   discipline at the host-fn layer is the only enforcement mechanism. A lint or test that
   asserts every read path carries a workspace filter is a Spec-stage mitigation that
-  belongs in `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)`.
+  belongs in `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)`. *(Amended
+  2026-10-19 r2, #4018: "policy enforcement is V0.1+" is superseded — RLS is **in V0** by
+  #3591 ruling 7262 (2026-10-16), and the fence is now the two-role model plus forced RLS,
+  both **verified on every instance check** (spec R-0117-c/-e) rather than assumed. The
+  #3591 batch rewrites this note in full; this parenthetical only stops it reading as
+  current.)*
 - **`TB-build-pipeline` ↔ `TB-mnemra-host`** is conceptual — the build pipeline is not a
   runtime adjacency — but the key custody choice (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` for V0 dogfood;
   `{{P-SigningKeyCustodyHardening}}` for production-grade posture) determines whether the
@@ -2447,6 +2574,41 @@ cluster's P-0014 extension):
 | `DF-fetch` | data flow | store → host pipeline (crosses `TB-plugin-store` → `TB-mnemra-host`; the bounds-first surface) |
 | `DF-referrers` | data flow | signature-referrer enumeration (count- and size-bounded, spec R-0084) |
 
+### Operator-instance retype (Amended 2026-10-19 r2, #4018, approved 2026-10-19 (#4018 activity 7800) — [P-0010](../adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19)
+
+**`TB-postgres` is retyped in place** (Warden B1): it was "the single-process cluster the host owns, reached over a host-owned socket by peer authentication" and is now **the operator-run PostgreSQL instance — the operator's zone**, which the host reaches as a client with two credentials. No second boundary is added; the canonical TB set stays at its count, with the `TB-postgres` row above carrying the r2 retype. The five typed flows into the zone are kept (`DF-substrate-rw`, `DF-projection-rebuild`, `DF-migration-write`, `DF-backup-read`, `DF-health-probe`); `DF-health-probe` is now issued by `P-instance-check` and `P-cli-check-db`, never by the liveness handler. The Frame's steady-state TB table row is updated to match. New typed elements, in the style of the distribution extension above:
+
+| ID | Type | Element |
+|---|---|---|
+| `TB-postgres` (retyped) | trust boundary / zone | the operator-run instance; the operator holds superuser authority inside it; the host holds two non-superuser roles |
+| `EE-other-principals` | external entity (inside `TB-postgres`) | other roles, applications or tenants on a shared or managed instance; bounded by the instance's grants, not by the host (accepted risk `AR-0013`) |
+| `P-instance-check` | process (inside `TB-mnemra-host`) | the facts probe plus decision (spec R-0118-a): serving role, pool-identical options, 10 s deadline, supervised task, coalesced `SIGHUP`; the **only** health-related process that touches the database |
+| `P-liveness-handler` | process | `GET /health` on a non-runtime thread with a 1 s in-process ping; never touches the database or the check results (R-0118-e) |
+| `P-readiness-handler` | process | `GET /ready`; reads the last **completed** check result and its age; `503` on any unmet hard clause, staleness (> 70 s), or drain (R-0118-f) |
+| `P-cli-check-db` | process (a separate `mnemra` invocation) | the operator's pre-flight: a second credential-holding client running the same check out-of-process; never a probe body (R-0118-d/-g) |
+| `DS-db-password-serving` | data store (inside `TB-fs-secrets`) | `MNEMRA_DATABASE_PASSWORD_FILE`: `O_NOFOLLOW` + `fstat` on every read; host-owned `0600` or root-owned group-readable Secret mount; failure is not-ready, never an exit (R-0119-b, ruling 7762) |
+| `DS-db-password-owner` | data store (inside `TB-fs-secrets`) | `MNEMRA_DATABASE_OWNER_PASSWORD_FILE`: read by `mnemra init` only; the serving host never reads it (R-0119-g) |
+| `DF-sighup` | data flow | `EE-operator` → `P-instance-check`: forced retry, password-file reload, pool rebuild; OS-signal authority only (R-0118-d) |
+| `DF-setup-sql` | data flow | `EE-operator` → `TB-postgres`: the one-time, operator-privileged DDL printed by `check-db --setup-sql` (two roles, grants, `CREATE EXTENSION`); no password literal (R-0118-d) |
+| `DF-db-password-read` | data flow | host processes → the credential files; descriptor-checked reads |
+| `DF-ready-read` | data flow | `P-readiness-handler` → `P-instance-check`: in-process read of the last completed result; no database |
+
+**Threats at the retyped crossing** (STRIDE-per-element; design-time, P-SecurityLayered; a Warden `threat-modeling` pass over this retype is required before the gate and was not run in the authoring session):
+
+| Element | STRIDE | Threat | Severity | Mitigation |
+|---|---|---|---|---|
+| `DF-health-probe`, `DF-substrate-rw` over a **local** transport | S | Neither loopback TCP nor a unix socket authenticates the server; a same-host process that binds the port or pre-creates the socket receives the host's password or traffic; the client library answers cleartext/MD5 password requests and uses no SCRAM channel binding (Warden, MEASURED sqlx-postgres 0.9.0 `sasl.rs:14`, `establish.rs:74-98`) | High | **Mitigated, not accepted** (ruling 7771): a password only ever travels over `verify-full` TLS, loopback included; a socket is used only with peer authentication after a peer-uid check (uid = socket-directory owner; no group or other write bit on the directory, no sticky exception) — the same-connection-before-first-byte form and the cleartext/MD5 refusal are both implementation-time mechanisms (sqlx 0.9 writes the startup packet with no hook), each pinned as a named expected failure visible in the gate (spec R-0120-h) — spec R-0117-f, R-0119-c/-d |
+| the same over **remote** TCP | S, T, I | spoofed or intercepted instance | High | `verify-full` against the operator's CA; `pg_stat_ssl` verified after connect (R-0117-f) |
+| `DS-db-password-serving`, `DS-db-password-owner` | I | credential disclosure through a world-readable mount, a symlink swap, the environment, argv, SQL history or logs | High | descriptor-based `fstat` on every read, `O_NOFOLLOW`, no world read; never in the URL or `PG*` (scrubbed), never in `--setup-sql` output (`\password`), never logged; the owner file is read by `init` only (R-0119-a/-b/-g) |
+| the serving role (`P-host-fns`, `P-instance-check`) | E | an over-privileged, owning or over-membered role turns a host query bug into a cross-tenant read or a schema change | Critical | attributes, ownership and transitive membership verified on every check against an empty allowlist; forced RLS reconciled against the catalog; the serving role cannot alter tables it does not own (R-0117-c/-e); the first draft's `NO FORCE` residual is dissolved by the two-role model |
+| `P-instance-check` | D | a wedged, panicked or silently stopped checker leaves a stale `met` in place, or a slow instance stalls the check | Medium | per-check deadline, supervised task with a synthetic `unverifiable` on restart, staleness withdraws readiness at 70 s, `seconds_since_last_ok` metric (R-0118-a/-f/-j) |
+| `TB-postgres` as a dependency | D | instance unavailable at boot or mid-serve | Medium | not ready without a restart loop; bounded backoff; `storage_unavailable` with a 5 s acquire bound; out-of-cycle check on error (R-0118-b/-c/-m) |
+| `DF-setup-sql` | T | the operator's DDL grants more than the printed SQL (a `BYPASSRLS` here, a membership there) | High | the host verifies the result rather than trusting the step (R-0117-c); the printed SQL is the documented, CI-exercised path (R-0120-g) |
+| `EE-other-principals` | I, E | another principal on a shared or managed instance reads or alters the host's database | High | **out of model** — accepted risk `AR-0013` (ruling 7771); the host's own grants are least-authority (R-0117-c) and the deployment document names the exposure obligations (R-0117-j items 6, 8) |
+| `EE-operator` | R | operator actions on the instance | Medium | the operator's own audit (`EE-operator`/R, unchanged) |
+
+Out of model, signed off (ruling 7771): a hostile operator — the operator owns the data by construction (`AR-0013`). The accepted-risk register below gains `AR-0011`–`AR-0013` for this amendment (Warden B2); the register's remaining sweep (R-0003, R-0007, R-0010 triggers) stays inside the #3591 batched amendment (maintainer ruling 2026-10-16, #3591 activity 7321). The operator obligations the host cannot verify are a named delegation (spec R-0117-j), of which items 1–3 are the accepted risk `AR-0011`.
+
 ## Accepted risks
 
 Populated by the Stage 2 terminal security review (2026-05-22). Each entry is a risk
@@ -2455,6 +2617,11 @@ carve-out the locked product brief authorizes. Entries are numbered `R-NNNN`. Pe
 workspace threat-modeling skill convention, every entry carries a **trip-wire** naming
 the condition under which the deferred mitigation must be revisited. Owner is the
 maintainer at V0; ownership transfers to a named role at commercial-tier transition.
+*(Amended 2026-10-19 r3, #4018: the register mixes two prefixes on purpose for now — the
+original rows keep `R-0001`–`R-0010`, which collide with the specs' requirement series
+(`CLAUDE.md`, #2126), and the entries this amendment adds use the register's own disjoint
+prefix `AR-`. Renaming or confirming the old rows is the #3591 batch's register sweep
+(ruling 7321), not this amendment's.)*
 
 The placeholder column set is extended with a **Rationale** column to make the
 deferral basis legible without external reference. Every entry maps to one or more
@@ -2462,7 +2629,7 @@ threat rows above by Risk ID.
 
 | Risk ID | Description | Owner | Trip-wire | Rationale |
 |---|---|---|---|---|
-| `R-0001` | RLS policy enforcement deferred to V0.1+; only the column-shape ships at V0. Cross-tenant disclosure on `P-mcp-handler`/I, `P-builtin-projects`/I, `DS-pg-content`/I, `DF-host-fn-call`/I depends on the host-side WHERE-clause discipline rather than database-enforced policy. | maintainer | First deployment serving more than one workspace (production multi-tenant traffic), OR the column-shape's lint coverage drops below 100% on read paths, OR a third-party plugin is loaded at runtime. | The brief locks tenant scoping key as structural from V0 precisely so policy enforcement can land later without substrate migration. V0 is single-workspace dogfood; the structural barrier is the WHERE-clause discipline, not policy enforcement. Defer-with-trip-wire matches `P-Defer`. |
+| `R-0001` | RLS policy enforcement deferred to V0.1+; only the column-shape ships at V0. Cross-tenant disclosure on `P-mcp-handler`/I, `P-builtin-projects`/I, `DS-pg-content`/I, `DF-host-fn-call`/I depends on the host-side WHERE-clause discipline rather than database-enforced policy. **(Amended 2026-10-19 r2, #4018 — SUPERSEDED by #3591 ruling 7262, 2026-10-16: RLS is IN V0. Kept as the rejected alternative with the reasons it lost: its trip-wire was human-noticed and never labelled parked; the host-side lint covers a fraction of the SQL files (#3575); retrofitting later means migrations on operator-held data and query paths that fail as silent empty results. The #3591 batch rewrites this row; this note only stops it reading as current.)** | maintainer | First deployment serving more than one workspace (production multi-tenant traffic), OR the column-shape's lint coverage drops below 100% on read paths, OR a third-party plugin is loaded at runtime. | The brief locks tenant scoping key as structural from V0 precisely so policy enforcement can land later without substrate migration. V0 is single-workspace dogfood; the structural barrier is the WHERE-clause discipline, not policy enforcement. Defer-with-trip-wire matches `P-Defer`. |
 | `R-0002` | External-authorization-server integration deferred to V0.1+. `P-builtin-auth` at V0 accepts a static admin token; per-deployment OIDC AS via RFC 9728 is in `0.1.0` substrate but federation/SSO is not. Operator-impersonation risk (`EE-operator`/S, `EE-orchestrator-agent`/S) hinges on token file ACLs and rotation discipline. | maintainer | First deployment integrating with an existing identity provider for the operator, OR shared-workstation use of the deployment node, OR external onboarding of agents beyond the maintainer's. | Brief Hard constraints scope mnemra as Resource Server only at V0; AS integration is brief idea-tier (D7). The static admin token bootstrap is the V0 dogfood pattern. |
 | `R-0003` | MCP transport at V0 is stdio. Transport confidentiality is process-spawning trust — a wrapping process the agent invokes can observe request/response bytes (`DF-mcp-stdio`/I, T). | maintainer | `{{P-MCPWriteSemantics}}` resolution OR streamable-HTTP transport activates (the microVM-appliance trip-wire from the brief), whichever lands first. | Brief Hard constraints fix stdio at V0; streamable-HTTP is V0.1+ activation gated on the microVM-appliance trip-wire. Stdio confidentiality is "the agent's host process is the trust unit." |
 | `R-0004` | Plugin signing-key custody at V0 is dogfood-scoped to the maintainer's single deployment under `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A) — build-host-on-disk, single-instance, maintainer-controlled. `DS-mnemra-root-key`/I and `EE-mnemra-root`/S are Critical-severity threats whose production-grade mitigation depends on `{{P-SigningKeyCustodyHardening}}`. The V0 commitment is made; the hardening is deferred to Tier C. | maintainer | Multi-deployment trip-wire fires — `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`'s stated condition: the moment mnemra-core is deployed beyond the maintainer's single dogfood instance. `{{P-SigningKeyCustodyHardening}}` (Tier C) must lock before that point. The risk register entry retires when `{{P-SigningKeyCustodyHardening}}` locks. | V0 dogfood scoped to single-operator single-deployment; key-on-build-host is a named and trip-wired V0 decision, not a gap. Production-grade custody (offline-root, HSM, never-on-node) is deferred under `P-Defer` with the multi-deployment trip-wire as the mandatory activation condition. |
@@ -2472,6 +2639,9 @@ threat rows above by Risk ID.
 | `R-0008` | **Rollback/downgrade on the distribution surface** (`EE-plugin-store`, `DF-fetch`): OCI + the keyed package signature cannot prevent the store (or a MITM on the LAN path) from serving an **older, validly-signed** bundle. High severity on the distribution surface; no freshness/monotonicity mechanism exists at this tier — deliberately, per `[P-0023](../adrs/P-0023-plugin-distribution.md)` (a bespoke version-monotonicity check is explicitly not built; TUF is the designed answer). | maintainer | `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`'s R-0005-e condition fires (deployment beyond the single dogfood instance, or third-party publishers) — the TUF adapter (timestamp/snapshot freshness) lands behind the locked `PackageVerifier` seam, co-requiring the Tier-C offline root for its rotation half. Entry retires when the TUF layer locks. | Single-publisher single-deployment dogfood: the operator controls both store and host, so a stale-serve requires compromising infrastructure the operator owns. The seam is pre-positioned so the mitigation arrives as an adapter, not rework (`P-Defer`, decision content in the Frame's deferral table). |
 | `R-0009` | **Single-root compromise-independence** (`DS-mnemra-root-key`/I reach, extended by distribution): the package signature (distribution anchor) and the inner manifest signature (provenance anchor) are both made by the one P-0005 root at this tier (`[P-0023](../adrs/P-0023-plugin-distribution.md)` D6, maintainer-ratified Q5 2026-07-07) — the layers are scope-independent, **not compromise-independent**; one root theft forges both, and detecting a stolen-key forgery needs a transparency-log/TUF witness that is deferred. Critical severity under key theft (as `R-0004`). | maintainer | The same R-0005-e condition — split to a distinct **distribution key** (or TUF delegated roles), restoring compromise-independence; the anchor-independence of the dual load-time checks becomes fully load-bearing at the split. Entry retires when the distribution key splits. | One custody story at single-publisher `core: true` scope (Security ↔ Simplicity, maintainer-resolved); the exposure is recorded in the ADR and here rather than silently accepted. Compensating: the R-0004 custody posture (key never on the deployment node) bounds the theft surface to the build host. |
 | `R-0010` | **Build-time dependency confusion** (`P-bundle-builder` reach): `wkg`-pulled WIT/component dependencies are composed into the component **before** signing, so a malicious same-named dependency resolved at build time changes the component bytes and every downstream gate then faithfully binds the poisoned artifact (bytes-run == bytes-signed — integrity, not provenance-of-inputs). | maintainer | Reproducible `wasm32-wasip2` builds land (the reproducible-builds work item, #1942) — SLSA provenance attestations attached as OCI referrers become assertable and are the designed answer. Interim: the lockfile-hash-pin weighing is a named spec-gate item on the distribution spec. Entry retires when provenance attestations land. | The residual is upstream of every signing gate by construction — no load-path mechanism can close it (the gates bind what was built). Named honestly rather than over-claimed; the distribution design neither widens nor narrows it. |
+| `AR-0011` *(Amended 2026-10-19 r2, #4018; signed off by the maintainer 2026-10-19, #4018 activity 7771)* | **The operator owns the Postgres and pgvector supply chain and the persistent storage the data lives on.** The host verifies nothing about the binaries it talks to and cannot see the instance's data directory: the embedded design's hash-pinning of the engine binaries (`KNOWN_GOOD_HASHES`) is **lost, not replaced** — a loss, labelled as such (P-0010 §Amendment DE9). Spec R-0117-j items 1–3, emitted by `mnemra check-db --obligations` under "Not verified by mnemra". | maintainer | Retires only if a packaging shape under #4019 lets the host verify what it talks to (a host-verified image digest, for example) — none is designed; otherwise standing. Re-examined at the #4019 gate. | The operator model (ruling 7470) places the instance outside the host's authority by construction; a host that cannot install or run the binaries cannot pin them. Named in the obligations list and the deployment document rather than implied. Rejected: keeping a host-side pin table for an install the host does not perform — it would check a path it never runs. |
+| `AR-0012` *(Amended 2026-10-19 r2, #4018; signed off 2026-10-19, activity 7771)* | **Up to one drift interval of writes acknowledged under a weakened durability setting.** An operator- or role-level change to `fsync` / `full_page_writes` / `synchronous_commit` / `data_sync_retry` is observed by the next instance check (30 s cadence plus one check duration, spec R-0118-c); writes acknowledged in that window may be lost on an instance crash. Spec R-0117-d, R-0121-b. | maintainer | **Mechanical trip-wire (r3):** the window only ever opens on a `durability_off` transition, and every such transition is counted (`instance_check_total{clause="R-0117-d",status="unmet"}`, spec R-0118-j) and alerted (`host_ready == 0`); the trip-wire is **the first such transition observed on a production instance**, which re-opens this entry — a lost write itself is not detectable, so the detector is keyed on the event that creates the window, not on the loss. The window shrinks if the drift interval shrinks (AE4, ruled fixed at 30 s on 2026-10-19, activity 7787) and closes only if every writer session re-checked the settings per transaction, a per-call cost this amendment does not take. | The settings are the operator's instance's; the host verifies them on the sessions writers use and rebuilds the pool after a drift, which is the structural mitigation. The residual is the interval, stated as a number rather than hidden. |
+| `AR-0013` *(Amended 2026-10-19 r2, #4018; signed off 2026-10-19, activity 7771)* | **A hostile operator, or other principals on a shared or managed instance, are out of model.** The operator holds superuser authority inside `TB-postgres`; `EE-other-principals` are bounded by the instance's grants, not by the host. `EE-other-principals`/I,E. | maintainer | A managed or shared-instance offering (the brief's `idea`-tier managed/appliance entries) — self-announcing through the register: that entry's design is where the model is re-drawn. | The operator owns the data by construction (the brief's self-hostable success criterion); modelling the owner as an adversary would make every control a control against the deployment's own principal. The host's side is least-authority (R-0117-c) and the exposure obligations are named (R-0117-j items 6, 8). **Not** accepted alongside this: local server spoofing, which is mitigated (spec R-0117-f, R-0119-c/-d). |
 
 **Cross-reference.** Each accepted risk maps to one or more threat rows in the threats-
 by-element table. A future risk-register file (workspace canon names `RISK-REGISTER.md`
@@ -2659,11 +2829,20 @@ primary-audience: human
 
 # Architecture Decision Records
 
-Architectural decisions for mnemra-core, in [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format. Vocabulary: `../glossary.md`.
+mnemra-core architectural decisions, recorded in [MADR](https://adr.github.io/madr/) (Markdown Architectural Decision Records) format.
 
 ## What is an ADR?
 
-One ADR = one architectural decision plus its context and rationale. Accepted ADRs are immutable: never edited to reflect changed opinion; superseded by a newer ADR when the decision evolves.
+An ADR records one architectural decision with its context and rationale.
+
+**Amendment rule:** an accepted ADR changes only by a dated, in-place `## Amendment YYYY-MM-DD` section appended to the record (maintainer ruling 2026-10-19, #4018 activity 7793; confirms the existing practice of [P-0003](P-0003-plugin-manifest.md) "Amendment 2026-06-30" and "Amendment 2026-07-07" and [P-0010](P-0010-storage-substrate-engine.md) "Amendment 2026-10-19").
+
+- Original decision text is never rewritten.
+- The amendment states what it supersedes and why.
+- Superseded text stays in the file as the record.
+- `supersedes` / `superseded_by` frontmatter and the `superseded` status remain for a decision **wholly** replaced by a new record.
+
+*Rejected alternative (kept per P-PreserveDecisionSpace): "ADRs are immutable once accepted — superseded by newer ADRs, never edited" (this file's earlier rule). Lost because: practice had already amended in place twice; a per-amendment successor file splits one decision's lineage across records a reader must reassemble; the in-place section keeps decision and history in one place — amend-don't-erase applied inside the record.*
 
 ## ADR Lifecycle
 
@@ -2675,40 +2854,50 @@ Statuses:
 | `rejected` | Discussed and explicitly declined |
 | `accepted` | The current decision in effect |
 | `deprecated` | Was accepted; no longer applies (context changed) |
-| `superseded` | Replaced by a newer ADR; see `superseded_by` field |
+| `superseded` | Wholly replaced by a newer ADR; see `superseded_by` field. A partial change is an in-place dated amendment section, not a new status |
 
 ## G/P Prefix Projection Pattern
 
-Two-tier identifiers, keyed on where a decision originates and how it propagates (see `../glossary.md#g--adr`, `../glossary.md#p--adr`, `../glossary.md#defaultsmd`).
+Two-tier identifiers, keyed on where a decision originates and how it propagates (see glossary: G-* ADR, P-* ADR, DEFAULTS.md).
 
-- **G-NNNN (general)** — workspace-wide decisions. No individual files in this directory; projected once into [`DEFAULTS.md`](DEFAULTS.md), a one-time snapshot with one concise entry per general standard and no rationale chain. Frozen at projection; upstream G-* changes do not auto-sync.
+- **G-NNNN (general)** — workspace-wide decisions. No individual files in this directory. Projected once into [`DEFAULTS.md`](DEFAULTS.md): a one-time snapshot, one concise entry per general standard, no rationale chain. Frozen at projection; upstream G-* changes do not auto-sync.
 - **P-NNNN (project)** — project-specific decisions, one `P-NNNN-*.md` file each in this directory. Two sub-categories:
   - *Project-specific:* no workspace-wide analog; a constraint or tradeoff unique to mnemra-core.
-  - *Override:* deviation from a `DEFAULTS.md` baseline entry. The Status field names the overridden default explicitly (e.g., `Status: accepted, Overrides G-0017`).
+  - *Override:* deviates from a `DEFAULTS.md` entry. Names the overridden default in its Status field (e.g., `Status: accepted, Overrides G-0017`).
 
 *The default is the starting point; any deviation is a new P-ADR.*
 
 ## Using the Template
 
-New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill every frontmatter field, write the body sections. An override of a `DEFAULTS.md` entry says so explicitly in the Status section.
+New project ADR: copy [`template.md`](template.md) to a numbered file (e.g., `adrs/P-0001-topic.md`), fill all frontmatter fields, write the body sections. An override of a `DEFAULTS.md` entry states so explicitly in the Status section.
 
 ## Current ADRs
 
-Nine Tier-A ADRs from WS-E-2 Stage 3, plus: P-0010 (storage substrate/engine; folded in 2026-06-08 from a post-spec-lock storage-engine evaluation); P-0011 (logging facade: `tracing` facade-from-binary, merged 2026-06-17); P-0012 (plugin runtime + MCP SDK: raw Wasmtime over Extism, retroactive, shipped Tasks 20–22; official `rmcp` SDK over hand-rolled MCP, forward, implemented by Task 23). P-0012 corrects both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build reversed on both halves without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8's E1 disposition: generation⊥storage separation) was **re-altituded out of the project-ADR layer**: observability *shape* is a theory trait + chassis mechanism, not a per-project ADR; its decisions live in the [observability baseline](../architecture/overview.md#observability); the original observability ADR P-0004 is `deprecated`, no successor ADR. P-0011 is *not* an observability-shape ADR: it is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract) and the plumbing foundation under that baseline. All Tier-A placeholder slots resolved; full status in [`placeholder-resolution.md`](placeholder-resolution.md). Cluster ADRs, each resolving its cluster's Frame slots and each `accepted` at that cluster's spec-exit gate: retrieval P-0014/P-0015/P-0016 (authored at the retrieval-cluster Stage 3 and accepted, both 2026-07-02); reporting-engine P-0020/P-0021 (authored at the reporting-engine Stage 3 and accepted, both 2026-07-04); coordination P-0022 (authored 2026-07-07 at the coordination-wedge Stage 3; resolves the one slot `{{P-CoordinationCluster}}`, a single slot, not a split; accepted 2026-07-07 as part of the Stage-3 package the gate reviewed alongside [the cluster spec](../../specs/2026-07-06-coordination-wedge.md)); distribution P-0023 (authored 2026-07-07 at the plugin-distribution Stage 3; resolves `{{P-PluginDistribution}}`; accepted 2026-07-11 as part of the Stage-3 package the gate reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md)).
+Provenance of the set:
+
+- **P-0001–P-0009:** nine Tier-A ADRs authored in WS-E-2 Stage 3. All Tier-A placeholder slots resolved (full status in [`placeholder-resolution.md`](placeholder-resolution.md)).
+- **P-0010:** storage substrate/engine, folded in 2026-06-08 from a post-spec-lock storage-engine evaluation.
+- **P-0011:** logging facade — `tracing` facade-from-binary, merged 2026-06-17. A dependency-selection + crate-topology decision (P-0010-shaped: concrete library choice behind a locked contract, per P-LockContract), *not* an observability-shape ADR; it is the plumbing foundation under the observability baseline.
+- **P-0012:** plugin runtime + MCP SDK — raw Wasmtime over Extism (retroactive; shipped Tasks 20–22) and official `rmcp` SDK over hand-rolled MCP (forward; implemented by Task 23). Corrects both halves of the never-ratified `adr-001-plugin-runtime` research proposal, which the build had reversed without an ADR.
+- **Observability re-derivation (2026-06-09):** P-0010 D8's E1 disposition (generation⊥storage separation) was **re-altituded out of the project-ADR layer**. Observability *shape* is a theory trait + chassis mechanism, not a per-project ADR; its decisions live in the [observability baseline](../architecture/overview.md#observability). P-0004 is `deprecated`, no successor ADR.
+- **P-0014/P-0015/P-0016:** retrieval cluster, authored 2026-07-02 at retrieval-cluster Stage 3; resolve that cluster's Frame slots; `accepted` 2026-07-02 at the retrieval-cluster spec-exit gate.
+- **P-0020/P-0021:** reporting engine, authored 2026-07-04 at reporting-engine Stage 3; resolve that cluster's Frame slots; `accepted` 2026-07-04 at the reporting-engine spec-exit gate.
+- **P-0022:** coordination cluster, authored 2026-07-07 at coordination-wedge Stage 3; resolves the single Frame slot `{{P-CoordinationCluster}}` (one slot, not a split); `accepted` 2026-07-07 at the coordination-wedge spec-exit gate, in the Stage-3 package reviewed alongside [the cluster spec](../../specs/2026-07-06-coordination-wedge.md).
+- **P-0023:** distribution, authored 2026-07-07 at plugin-distribution Stage 3; resolves the `{{P-PluginDistribution}}` Frame slot; `accepted` 2026-07-11 at the plugin-distribution spec-exit gate, in the Stage-3 package reviewed alongside [the cluster spec](../../specs/2026-07-07-plugin-distribution.md).
 
 | ADR | Summary |
 |-----|---------|
 | [P-0001-storage-layout](P-0001-storage-layout.md) | C1 single-document layout: whole artifact in one row, JSONB frontmatter + body + system fields, per-artifact-type tables; non-breaking C2 evolution path via the projection layer. Sits under P-0010 (the Postgres implementation under the swap trait). |
 | [P-0002-core-plugin-partition](P-0002-core-plugin-partition.md) | Verb-on-content cohesion criterion: 4 `core: true` plugins (tasks / repos / two further artifact-family plugins) covering `0.2.0`–`0.13.0`; 7 builtins covering foundational substrate; `0.14.0` migration as builtin handler. |
 | [P-0003-plugin-manifest](P-0003-plugin-manifest.md) | V0 manifest schema: universal `content.emit` verb shape, `schema_version: 1`, typed host-fn allowlist compiled per-instance from signed manifest; `workspace_id` structurally excluded from write-path ABI. |
-| [P-0004-observability-shape](P-0004-observability-shape.md) | **`deprecated` — no successor ADR.** (Historical.) Per-verb metrics surface, TimescaleDB retention policies (90d/365d/30d), health-endpoint detail body, and 1-hour continuous-aggregate window — conflated observability storage (TimescaleDB hypertables) into the app's own Postgres substrate. Its storage core was falsified by P-0010 D8; the generation-side decisions were re-altituded to the [observability baseline](../architecture/overview.md#observability) (a theory-trait baseline, not an ADR). |
+| [P-0004-observability-shape](P-0004-observability-shape.md) | **`deprecated` — no successor ADR.** (Historical.) Per-verb metrics surface, TimescaleDB retention policies (90d/365d/30d), health-endpoint detail body, and 1-hour continuous-aggregate window — conflated observability storage (TimescaleDB hypertables) into the app's own Postgres substrate. Storage core falsified by P-0010 D8; generation-side decisions re-altituded to the [observability baseline](../architecture/overview.md#observability) (a theory-trait baseline, not an ADR). |
 | [P-0005-v0-signing-chain](P-0005-v0-signing-chain.md) | V0 minimum-viable signing-key custody: build-host-on-disk at mode 600, synchronous fail-closed plugin load verification, multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C). |
 | [P-0006-v0-tenant-enforcement](P-0006-v0-tenant-enforcement.md) | Typed `WorkspaceCtx` parameter binding at the host-fn boundary as the V0 application-layer workspace isolation mechanism; WHERE-clause-mandatory discipline; upstream of RLS policy enforcement (V0.1+). |
 | [P-0007-plugin-resource-limits](P-0007-plugin-resource-limits.md) | Wasmtime per-instance resource limits: fuel (10B ticks), epoch-interruption (5s), memory ceiling (64 MiB), table/instance limits at Wasmtime defaults; both fuel and epoch ON at V0. |
 | [P-0008-admin-token-shape](P-0008-admin-token-shape.md) | Static admin token: opaque 32-byte random value, BLAKE3-hashed in DB, workspace claim from server-side lookup row; trivial revocation, no second signing key at V0. |
 | [P-0009-rls-admin-token](P-0009-rls-admin-token.md) | Binary admin/read-observer role enum; permission matrix per role for MCP verb categories and CLI control-plane ops; `WorkspaceCtx` carries `token_id` for write attribution; V0 app-layer enforcement with V0.1+ RLS policy hardening path. |
-| [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) | PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (one implementation); V0 embedded Postgres; A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series on named trip-wires (D3/D4/D8 — TimescaleDB demoted); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. Reframes P-0001/Frame/overview. Escalation E1 (D8 vs observability hypertables) dispositioned 2026-06-09 → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
-| [P-0011-logging-facade](P-0011-logging-facade.md) | `tracing` + `tracing-subscriber` (Green/MIT) as the logging facade, wired **facade-from-binary**: the binary (`cmd/mnemra`) owns the one global subscriber (JSON → stdout + `EnvFilter`); library crates use `tracing` macros only and never depend on `tracing-subscriber`. Macros = locked contract, subscriber = binary-owned implementation. Foundation + crate-topology only (impl-crate-only); the full emission layer (semantics, per-verb metrics, OTel export, redaction) is deferred to Task 25 / R-0004. A dependency/topology choice (P-0010-shaped), not an observability *shape* decision (which the 2026-06-09 E1 disposition keeps in the [observability baseline](../architecture/overview.md#observability)). |
+| [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) | PostgreSQL ratified on merits behind an engine-agnostic swappable `Storage` trait (one implementation); V0 engine a separate, operator-run PostgreSQL instance (Amendment 2026-10-19, approved; was embedded Postgres); A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series on named trip-wires (D3/D4/D8 — TimescaleDB demoted); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. Reframes P-0001/Frame/overview. Escalation E1 (D8 vs observability hypertables) dispositioned 2026-06-09 → re-altituded out of the ADR layer to the [observability baseline](../architecture/overview.md#observability); P-0004 `deprecated`, no successor ADR. |
+| [P-0011-logging-facade](P-0011-logging-facade.md) | `tracing` + `tracing-subscriber` (Green/MIT) as the logging facade, wired **facade-from-binary**: the binary (`cmd/mnemra`) owns the one global subscriber (JSON → stdout + `EnvFilter`); library crates use `tracing` macros only and never depend on `tracing-subscriber`. Macros = locked contract, subscriber = binary-owned implementation. Foundation + crate-topology only (impl-crate-only); full emission layer (semantics, per-verb metrics, OTel export, redaction) deferred to Task 25 / R-0004. A dependency/topology choice (P-0010-shaped), not an observability *shape* decision (which the 2026-06-09 E1 disposition keeps in the [observability baseline](../architecture/overview.md#observability)). |
 | [P-0012-plugin-runtime-and-mcp-sdk](P-0012-plugin-runtime-and-mcp-sdk.md) | Two orthogonal substrate-layer choices the never-ratified `adr-001-plugin-runtime` proposal had bundled, and the build reversed on both halves without an ADR. **Decision A (retroactive; shipped Tasks 20–22):** host plugins on **raw Wasmtime, not Extism** — P-0007's resource-limit mechanism (fuel + epoch + `ResourceLimiter`) needs direct Wasmtime `Config`/`Store` control an Extism abstraction would mediate. **Decision B (forward; implemented by Task 23):** adopt the official MCP Rust SDK **`rmcp` v1.7.0 (Apache-2.0/Green)** for the single stdio MCP server rather than hand-rolling MCP/JSON-RPC — R-0010-a mandates MCP-2025-06-18 conformance and the MCP server is the auth+dispatch trust boundary, the worst place to hand-roll a mandated external wire contract; mnemra's R-0010 handler logic rides on top as the `rmcp` `ServerHandler`, unchanged. Dependency-selection decisions (P-0010/P-0011-shaped), anchored to `P-StackDiscipline` applied per-layer. |
 | [P-0013-plugin-invocation-model](P-0013-plugin-invocation-model.md) | Typed per-verb `content` exports (create/get/list/update/delete) invoked per authenticated verb; the universal `run(input: string) -> string` string-dispatch export is RETIRED; symmetric typing both directions, no string verb-resolution on the V0 surface. Fills the export/invocation-side gap P-0012 scoped out; accepted-on-landing (maintainer lock 2026-06-20). |
 | [P-0014-retrieval-architecture](P-0014-retrieval-architecture.md) | Retrieval topology for the retrieval cluster: per-shape chunking + one collapsed-tree multi-resolution index behind a `TreeBuilder` seam (authored-first under a named eval); hybrid FTS+dense fused by application-side RRF with local cross-encoder rerank; three host-served MCP verbs with disclosure-budget mechanics; degraded-mode matrix (zero-egress a supported configuration; model artifacts deploy-time-provisioned, never runtime-fetched); instrumentation shape; model pin+verify (TB-5) + encoder footprint disclosure. P-0010 D6's four method-borrows land here (deferral closed). |
@@ -2720,6 +2909,7 @@ Nine Tier-A ADRs from WS-E-2 Stage 3, plus: P-0010 (storage substrate/engine; fo
 | [P-0020-report-execution-context](P-0020-report-execution-context.md) | The reporting engine's dedicated read-only Postgres execution context: a SELECT-only report role + `READ ONLY` transaction (two independent write-blocks), table + function-EXECUTE allow-lists with default-deny exclusions (`admin_tokens`, policy-audit stores), a scoped RLS exception keyed on per-execution `SET LOCAL` session settings with session-key tamper-resistance via GUC-setter revocation (chosen over `SET ROLE`/`current_user` keying), the ownership/`BYPASSRLS`/`FORCE ROW LEVEL SECURITY` model as a correctness precondition, timeout/row-cap/bounded-pool cost containment, and the OC-10 reconciliation check. Scoped exception to the P-0006/P-0009 deferred-RLS posture on exactly the caller-authored-SQL path; converges with the general R-0001 activation. Resolves the reporting-engine Frame `{{P-ReportExecutionContext}}` slot. |
 | [P-0021-report-definition-type](P-0021-report-definition-type.md) | The report-definition content type: a host-core-owned `reference`-cluster content artifact written through the existing content-write machinery — argued deliberately OFF the P-0018 core-entity short list (referenced by name at lookup, never a hard FK target; a third host-owned-content category). Locks the definition schema, write-time validation (including rejection of data-modifying CTEs so an invalid definition never registers), full P-0015 policy-record inheritance (`visibility` not-found / `dont_use` stub dispositions), reserved-built-in-name reservation, and `(workspace_id, name)` uniqueness. Resolves the reporting-engine Frame `{{P-ReportDefinitionType}}` slot. |
 | [P-0022-coordination-cluster](P-0022-coordination-cluster.md) | The coordination cluster's one-slot contract record: a **core host subsystem** (the P-0002 verb-on-content walk — not a plugin, mints no signed artifact, does not fire the P-0013 domain-verb tripwire) with actors as durable role-instance identity (sessions are ephemeral host-derived attachments; one-live-attachment, agent-type-only, audited succession), leases as the mutual-exclusion primitive on the duration line (substrate-atomic acquisition, TTL, expired-only always-audited takeover, a registered resource-identifier scheme), and addressed messages as rows with post-send immutability, a monotonic `sent→delivered→acknowledged→dispositioned` lifecycle, a closed `{completed, declined, obsolete}` disposition vocabulary, and code-registered types (`merge-request` v1 + `handoff` v1). Two agent-visible MCP tools (`claim` + `message`, actions as closed enums) inside the 8-of-≤9 verb budget; reads default-visible in-workspace / writes strictly authority-scoped with a multi-team + trust-differentiated-actor tripwire; own storage placement outside the P-0017 four-shape content taxonomy, hard-FK to core entities only, standalone over zero content. Merger stays instance-shaped (re-arm on push transport). Log topology, audit-store detail, and the auth-bundle policy composition are explicitly out of slot. Resolves the coordination-wedge Frame `{{P-CoordinationCluster}}` slot. |
+| [P-0026-db-connection-authentication-transport](P-0026-db-connection-authentication-transport.md) … [P-0031-test-substrate-isolation](P-0031-test-substrate-isolation.md) | *(2026-10-19, `accepted` with the operator-run Postgres amendment — #4018 activities 7793 and 7800)* Six control-class ADRs for the operator-run PostgreSQL instance — connection authentication and transport (P-0026), authorization and role separation (P-0027), requirements-check integrity (P-0028), DB credential files (P-0029), delegated-policy inventory and supply chain (P-0030), test-substrate isolation (P-0031); each points at the V0 substrate spec clauses R-0117–R-0121 that implement it. P-0032 (probe and readiness surface) is reserved and written with the HTTPS transport amendment (#4127). |
 | [P-0023-plugin-distribution](P-0023-plugin-distribution.md) | The distribution layer's contract record (W2-1): uniform multi-artifact OCI bundle (N≥1, wasm = `layers[0]`, signed inner manifest as config descriptor, one flat manifest, uncompressed-only at V0); keyed-in-tree package signature (P-0005 root over the domain-separated outer-manifest digest, OCI 1.1 referrer, signer-key-pinned, never TOFU); two R-NoExternalHost transports (image-layout fs, self-hosted distribution API) behind one store contract; the bounds-first pre-phase (`fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds`) behind the locked `PackageVerifier` seam (TUF slots behind it at R-0005-e); hard cutover, no bare/legacy load path; single-root custody exposure recorded (register R-0009). Pulls P-0019 DEF-2's single-publisher scope ahead of its tripwire and supersedes its cosign-on-`wkg` shape; the `[[artifacts]]` schema lands as P-0003 §Amendment 2026-07-07. Resolves the plugin-distribution Frame `{{P-PluginDistribution}}` slot. |
 
 <!-- ===== docs/src/adrs/DEFAULTS.md ===== -->
@@ -4659,7 +4849,7 @@ This amendment adds **only** the three ingest control-plane rows above to the pe
 
 ---
 title: "P-0010: Storage Substrate and Engine"
-summary: "PostgreSQL ratified on merits as the storage substrate, behind an engine-agnostic swappable Storage trait (one implementation). V0 engine is embedded Postgres; V0 stack is A1-clean (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series capabilities adopted on named trip-wires. Supersedes the substrate hard-lock framing of P-0001 and the Frame."
+summary: "PostgreSQL ratified on merits as the storage substrate, behind an engine-agnostic swappable Storage trait (one implementation). V0 engine is embedded Postgres (Amendment 2026-10-19, #4018, approved: a separate, operator-run PostgreSQL instance); V0 stack is A1-clean (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series capabilities adopted on named trip-wires. Supersedes the substrate hard-lock framing of P-0001 and the Frame."
 primary-audience: agent
 ---
 
@@ -4735,6 +4925,8 @@ The contract is locked because it is intrinsic to the storage layer's identity (
 The `Storage` trait is exercised by Postgres (the production implementation) and an in-memory test adapter — the layering/test seam that motivates having a trait at all even when only one production engine exists. (This trait-for-layering rationale predates the swap-trait decision: a one-implementation-deep `Storage` trait was already part of the substrate design for in-memory testing and host-layer decoupling; D5 widens it from deliberately Postgres-shaped to engine-agnostic.) The design-time two-adapter test for the trait binds **two** co-equal contract invariants, both recorded in the multi-tenancy and transaction note below: single-transaction keyed supersession (the transaction / unit-of-work surface) **and** workspace-scoped tenant isolation. These are the guarantees any swap candidate must preserve; an adapter that cannot express either fails the two-adapter test and does not satisfy the contract.
 
 ### V0 engine: embedded Postgres
+
+> ⛔ **SUPERSEDED by §Amendment 2026-10-19 (#4018), approved 2026-10-19 (#4018 activity 7800).** The text below is retained as the record of the embedded-engine decision and the evidence it was made on; the V0 engine under the amendment is a separate, operator-run PostgreSQL instance. D1, D2, D5 and D8 are unchanged.
 
 **The V0 engine SHALL be embedded Postgres** (`postgresql_embedded` with `pgvector` compiled/bundled via `postgresql_extensions` / `pgvector_compiled`), not an operator-provisioned external Postgres server. This was chosen over embedded-SurrealDB on a measured M4 spike: 8× lighter idle / 20× under workload, pgvector clean on Apple Silicon, where SurrealDB v3.1.3 carried a `.bind()`+KNN hang. The embedded engine ships *with* the single self-hosted binary; pgvector is bundled/compiled, not OS-installed. This is the storage-side of the "single self-hosted binary, embedded-default" deployment posture. *(Anchor: ratified V0-engine decision; Dogfooding — measurement overturned the PG-heavier hunch.)*
 
@@ -4822,6 +5014,133 @@ These preconditions bind at V0.1+ RLS-policy activation (the V0 enforcement is a
 D8 demotes TimescaleDB off the V0 stack to plain timestamped tables; the then-accepted [P-0004-observability-shape](P-0004-observability-shape.md) and the locked spec (R-0004-a/b/c/e, R-0013-c, R-0013-a's `CREATE EXTENSION timescaledb`, the health-endpoint `timescaledb` field) committed the metrics/events surfaces to TimescaleDB hypertables — the same surfaces D8 reaches. Canon decided the *principle*: the falsified P-0004 freeze is re-derived against the post-D8 world (P-LockContract when-to-lock edge; freeze-scope-under-reshape). What was open was the *scope/sequencing* — re-derive P-0004 + the R-0004/R-0013-c requirements within the fold, or sequence that re-derivation as a tracked follow-up — the maintainer's call.
 
 **Disposition (maintainer, 2026-06-09): re-derive now**, with a deeper architectural direction — separate observability *generation* from *storage*. The observability shape is re-derived to the [observability baseline](../architecture/overview.md#observability) (generation⊥storage as a theory trait; P-0004 `deprecated`, no successor ADR): the server emits telemetry (stdout structured logs + OTel traces/metrics + health-endpoint-first) storage-independently from the bare shell; the observability *storage* backend is deferred behind the separation (option set {Prometheus, InfluxDB, TimescaleDB, plain Postgres tables}, named tripwire), not locked; the standalone binary survives (observability storage is external operator infra). The spec's observability requirements are re-derived to that baseline in the same fold. The D8 "NOT locked here" carve-out is removed (above); P-0004 is deprecated, with no successor ADR. E1 carries no open content; this record preserves the lineage (P-PreserveDecisionSpace).
+
+---
+
+## Amendment 2026-10-19 — V0 engine: a separate, operator-run PostgreSQL instance; supersedes "V0 engine: embedded Postgres"
+
+**Status: APPROVED by the maintainer 2026-10-19 (#4018 activity 7800) at commit `08f4b8e`, after six DRAFT revisions (r1–r6), four review rounds and a final pass; the revision notes below are kept as the record of how the decision converged.** It follows the in-place dated `§Amendment` precedent of [P-0003](P-0003-plugin-manifest.md) ("Amendment 2026-06-30", "Amendment 2026-07-07"). The lifecycle rule is **RULED 2026-10-19** (activity 7793): an accepted ADR changes by a dated in-place amendment section; the [ADR README](README.md) now says so and keeps supersession-only as the rejected alternative with its reason. Written for an implementer arriving cold; the deliberation is on task #4018, the decisions and the options they were made against are here.
+
+### Context — what changed since the "V0 engine" decision
+
+The "V0 engine: embedded Postgres" subsection above was ratified 2026-06-07 on a measured spike (idle and workload memory against embedded SurrealDB) and the single-binary design intent. The 2026-09-15 durability ruling then kept it: an operator-provisioned external Postgres was "a future engine, not V0" because "it moves the durability problem to the Postgres server rather than solving it" (register entry, Frame §Storage shape, spec R-0116 preamble). The maintainer's own standard for reopening — a ruling is sticky against repetition, not against new evidence — was met by six items, each a deviation of the **embedding crate** from vanilla Postgres, not a property of Postgres (MEASURED in the implementation lane 2026-10-15/16 unless marked; recorded on #4018):
+
+1. `postgresql_embedded` 0.20.4 `start()` passes `-F` to the postmaster (`fsync = off` at command-line precedence); spec R-0116-d existed to fence it.
+2. Its `initialize()` passes `initdb --pwfile`; R-0116-e existed to fence it.
+3. Its default data directory is temporary and deleted on drop — the defect behind #3565, which mnemra then selected (`libs/mnemra-host/storage/postgres/engine.rs:617`, `.temporary(true)`, MEASURED at `57cfeca`).
+4. Its `Drop` runs `pg_ctl stop -m fast` whenever `postmaster.pid` exists — a pid-only stop with no identity check (R-0116 plan blocker B1, decisions D5/D12/D18).
+5. Downloaded binaries execute before the host's hash pin, and most install files are unpinned (#3616).
+6. `zip` enters the graph only through `postgresql_archive`'s pgvector installer; every zip 8.x was yanked for security on 2026-10-16 and three RustSec advisories followed, leaving the advisory gate green only through scoped ignores (#4017; `deny.toml:91-117` at `57cfeca`).
+7. The R-0116 plan (r4, 2026-10-15) grew ten tasks and five decisions largely to work around items 1–5, and its P-2 question was whether to take two more crates from the same family as direct dependencies.
+8. **Added at the gate (MEASURED by Sage 2026-10-19, spot-checked by the lead):** the embedded pins are below both security floors — `=16.4.0` (`engine.rs:216`) is exposed to 49 of the 55 CVEs affecting 16.x (floor 16.15), and the portalcorp pgvector channel (`=0.16.105`, `engine.rs:225-229`, bundling pgvector 0.8.0) is exposed to all three pgvector CVEs including the 8.8 code-execution one (floor 0.8.7) — and that channel's newest tag still bundles 0.8.0, so the embedded design **could not reach the floor at all** without changing channel. The operator model reaches it by the operator installing a current release.
+
+Maintainer rulings, verbatim, on #4018: 2026-10-16 (activity 7091) "Operator; mnemra connects"; 2026-10-18 (7470) "we are moving to a separate normal postgres instance, i got caught up in the convience trap of creating a standalone with more tools and 3rd party ones, sometimes its ok, but right now it was only convienent"; 2026-10-18 (7471) "so normal postgress and we'll install pg_vector ourselves as the local operator of that postgres … these are the requirements we have on a postgres instance and we'll need to the ability to verify if required"; 2026-10-16 (7261) every delegated policy "is verified at startup and fails closed"; 2026-10-19 (7749) the host stays up, does not serve, reports why, retries and can be forced to retry; 2026-10-18 (7472) the persistence defect was mnemra's own `.temporary(true)`, not a property of embedding.
+
+**Revision r2, 2026-10-19**, after the Warden (security, two blockers), Bolt (operations) and Charon (canon) reviews of the first draft and the maintainer's rulings on #4018 activities 7761, 7762 and 7771: the order is engine-first (AE3, RULED); two database roles (AE7, RULED); no soft class at V0 (AE2, RULED); the database password file is stay-up-and-report (7762); the three pre-existing own-file checks stay exits as a follow-up (7761); three risks accepted with register entries `AR-0011`–`AR-0013` (7771); local server spoofing is **not** accepted and is mitigated (spec R-0117-f, R-0119-c/-d). Identifier note (Charon C5): this amendment's escalations are **AE1–AE10** and its decisions **DE1–DE10**, disjoint from P-0010's own D1–D8 and E1; the R-0116 plan's decisions are cited as **plan-D*n*** and its gaps as **plan-SG-*n***.
+
+### Decision outcome
+
+**DE1 — The V0 engine SHALL be a separate, vanilla PostgreSQL instance the operator installs and runs, reached by connection configuration.** The host owns no cluster: no download, no `initdb`, no `pg_ctl`, no data directory, no `CREATE EXTENSION`. `postgresql_embedded`, `postgresql_extensions` and `postgresql_archive` leave the dependency graph. D1 (Postgres on merits), D2 (A1-clean stack), D5 (engine-agnostic `Storage` trait, one implementation) and D8 stand unchanged; this amendment changes only the engine subsection. The 2026-09-15 ruling is superseded on new evidence and recorded below as the rejected alternative with the reason it lost. *(Anchors: maintainer rulings 7091/7470/7471 — DE1 stands on the rulings; V-Simplicity — the smallest mechanism that solves the problem is no lifecycle code at all; V-Security — items 5 and 6 above are supply-chain surface the host no longer carries.)*
+
+**DE2 — Every policy the host delegates to the operator is a requirement on the instance, verified by the host over its serving role on every start, retry and forced retry, failing closed; what cannot be verified is named in one list the host itself emits; and the host uses two roles.** The requirements are spec R-0117 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`), **every clause hard at V0** (ruling 7761). "Fails closed" means **refuses to serve** — the host stays up, readiness is false with the reason, no MCP verb executes, and it retries. An `unverifiable` result (the role could not read a setting, or the check did not complete) is treated as unmet, never as met. **Two roles** (ruling 7771, confirming #3591 activity 7289): an **owner role** that owns every schema object and is used only by `mnemra init` under its own credential; a **serving role** with DML grants only, owning nothing, a member of no other role, holding none of `SUPERUSER`/`BYPASSRLS`/`CREATEROLE`/`CREATEDB`/`REPLICATION` — verified every check, including transitive membership against an empty allowlist (spec R-0117-c). Both are created by the operator from `mnemra check-db --setup-sql`, with passwords set client-side through `\password` so no secret lands in SQL history. *(Anchors: **maintainer ruling 7261 item 1** is the primary anchor for runtime verification of a delegated policy — no canon principle reaches it (P-VerifyInheritedState covers agent handoffs), and the canon question is filed as #4050 rather than invented here; P-SecurityLayered — a control that errors denies; P-LeastAuthority — the serving process never holds schema-changing authority, and the check runs with no authority above the role's job; P-GuaranteeByMechanism — the obligations list and the deployment document are asserted equal by a test.)*
+
+**DE3 — Startup check, readiness and liveness are three contracts on three surfaces, never one; no soft class exists at V0.** The instance check (one bounded, supervised implementation, spec R-0118-a) gates readiness; `GET /ready` says whether a call can be served, why not, and how stale the answer is (R-0118-f); `GET /health` says only whether the process is alive and not wedged, from a non-runtime thread, and never touches the instance (R-0118-e); `mnemra check-db` is the operator's pre-flight and diagnostic, never a probe body (R-0118-d/-g). Probe mapping: liveness → `/health`, readiness → `/ready`, startup → `/health` or none, pre-flight → `check-db`. MCP on stdio completes `initialize` and `tools/list` while not ready and answers every dispatching call with a **coarse** `host_not_ready { kind, next_retry_s }` — the caller is unauthenticated while the instance is unreachable, so the detail lives on `/ready` and `check-db` only (R-0118-h). **There is no `capability_unavailable` error, no `degraded` field, gate or test** (ruling 7771); the first soft entrant's design is recorded once in R-0118-i with a migrations-suite test as its trip-wire. The one shared implementation is the facts probe and the decision; the surfaces stay distinct because merging them is what makes a database outage restart a process. MEASURED at `57cfeca`: today one route serves all three (`libs/mnemra-host/health.rs:623-639` → `schema/init.rs:757`), so this amends spec R-0004-g and, by inheritance, the signing-to-runnable spec's R-0022-b. *(Anchors: rulings 7749, 7761, 7771, 7787 (the split RULED; `ready` ⇒ `alive`, never the reverse — AE1); V-Reliability — graceful degradation over crash-restart; P-ReliabilityTarget — readiness is read from the consumer's side; P-CheckCoversTheClaim — liveness checks liveness; V-Observability — a checker that stops reporting is detected (staleness) rather than trusted.)*
+
+**DE4 — Retry is exponential backoff 1 s → 30 s cap (300 s cap while the only failure is `auth_failed`), measured from check completion, with no attempt limit; a 30 s drift re-check while serving; two-consecutive-successes hysteresis on reachability; `SIGHUP` as the forced-retry trigger (coalesced with an in-flight check), which also reloads the password file and rebuilds the serving pool.** *(Anchors: V-Reliability — "retries with backoff" is the named standing pattern, and timeouts bound every probe; V-Simplicity — one signal, three constants, no new route or configuration; P-LeastAuthority — the only principal that can force a retry already holds the authority to signal the process; spec R-0004-g keeps the listener `GET`-only and unauthenticated, which rules out a mutating route; R-0010-g keeps control-plane operations off HTTP.)* Rejected: a `POST` recheck route on the loopback listener; an admin-token-gated endpoint; `check-db` signalling the host; a fixed interval; an attempt limit; re-checking on every readiness probe (spec R-0118-c/-d carry the reasons). Open for the maintainer: the constants themselves (AE4).
+
+**DE5 — Connection options are built explicitly from a closed allowlist and the driver never sees the URL or the environment; a password lives only in a file read safely on every use and only ever travels over `verify-full` TLS, loopback included; a unix socket is peer-authenticated after a peer-uid and socket-directory check; `~/.pgpass` and `PG*` are made inert by mechanism; `mnemra init` holds a separate owner credential the serving host never reads.** Spec R-0119. This re-opens and answers the credential-at-rest question R-0116-e dissolved, and it mitigates — rather than accepts — local server spoofing (ruling 7771). *(Anchors: P-SecurityLayered — enumerate the permitted, and a control that errors denies; V-Security — default-on encryption, no secret in environment, argv, SQL history or logs; V-DataMinimization — peer authentication holds no secret at all; P-CheckCoversTheClaim — the file check is on the descriptor the read uses; V-Consistency — the R-0008-e / R-0014-d file shape; ruling 7762 — a bad credential file is a not-ready state, never an exit.)* Rejected: a password in the URL or an environment variable; a URL denylist (the driver's grammar is wider than any list, and an omission fails open); `.pgpass` as a second path; the `<data_dir>/secrets/` shape (R-0116-e's reasons stand); one role for init and serving (rejected at 7771).
+
+**DE6 — Tests obtain Postgres from an operator- or CI-provided server through the existing fixture entry point, from exactly two required environment variables, with three roles per run (a harness role, and a run-scoped owner and serving pair so the host-under-test satisfies R-0117-c), a per-test database cloned from a template that already carries `pgvector`, the superuser URL confined to one gated binary, a refusal to run against a server holding a production store, an orphan sweep scoped to the run's own prefix, a digest-pinned CI service container with a scheduled digest-bump trigger, a fail-not-skip proof step, and a fresh-machine CI job that runs the documented operator path end to end.** Spec R-0120. The tier-2 CI spec's fixture shape transfers; its engine words do not. *(Anchors: R-0018-b — real Postgres, never a mock; P-TrustworthySignal — no skip, no environment-dependent red, and the proof that the skip class is absent; P-TestableByDesign — the server is an injected input; P-LeastAuthority — superuser authority confined to one binary; P-SecurityLayered supply chain — the image is pinned by digest and the pin has a firing bump because Dependabot is disabled here; P-CheckCoversTheClaim — "a fresh machine reaches serving" is claimed only by a job that does it; V-Consistency — local, CI and smoke share one mechanism.)* Rejected: skip-when-absent; a fixture-started disposable cluster (re-creates the host-driven lifecycle rejected at 7091; packaging is #4019's); one role for harness and host (cannot satisfy R-0117-c — Charon C7).
+
+**DE7 — The persistence fix is a CORRECTION, never a benefit of the move.** #3565's defect was `.temporary(true)` in mnemra's own code; under DE1 the host owns no data directory of any kind, so the defect has no site. The durability requirement stays in the core: spec R-0121 (the invariant, host restarts, mid-write loss), R-0117-d (durability settings, verified on the sessions writers use, with the pool rebuilt after drift) and R-0117-j item 1 (data on persistent storage, the operator's, named). The "hard kill of the storage engine" scenario is dropped from the host's acceptance with reason (R-0121-b): the host cannot kill an instance it does not own and the crash-recovery claim is Postgres's under the verified settings. The up-to-one-interval window in which a write can be acknowledged under a weakened setting is an **accepted risk** signed off by the maintainer (`AR-0012`, ruling 7771). *(Anchors: ruling 7472; P-CheckCoversTheClaim; V-Honesty — the reliance and the window are named.)*
+
+**DE8 — The implementation lane's R-0116 durability plan (authored 2026-10-15, revision r4 after three review rounds — ten tasks T1–T10, twenty decisions D1–D20, twenty-one spec gaps SG-1–SG-21; never started; unread by the maintainer; held in the maintainer's private records and restated here rather than linked, per #3591 ruling 7147 / V-DualAudience) is superseded in full.** No task survives: plan-T1/T2/T5/T6/T8 (data directory, lock, reconciliation, version guard, replace-the-executable) have no object; plan-T4/T7/T10 (persistent engine, `-F` injection, `EngineMode`) have no engine; plan-T9 (`mnemra init`) is re-specified by R-0013-a as amended; plan-T3 (the operator deployment document) survives as a need with new content (spec Constraints, "Operator-run instance"). Of its decisions, plan-D4 (`echo.*` substitution for `task.*` in scenarios), plan-D7 (a `verify-smoke` count pin) and plan-D16's shape (an `env_clear` spawn helper plus a seeded-proven source check, now guarding the test-substrate URLs) carry forward as plan-tier guidance; plan-D1/D2/D5/D10–D15/D17–D20 are moot. Of its spec gaps: plan-SG-1 (stdout versus stderr for structured records) and plan-SG-12 (listener-before-config ordering) are pre-existing and still open — each becomes a tracker task (Follow-ups below); plan-SG-15 is resolved (stdin EOF is a clean stop, R-0121-a); plan-SG-16 is AE9; plan-SG-20 is closed by R-0117-d's writer-session check; plan-SG-2/-3/-4/-5/-7/-8/-9/-10/-11/-17/-18/-19/-21 are moot with R-0116. The plan's status change is a brain-file write for the implementation lane's dispatcher, listed below. *(Anchors: P-LockContract — a lock binds the implementation, not the facts, and later work falsified the world the plan was authored against; P-PreserveDecisionSpace — the plan is superseded, not deleted.)*
+
+**DE9 — What exits with the embedded engine, per record, and what the move costs.** None of this is implemented by this amendment; it is the implementation lane's list, each item with the record that must change. **Labelled as a loss (Bolt M7): the host-side supply-chain verification of the database binaries it runs — `KNOWN_GOOD_HASHES` and `verify_pinned_artifacts` — is lost, not replaced.** Under the operator model the host verifies nothing about the binaries it talks to; the install's supply chain is the operator's (spec R-0117-j item 3; accepted risk `AR-0011`). The "compatible with stores initialised under the embedded engine" sentence of the first draft is moot: the embedded engine never persisted a store (`.temporary(true)`), so there is no such store.
+
+| Exits | Where (MEASURED at `57cfeca`) | Record to change | Tracker |
+|---|---|---|---|
+| `postgresql_embedded`, `postgresql_extensions` (and transitively `postgresql_archive`, `postgresql_commands`, `zip`) | `libs/mnemra-host/Cargo.toml:31-32`; `Cargo.lock` | Cargo manifests; `deny.toml` `[sources]`/`[bans]` if any entry names them | #4018 |
+| The three RUSTSEC zip ignores and their comment block | `deny.toml:91-117` (`unused-ignored-advisory = deny` turns them red once zip leaves the graph, per the file's own comment) | `deny.toml` | #4017 (done; the exit is this), #4103 → cancel (its 2026-10-30 backport check has no object) |
+| `EmbeddedEngine`, `KNOWN_GOOD_HASHES`, `verify_pinned_artifacts`, `EMBEDDED_PG_VERSION`, `PGVECTOR_VERSION`, `install_extension`, the hash-before-exec ordering | `libs/mnemra-host/storage/postgres/engine.rs` (`:216`, `:229`, `:306`, `:391`, `:595-630`, `:700`) | The engine module becomes a connection module: allowlisted option construction (R-0119), two pools (serving; owner for `init`), the facts probe and check (R-0117/R-0118) | #3616 → close as moot: the host executes no downloaded binary; the supply-chain loss is named (`AR-0011`) |
+| `verify-cold-start` gate and its `GITHUB_TOKEN` precheck; the `just ci` refuse-without-token rule | `justfile:756-811`; `_ci-verify-chain` and `-nocoverage` | `justfile`: retire; add the two-variable preflight (R-0120-c); `CLAUDE.md` "Verify command" rows | #3597 (done; gate retires), #3632 → cancel |
+| `~/.theseus` caches and the pin-hash cache key | `.github/workflows/ci.yml:119-123`, `:191-195`, `:305-309` | `ci.yml` gains a `services:` Postgres+pgvector container pinned by digest with `pg_isready`, the setup step, the env-unset proof step, the scheduled digest-bump workflow, and the **fresh-machine job** (R-0120-c/-g) | #4018 |
+| `scripts/ci-reap.sh` postmaster reap and the cross-lane `$TMPDIR` reap trap | `justfile:940`; `scripts/ci-reap.sh`; `CLAUDE.md` "Embedded Postgres" | Retire or narrow the reap; its successor is the run-prefix orphan sweeper (R-0120-a); delete the CLAUDE.md trap | #4018 |
+| `tests/common/shared_engine.rs` (`EmbeddedEngine::start()` at `:73`), `tests/postgres_engine.rs`, `tests/postgres_engine_cold_start.rs`, `tests/lint_engine_construction.rs` (R-0032 symbols), `tests/common/no_migrate_set.rs` exceptions | `libs/mnemra-host/tests/` | Re-point the fixture at the two test URLs with three roles (R-0120); replace the guard's symbol list (R-0120-f); the tier-2 spec's own amendment states the new symbols | #4018; the tier-2 spec amendment (design lane; Follow-ups) |
+| `cmd/mnemra/cmd/init.rs:25` temporary engine | `cmd/mnemra` | `init` per R-0013-a as amended (owner credential, advisory lock, `--dry-run`); new verbs `check-db`, `ready`; `backup` → `not_supported` (R-0011-d as amended) | #4018 |
+| `/health` single-route detail body; `check_admin_token`-only 5-pre check | `libs/mnemra-host/health.rs`; `schema/init.rs:757`; `mnemra_host.rs:521`; `startup/file_mode_check.rs:67,:106` | Two routes per R-0118-e/-f with the status-code property test; `health_snapshot` becomes the facts probe's schema half; the `200`-on-`down` defect (`health.rs:627-629`) is the property test's seeded case; the password file gets its own descriptor-based check (R-0119-b), not the path-based 5-pre one | #4018 |
+| `#3562` "ship Postgres and pgvector inside the binary" | tracker | **Cancelled (ruling 7793, AE10)**: there is nothing to bundle. The mnemra.dev "Postgres built in" claim is #3375's to fix, wording "one binary; bring your Postgres"; README:13 (#3376) likewise | #3562 cancelled; #3375, #3376 |
+| `CLAUDE.md` sections "Known defect: host data does not survive a restart" (delete when #3565 lands, per its own instruction), "Embedded Postgres", the supply-chain zip paragraph, the R-0032 and cold-start table rows, the `GITHUB_TOKEN`/sigil recipe | `CLAUDE.md` | Rewrite against R-0117–R-0121 | #4018 |
+| Spec R-0116, its scenarios, the data-directory table, the "Data location and durability" constraint, the `/health degraded and down` scenario | `docs/specs/2026-05-24-mnemra-core-v0-substrate.md` | Superseded in this amendment (banners); content moved per the banners | this amendment |
+
+**DE10 — The engine amendment lands before the #3591 batch (RULED, AE3).**
+
+### Considered options (recorded per P-PreserveDecisionSpace)
+
+1. **Keep the embedded engine and run the R-0116 plan as written.** Lost: items 1–7 above; every one of the plan's hardest decisions (plan-D5, plan-D12, plan-D18) existed to fence the crate's deviation from vanilla Postgres, and the advisory gate was green only through ignores. Verbatim, Peter: "every time we use someone's tweak to the defaults there is room for oddity to creep in. vs staying with the vanilla \"normal\" options."
+2. **The host drives an operator-installed vanilla Postgres through stock `initdb`/`pg_ctl` (local, host-owned data directory).** Keeps durability host-owned and most of R-0116; drops the crate. Lost at ruling 7091: mnemra still owns lifecycle code (the pid-identity and orphan-postmaster problems return in mnemra's own code), and a managed or remote deployment still needs a connection path, so the connection path has to exist anyway.
+3. **A lifecycle seam with both (1)/(2) and the connection path behind it, per deployment use case.** Lost at 7091: the most code, and it defers rather than makes the choice; D5's `Storage` trait is already the seam that matters.
+4. **Operator-run instance reached by connection configuration (chosen).** The host carries no lifecycle, no download, no pins; durability settings become verified requirements; the credential question returns and is answered (R-0119).
+5. **The 2026-09-15 ruling, "a future engine, not V0: it moves the durability problem to the Postgres server rather than solving it" — superseded.** It lost on new evidence: the durability problem was mnemra's own configuration (ruling 7472), and the embedded engine's "solution" required fencing the crate on three fronts. Under DE2 the problem is not moved silently: it is stated as requirements the host verifies, plus the named unverifiable remainder.
+6. **One database role that both owns and serves (the first draft's R-0013-e).** Rejected by the maintainer at 7771: the owner's RLS bypass then rests on `FORCE` alone, and the serving process holds schema-changing authority as standing capability. Two roles (owner for `init`, serving for the host) cost one more credential, held only by `init`.
+
+### Consequences
+
+**Good.** No third-party lifecycle code, no first-run network egress, no binaries executed before verification, no zip in the graph; the tenant-boundary preconditions (no superuser, no `BYPASSRLS`, no ownership, no membership, `FORCE ROW LEVEL SECURITY`) are checked rather than assumed, which #3591's RLS-in-V0 ruling depends on; the serving process never holds schema-changing authority; the host runs anywhere a Postgres is reachable, including managed Postgres (D1's "commodity managed Postgres" consequence becomes literally true at V0); a database outage never restarts the process, and a host that is up but not serving is visible as such (metrics, alert).
+
+**Bad / trade-offs.** An operator must install and run Postgres and pgvector, create two roles and set two passwords before first start — the single-binary story on the landing site changes (#3562 cancelled; the wording "one binary; bring your Postgres" is #3375's); a credential at rest can exist (bounded by R-0119); **the host-side supply-chain verification of the database binaries is lost, not replaced** (`AR-0011`); the host cannot test engine crash recovery and says so (R-0121-b); up to one interval of writes can be acknowledged under a weakened durability setting (`AR-0012`); a hostile operator or another principal on a shared instance is out of model (`AR-0013`); two hosts on one database is **unsupported until #4127** with a detection tripwire (AE9, superseded by the shared-service ruling); a daemon deployment has no transport until #4127 (R-0118-k); P-0010's decision driver "the substrate ships inside the single self-hosted binary (embedded-default is the design intent)" is false as a packaging statement — the license gate it motivated still applies to what the host links and to what the operator document recommends, and D1 stands on merits regardless.
+
+### Records this amendment falsifies and does not edit (raise, don't ship stale — P-LockContract), each with what fires its correction
+
+- `docs/specs/2026-07-02-ci-flake-tier2-shared-engine.md` (approved): R-0026 "boots the binary's engine", R-0027's privileged provisioning on `EmbeddedEngine`, R-0032's symbol list. **Needs its own amendment** (design lane); R-0120 states what transfers. *Fires by:* the tracker task below, wired as a blocking dependency of the implementation task that re-points the fixture, so the fixture cannot land against a spec that names a symbol it removed.
+- `docs/specs/2026-06-30-signing-to-runnable.md:81` R-0022-d ("the production storage pool SHALL be sourced from `PostgresStorage::start_embedded()`"); `docs/intent/signing-to-runnable-frame.md:248` ("bootstrap on the embedded engine, enable bundled pgvector"). *Fires by:* the same tracker task (one amendment, the two signing records together), blocking the implementation task that replaces the pool source.
+- `docs/specs/2026-06-26-ci-flake-tier1-serialize.md:70-77` (the serialized group is "binaries that start an embedded Postgres engine", enumerated by `grep EmbeddedEngine|postgresql_embedded|start_engine`); `docs/specs/2026-07-15-ci-coverage-shard.md:75` ("the embedded-Postgres set is the heavy one"). *Fires by:* the tier-2 amendment task above, which re-defines group membership for all three CI specs at once.
+- `docs/src/adrs/README.md:57` (P-0010's row: "V0 embedded Postgres"); `docs/src/adrs/P-0001-storage-layout.md:161` ("V0 embedded engine"). *Fires by:* the gate on this amendment — both are one-line cross-references corrected in the landing commit of this amendment (listed in Downstream), not a separate task.
+- `docs/intent/postmaster-ownership-marker.md` and `-frame.md`, `docs/intent/ci-flake-tier1-serialize*.md`, `docs/intent/ci-flake-tier2-shared-engine*.md`: the postmaster the host owns no longer exists. Historical intakes; *fires by:* the tier-2 amendment task adds a superseded banner to each in the same change.
+- `docs/specs/2026-07-16-ingestion-pipeline.md` and its Frame: **not falsified** (Charon C1 — no engine reference; R-0117-d keeps raw staging durable). Recorded as a **dependency to re-read** at that spec's next amendment; *fires by:* the tracker task below, filed against the ingestion spec with no blocker (nothing in it is wrong today).
+- The Frame's Tier-C slot `{{P-PostgresExtDeploy}}`: the "which extensions, at what version" half is answered (R-0117-b); the "how they reach the operator" half is #4019's. Marked in the Frame; *fires by:* #4019's gate.
+- `README.md:13` ("bundled Postgres", #3376); `docs/src/specs/README.md`; `DEFAULTS.md` G-0002 — pre-existing wrong prose, now wrong in a new direction; *fires by:* #3376 and the CLAUDE.md rewrite task.
+
+### Follow-ups — each with its firing mechanism, and the tracker tasks for Puck to file (Charon C2)
+
+| Follow-up | Mechanism or label | Task to file (Puck) |
+|---|---|---|
+| Tier-2 CI spec amendment (R-0026/R-0027/R-0032 words; group membership for tier-1 and coverage-shard; intake banners) | **Fires:** wired as a blocking dependency of the fixture re-point implementation task | **#4119** (filed) — design lane |
+| Signing-to-runnable R-0022-d and its Frame :248 | **Fires:** blocking dependency of the pool-source implementation task | **#4120** (filed) — design lane |
+| Ingestion spec/Frame re-read against R-0117-d and R-0121 | **Fires:** at that spec's next amendment; no blocker (not falsified) — the task is the carrier, so the cadence outlives this gate | **#4121** (filed) — design lane, low |
+| plan-SG-1 (structured records on stdout versus the stderr sink) | **Fires:** blocking dependency of the `instance_check` emission implementation task (it cannot pick a sink without the ruling) | **#4122** (filed) |
+| plan-SG-12 (listener bind before config load, R-0004-g vs R-0116-b precedent) | **PARKED**, cadence that outlives this gate: **every amendment to the V0 substrate spec** re-reads it, and each revision of this amendment; the ordering is harmless today (the 5-pre precedent) | **#4123** (filed, PARKED) — low |
+| AE9 audit: host-held state assumed exclusive (projection refresh queue is the INFERRED candidate) | **Lower priority since ruling 7790:** AE9 is superseded by the shared-service model (#4127), under which one host serves every session; the `concurrent_host_detected` tripwire still records any interim occurrence; the audit is not pulled forward | **#4124** (filed) — implementation lane, lowered |
+| Own-file mode checks (admin token, signing material, LLM key) move to stay-up (ruling 7761: follow-up) | **Fires:** blocking dependency of the container-image work (the Secret-mount default is the container fact that makes an exit crash-loop) | **#4125** (filed) — design lane |
+| Container image contract (spec Out of Scope, parked) | **PARKED**, resurfaced mechanically: the task is a blocking dependency of #4019's packaging decision; cadence: this amendment's revisions and the #4019 gate | **#4126** (filed; blocker of #4019) |
+| `backup` CLI verb has no object (R-0011-d) | **Fires:** `backup` exits `not_supported` until defined | added to #3591's batch scope (#3591 activity 7781) |
+| R-0116 plan `status: superseded` (brain file) | one-time write at the gate | implementation-lane dispatcher, at this amendment's gate |
+| Warden's seven control-class ADRs — **RULED 2026-10-19 (activity 7793): all seven are written.** Authored `proposed` in this change, each pointing at the spec clauses that implement it: [P-0026](P-0026-db-connection-authentication-transport.md) DB connection authentication and transport; [P-0027](P-0027-db-authorization-role-separation.md) DB authorization and role separation (coordinated with #3591); [P-0028](P-0028-requirements-check-integrity.md) requirements-check integrity; [P-0029](P-0029-db-credential-files.md) secrets management for the DB credential files; [P-0030](P-0030-delegated-policy-inventory-supply-chain.md) delegated-policy inventory and supply chain (floors 16.15 / 0.8.7 from AE6); [P-0031](P-0031-test-substrate-isolation.md) test-substrate isolation. **P-0032** (probe and readiness surface) is reserved and written with the HTTPS transport amendment ("Probe surface (with transport)") | **Fires:** the six move to `accepted` at this amendment's final gate; P-0032 is authored by #4127 | #4127 (P-0032) |
+| **The HTTPS shared-service transport amendment** (rulings 7787–7790): one long-running service, every session over streamable-HTTP MCP, HTTPS only, localhost included; amends R-0010-a/-e, R-0118-k and the probe surface; supersedes AE9, takes AE5 | **Fires:** the next amendment after this one lands (ruling 7790: gate this first, do not fold); it lowers #4124's priority | **#4127** (filed) — design lane |
+| Canon gap: runtime verification of a delegated policy | filed as #4050 (puck-plugin) | exists |
+
+### Threat model (design-time, P-SecurityLayered)
+
+The DFD retype, the typed-elements table and the threat rows live in the overview (`docs/src/architecture/overview.md`, "Operator-instance retype (Amended 2026-10-19 r2)"); the canonical TB enumeration is the overview's, and `TB-postgres` is **retyped in place** as the operator's zone (Warden B1) — no second boundary is added. The Frame's TB table row is updated to match. Summary of the delta: the crossing `TB-mnemra-host` ↔ `TB-postgres` becomes a client-to-operator-zone crossing with two credentials (serving, owner), two transports (peer socket after a peer-uid check; `verify-full` TCP), the facts probe and `check-db` as two credential-holding clients, `SIGHUP` from `EE-operator`, the operator's setup-SQL DDL into the zone, and `EE-other-principals` inside the zone. Spoofing of a **local** transport is mitigated (spec R-0117-f, R-0119-c/-d), not accepted (ruling 7771). **The first draft's "residual: the host's role can `NO FORCE` its own tables" disappears under two roles** — the serving role owns nothing and cannot alter a table it does not own; `FORCE` now guards the owner's `init` sessions. Accepted risks, signed off by the maintainer 2026-10-19 (ruling 7771), are register entries `AR-0011` (operator-owned supply chain and persistent storage), `AR-0012` (the one-interval durability window) and `AR-0013` (hostile operator / other principals out of model). A Warden `threat-modeling` pass over the retyped DFD is required before the gate; the r1 review's two blockers (B1 retype, B2 register ids) are addressed in this revision.
+
+### Decisions for the maintainer (AE1–AE10; the option space is kept open on the page; RULED items record the ruling and the rejected alternative)
+
+- **AE1 — The three-contract split and the own-file refusals. RULED.** *Split half RULED 2026-10-19 (activity 7787):* three contracts. The maintainer's question — "my assumption would be it is impossible for health to be good when ready is not. is this correct?" — is answered in the spec (R-0118-e/-f): no; `ready` ⇒ `alive` and never the reverse, so `/health` `200` with `/ready` `503` is the designed not-ready state and `/ready` `200` with `/health` `503` cannot occur. *Own-file half RULED 2026-10-19 (activity 7761):* the admin-token, signing-material and LLM-key mode checks keep exiting in this amendment; stay-up for them is #4125. Rejected alternative kept — one endpoint with a status field (today's shape), cheaper, and the restart loop returns the moment an orchestrator points liveness at it.
+- **AE2 — All-hard at V0 and no soft class. RULED 2026-10-19 (7761, 7771):** every R-0117 clause hard; no `capability_unavailable`, no `degraded` machinery ("build it when needed"); pgvector recorded as the first soft candidate once P-0014 degraded-mode exists, with the migrations-suite trip-wire (R-0118-i). Rejected alternatives kept: (b) R-0117-b soft now, gating embedding-write and dense-retrieval — a capability registry before any capability uses pgvector, and partial retrieval served; (c) the soft contract defined with an empty set (the first draft) — machinery and tests for a member that does not exist.
+- **AE3 — Ordering relative to #3591. RULED 2026-10-19 (7761, re-confirmed 7771): the engine amendment lands before the #3591 batch.** This **supersedes ruling 7110** (2026-10-16, "Fold in, keep order"), which is kept as the rejected alternative with its reason: the same five records are amended twice. *Record of the context the first draft omitted:* ruling 5518 (2026-09-20) set batch timing for the canon-review changes and fixed the sequence #3591 triage → #3640 sweep → one amendment; ruling 7147 (AMB-2, published docs stop depending on private records) was queued into that batch; ruling 7261 item 1 placed the delegated-policy startup checks **in the batch**; ruling 7110 folded the engine amendment in and **accepted the persistence (#3565) and zip (#4017) holds as its cost** — so those holds are **not** new evidence for reversing it. The new evidence that reversed 7110 is what arrived after 2026-10-16: the zip un-yank, and the critical GHSA-m665 (unreachable, invisible to the advisory gate until RustSec imports it) — 7771 verbatim: "the new evidence is the zip unyank + critical GHSA-m665 / RustSec trip". A second reason stands on its own: #3591's RLS requirements cite the role model this amendment verifies (R-0117-c/-e, two roles per 7289), so landing it first gives the batch a verified precondition instead of an assumed one. Process note, recorded: the first draft was dispatched as a separate amendment against 7110's order from an unverified carrier line; the author raised the conflict as the then-E3 and the maintainer ruled.
+- **AE4 — Retry constants, `SIGHUP`, and the alert threshold (DE4, R-0118-j). RULED 2026-10-19 (activity 7787): fixed defaults as drafted** — code constants: 1 s → 30 s backoff (300 s cap on `auth_failed`), 30 s drift re-check, two-success hysteresis on reachability, `SIGHUP`, `host_ready == 0` alert at 5 min. Rejected alternatives kept: (b) operator-configurable intervals and threshold — a configuration surface with no evidence yet; (c) a `POST` recheck route — rejected on R-0004-g.
+- **AE5 — HTTP probes versus loopback-only. DEFERRED 2026-10-19 (activity 7790) to the HTTPS shared-service transport amendment, #4127, which decides the listener.** The options are carried there unchanged: (a) loopback-only with exec probes (as drafted here, and what this amendment ships); (b) a bind-address surface with status-code-only bodies off-loopback per R-0004-g's own clause. Under the shared-service model the listener question is the transport's, not this amendment's.
+- **AE6 — The version floors. RULED 2026-10-19 (activity 7793): from security history, filled from Sage's measurement the same day** — PostgreSQL **16.15** (55 CVEs affect 16.x, all fixed by 16.15, 25 only there; representative 8.8s and the RLS-relevant CVE-2026-14666 cited in R-0117-a) and pgvector **0.8.7** (CVE-2026-103484 / GHSA-pw7q-9788-x566, IVFFlat out-of-bounds write → code execution, every earlier release affected; R-0117-b). Floors move: the weekly R-0120-c workflow fails when a newer 16.x minor or pgvector release exists or the CI image falls below a floor — a mechanism, chosen over a dated cadence because the quarterly schedule is published but a cadence still depends on recall. Rejected alternative kept: pinning to the versions the CI image carries at the gate — a floor set by what happened to be installed is a measurement, not a target (P-ReliabilityTarget).
+- **AE7 — The role model. RULED 2026-10-19 (7771, confirming 7289): two roles** — owner (owns the schema, used only by `mnemra init` under its own credential) and serving (DML only, owns nothing, member of nothing, none of the five attributes), both from `--setup-sql`, passwords via `\password`. Rejected alternatives kept: one login role that owns and serves (the first draft) — standing schema authority in the serving process, RLS bypass resting on `FORCE` alone; granting the serving role `CREATEROLE` so the host creates roles — authority above the job; the operator hand-creating every role with no printed SQL — the same result as the ruling with more operator error surface.
+- **AE8 — The host's start never applies migrations (R-0117-h). RULED 2026-10-19 (activity 7787): only via `mnemra init`** — owner credential, advisory lock, `--dry-run`; pending migrations are a not-ready reason; the way back is restore-from-backup; rolling upgrades unsupported. Rejected alternative kept: forward-only auto-migration at start (reasons on R-0117-h).
+- **AE9 — Two hosts on one database. SUPERSEDED 2026-10-19 (activities 7787, 7788, 7789, 7790).** The maintainer, verbatim: "change the model so its acts like remote even when local. I have multiple sessions running always and wasn't aware of this restriction" — and ruled the **shared-service model**: one long-running mnemra service that every agent session reaches over streamable-HTTP MCP, HTTPS/TLS only, localhost included ("i asked because i want it simple single path so always https over TLS"), one code path local and remote. One host serves every session, so the two-hosts question dissolves as framed. That model is the **next amendment, #4127** — it amends R-0010-a/-e (stdio only; streamable-HTTP not at V0), R-0118-k (the daemon/supervision model becomes V0 scope) and the probe surface (P-0032), and needs per-session authentication, a network-listener threat model and supervision; the maintainer chose to gate this amendment first and not fold the transport in (7790). Carried unchanged here, interim until #4127: two hosts on one database is unsupported and detected (`concurrent_host_detected`, spec Out of Scope); R-0010-a/-e stay as written. The options as framed are kept for the record: (a) allowed after a host-state audit (INFERRED candidate: the projection refresh queue); (b) a session advisory lock — both moot under one shared host. #4124's audit is **not pulled forward** and is lower priority under the ruling. Open and labelled UNVERIFIED by the lead at 7789: whether the agent's HTTP MCP client can trust a custom or local CA — #4127 confirms this first.
+- **AE10 — The landing claim. RULED 2026-10-19 (activity 7793): cancel #3562** (bundle Postgres); the mnemra.dev "Postgres built in" claim is **#3375's** to fix, wording "one binary; bring your Postgres". Rejected alternative kept: keeping #3562 open against a future bundled packaging under #4019 — #4019 can re-open it with a packaging answer if one ever bundles.
+
+**ADR lifecycle — RULED 2026-10-19 (activity 7793):** an accepted ADR changes by a dated in-place amendment section, as this one does; the README carries the rule and the rejected supersession-only alternative.
+
+### Downstream changes for the implementation lane (listed, not implemented)
+
+The DE9 table, plus: implement R-0117–R-0121 against the amended spec once gated; the `deployment.md` operator document with the R-0117-j docs test and every section the spec Constraints enumerate; `/docs-translate` → `just docs-llms` → `just docs-check` and the regenerated `docs/_published/` for this amendment's `docs/src/` edits (not run here — a build step); the one-line cross-reference corrections in `docs/src/adrs/README.md:57` and `docs/src/adrs/P-0001-storage-layout.md:161` in the landing commit; the brain-file status change on the R-0116 plan; the tracker dispositions in DE9 and the tasks in Follow-ups; the Warden `threat-modeling` pass over the retyped overview DFD before the gate; the design-lane amendments listed in Follow-ups.
 
 <!-- ===== docs/src/adrs/P-0011-logging-facade.md ===== -->
 
@@ -7404,6 +7723,495 @@ The V0.1 adapter implements `claim` with **`FOR UPDATE SKIP LOCKED`** (the overv
 - Frame: [`docs/intent/ingestion-pipeline-frame.md`](../../intent/ingestion-pipeline-frame.md) (blob `f56b3685`), IP-5; §9 open ADR slots (opened by Stage-2a decision 1).
 - Placeholder ledger: [`placeholder-resolution.md`](placeholder-resolution.md) updates `{{P-job-queue}}` → P-0025 when this lands.
 
+<!-- ===== docs/src/adrs/P-0026-db-connection-authentication-transport.md ===== -->
+
+---
+title: "P-0026: DB connection authentication and transport"
+summary: "How the host reaches the operator-run PostgreSQL instance: connection options built from a closed allowlist (never the driver's URL parser or the environment), a password only ever over verify-full TLS (loopback included), peer authentication over a unix socket after a peer-uid and socket-directory check, PG* and ~/.pgpass made inert, cleartext/MD5 auth requests refused. Control-class ADR 1 of the operator-Postgres amendment."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-10-19"
+decision-makers: ["the maintainer"]
+consulted: ["Warden (security review, rounds 1–4)", "Bolt (operations review)", "Charon (canon review)"]
+informed: []
+supersedes: null
+superseded_by: null
+---
+
+# P-0026: DB connection authentication and transport
+
+## Status
+
+`accepted` — authored `proposed` 2026-10-19 at the #4018 gate (maintainer ruling 7793: all seven of Warden's proposed control-class ADRs are written; this is ADR 1). Moves to `accepted` at the amendment's final gate. Pending the maintainer's gate; nothing here is locked.
+
+## Context and Problem Statement
+
+Under [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 the host no longer owns its cluster; it is a client of an operator-run PostgreSQL instance it reaches over a unix socket or TCP, with a credential that can exist. The embedded design (spec R-0116-e, superseded) had dissolved every transport question by owning a host-only socket. Three facts set the problem (Warden, MEASURED in sqlx-postgres 0.9.0 during review): the driver's URL parser accepts far more than the host inspects (`?password=`, `hostaddr`, `options`, multi-host, `PG*` defaults, an always-run `~/.pgpass` lookup, unknown keys logged with their values); neither loopback TCP nor a unix socket authenticates the server; and the driver answers cleartext and MD5 password requests with no SCRAM channel binding. The maintainer ruled that local server spoofing is **not** an accepted risk (#4018 activity 7771) — it must be mitigated.
+
+## Decision Drivers
+
+- **Default-on security, one posture local and remote** — the maintainer's standing direction ("acts like remote even when local", activity 7787) applied to the database connection: a password never travels unprotected, on any transport.
+- **Enumerate the permitted** — a denylist on a grammar wider than the host's list fails open on the first omission (`P-SecurityLayered`).
+- **No secret in the environment, argv, SQL history or logs** (V-Security, V-DataMinimization).
+- **Honesty about the driver** — two mechanisms cannot be built with today's driver; they are named and pinned, not implied (V-Honesty, `P-TrustworthySignal`).
+
+## Considered Options
+
+1. **Explicit, allowlisted connection options; TLS `verify-full` for every TCP connection; peer-only sockets with a pre-write peer-uid check; environment and `.pgpass` made inert (chosen).**
+2. **Pass `MNEMRA_DATABASE_URL` to the driver's parser with a denylist of forbidden keys.**
+3. **Require TLS only off-loopback; allow password auth on loopback and sockets.**
+4. **Peer authentication only (no password path at all), carrying R-0116-e's shape forward.**
+
+## Decision Outcome
+
+Chosen option: **1.** The host parses `MNEMRA_DATABASE_URL` itself against a closed grammar and builds the driver's options field by field; the driver never sees the URL or a `PG*` variable; `PG*` is scrubbed in `main` before any thread starts; `~/.pgpass` is made inert and proven so by a seeded test. Any TCP connection — loopback included — uses `sslmode = verify-full` against the operator's CA, and a password is only ever sent over such a connection; a unix socket is used only with peer authentication and no password, after the peer uid is matched to the socket directory's owner and the directory carries no group or other write bit. The host refuses cleartext and MD5 authentication requests — an implementation-time mechanism (the driver exposes no option), pinned as a named expected failure with an exit detector keyed on the driver version. The "same connection, before the first byte" form of the peer-uid check is likewise pinned. *(Anchors: maintainer ruling 7771 — local spoofing mitigated, not accepted; `P-SecurityLayered` — enumerate the permitted, a control that errors denies; V-Security; V-DataMinimization — peer authentication holds no secret; `P-GuaranteeByMechanism` — refusals are mechanisms, not conventions; `P-Defer` DF1 — the two implementation-time gaps have a named exit and a detector.)*
+
+**Implemented by** spec R-0119-a (allowlist, `PG*` scrub), R-0119-c (peer), R-0119-d (transport floor), R-0119-e (`.pgpass` inert), R-0117-f (transport verification, socket-directory rule, the two pinned mechanisms), R-0120-h (expected failures) in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`. This ADR records the decision; the clauses carry the observables.
+
+### Consequences
+
+**Good:** one transport posture local and remote; no credential reaches the wire except over an authenticated channel; the driver's parser is out of the trust boundary; the operator's `pg_hba` cannot downgrade the host into cleartext once the refusal mechanism lands; until then the only protection against a downgrade request is that the password travels inside a `verify-full` TLS session to an authenticated server — the `pg_hba` obligation (R-0117-j item 6) is unverified and catches nothing, which is why the refusal is pinned as a named expected failure rather than left to the document.
+
+**Bad / Trade-offs:** an operator running Postgres on the same machine must either provision a socket with peer authentication or a TLS certificate for loopback — there is no "just a password on localhost" mode; two mechanisms are known gaps until the driver or the host's own connection handling closes them (`known_gaps` on `/ready` while they are, R-0118-f); the socket-directory check does not walk ancestors (residual named in R-0117-f).
+
+## Pros and Cons of the Options
+
+### Option 1 — allowlisted options, TLS everywhere on TCP, peer-only sockets (chosen)
+
+- Pro: the only option under which every bypass Warden measured has a seeded test.
+- Pro: one code path for local and remote, matching the maintainer's direction.
+- Con: local password-on-loopback is refused; the operator must choose socket+peer or TLS.
+
+### Option 2 — driver URL parser plus a denylist
+
+- Pro: least code.
+- Con: the denylist is shorter than the driver's grammar by construction; an unlisted key (`passfile`, `options`, a future one) fails open, and unknown keys were measured to be logged with their values.
+
+### Option 3 — TLS only off-loopback
+
+- Pro: the familiar shape.
+- Con: loopback authenticates nothing — a same-host process that binds the port receives the password; rejected by ruling 7771.
+
+### Option 4 — peer authentication only
+
+- Pro: no credential at rest, the R-0116-e property.
+- Con: a remote or managed instance has no unix socket, so the host could not reach the deployment shapes the amendment exists for.
+
+## More Information
+
+- [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE5, AE1 ruled); [P-0029](P-0029-db-credential-files.md) owns the credential file itself; [P-0027](P-0027-db-authorization-role-separation.md) owns what the authenticated role may do.
+- The probe listener's own transport (`/health`, `/ready`) is ADR 7, P-0032, written with the HTTPS shared-service transport amendment (#4127).
+- Threat rows: overview "Operator-instance retype (Amended 2026-10-19 r2)" — `DF-health-probe`/`DF-substrate-rw` over local transports (S), remote TCP (S, T, I).
+
+<!-- ===== docs/src/adrs/P-0027-db-authorization-role-separation.md ===== -->
+
+---
+title: "P-0027: DB authorization and role separation"
+summary: "Two database roles created by the operator from host-printed SQL: an owner role that owns the schema and is used only by `mnemra init` under its own credential, and a serving role with DML grants only — owning nothing, member of nothing, no CREATE anywhere, none of the five dangerous attributes — verified by the host on every instance check, with forced RLS reconciled against the catalog. Control-class ADR 2 of the operator-Postgres amendment; coordinated with the #3591 tenancy/RLS batch."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-10-19"
+decision-makers: ["the maintainer"]
+consulted: ["Warden (security review, rounds 1–4)", "Charon (canon review)"]
+informed: ["the #3591 batched amendment (tenancy and RLS)"]
+supersedes: null
+superseded_by: null
+---
+
+# P-0027: DB authorization and role separation
+
+## Status
+
+`accepted` — authored `proposed` 2026-10-19 at the #4018 gate (ruling 7793, ADR 2). Accepted 2026-10-19 by the maintainer (#4018 activity 7800) with the operator-run Postgres amendment at commit `08f4b8e`. Coordinates with the #3591 batch, which owns the RLS policy template, the tenant key and the RLS manifest (rulings 7262, 7289).
+
+## Context and Problem Statement
+
+PostgreSQL row-level security is the reference implementation for workspace-scoped isolation ([P-0010](P-0010-storage-substrate-engine.md) D1), and it is bypassed by any superuser, any `BYPASSRLS` role, and any table owner whose table lacks `FORCE ROW LEVEL SECURITY`. Under the embedded engine the host created its own roles as a bootstrap superuser; under the operator-run instance the host holds no `CREATEROLE` and inherits whatever roles the operator made. The first draft of the amendment used one login role that both owned the schema and served; the maintainer rejected it (activity 7771) and ruled two roles, confirming the #3591 amendment content (activity 7289). Warden's review then found the owner-escalation path on `pg_upgrade`d clusters: `public` keeps `CREATE` for `PUBLIC` on clusters upgraded from ≤ 14, so a function planted through SQL injection in a schema on the owner's `search_path` runs with owner authority at the next `mnemra init`.
+
+## Decision Drivers
+
+- **Least authority as standing capability** — the serving process must hold no schema-changing authority while it serves (`P-LeastAuthority`).
+- **Verified, never assumed** — every precondition RLS depends on is checked on every instance check, failing closed (maintainer ruling 7261 item 1; `P-SecurityLayered`).
+- **Opt-out polarity on the enumeration** — the RLS manifest is reconciled against the catalog, so a tenant-scoped table absent from the manifest fails loud (`P-TrustworthySignal`).
+- **Simplicity** — two roles, not four; the embedded design's four `NOLOGIN` roles were never connected as (MEASURED `libs/mnemra-host/schema/init.rs:589-595` at `57cfeca`).
+
+## Considered Options
+
+1. **Two roles — owner (init only) and serving (DML only, verified every check) — created by the operator from `--setup-sql` (chosen).**
+2. **One login role that owns and serves, relying on `FORCE ROW LEVEL SECURITY`.**
+3. **Four roles as R-0013-e originally wrote (host-fns, migration, backup, health-probe), created by the host.**
+4. **The operator hand-creates roles with no printed SQL.**
+
+## Decision Outcome
+
+Chosen option: **1.** The operator applies `mnemra check-db --setup-sql` once with their own privileges: it creates the owner role and the serving role (`LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION`, `PASSWORD NULL` with passwords set client-side through `\password`), `REVOKE CREATE ON SCHEMA public FROM PUBLIC`, `CREATE SCHEMA mnemra AUTHORIZATION <owner>`, `CONNECT` and schema `USAGE` to both, DML plus the owner's `ALTER DEFAULT PRIVILEGES` to the serving role, and `CREATE` to neither. `mnemra init` runs as the owner with `search_path = pg_catalog, mnemra` and schema-qualified SQL, under an advisory lock; the serving host never holds the owner credential. On every instance check the host verifies, as the serving role: the five attributes; ownership of no relation in the mnemra schema; transitive membership of no other role against an empty allowlist (predefined `pg_*` roles and the owner role included); no `CREATE` on any non-system schema or on the database; the mnemra schema owned by the owner role; and, for every table in the #3591 RLS manifest, `relrowsecurity` and `relforcerowsecurity` true with found-count equal to the manifest and every tenant-column table present in it. Any failure is a hard not-ready reason. *(Anchors: maintainer rulings 7771 and 7289 (two roles), 7261 (verified, fail closed), 7262 (RLS in V0); `P-LeastAuthority`; `P-SecurityLayered`; `P-TrustworthySignal` — reconciliation with opt-out polarity; [P-0010](P-0010-storage-substrate-engine.md) multi-tenancy preconditions 1–3.)*
+
+**Implemented by** spec R-0117-c (attributes, ownership, membership, `CREATE`, schema owner), R-0117-e (forced RLS, reconciliation), R-0013-e as amended (the two roles), R-0013-a as amended (`init` as owner, `search_path`, advisory lock), R-0118-d (`--setup-sql`), R-0119-g (owner credential held by `init` only) in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`.
+
+### Consequences
+
+**Good:** the serving process cannot alter the schema even if fully compromised at the SQL layer; RLS preconditions are facts the host observes, not assumptions; the owner's `search_path` cannot be poisoned from `public`; the first draft's "the serving role can `NO FORCE` its own tables" residual disappears.
+
+**Bad / Trade-offs:** two credentials and two passwords for the operator to set; `mnemra init` is a distinct step with its own credential; the check cannot see a copy of the owner secret stored elsewhere (named as obligation R-0117-j item 5 in [P-0030](P-0030-delegated-policy-inventory-supply-chain.md)); a compromised host **process** (not just its SQL) that can read the owner's file is out of this ADR's reach — [P-0029](P-0029-db-credential-files.md) requires the owner credential to be absent at serve time.
+
+## Pros and Cons of the Options
+
+### Option 1 — two roles, operator-created, host-verified (chosen)
+
+- Pro: closes owner-bypass of RLS structurally (the serving role owns nothing) and closes the `CREATE` escalation.
+- Pro: every precondition has a seeded failing test.
+- Con: one more credential; `init` cannot share the serving connection.
+
+### Option 2 — one role that owns and serves
+
+- Pro: one credential, one setup step.
+- Con: the serving process holds schema authority as standing capability; RLS bypass rests on `FORCE` alone; rejected by the maintainer at 7771.
+
+### Option 3 — four host-created roles
+
+- Pro: finest-grained split.
+- Con: needs `CREATEROLE` or a bootstrap superuser the host no longer has; the four roles were `NOLOGIN` and never connected as; three of the four have no object under the operator model (backup is the operator's; probes run as the serving role).
+
+### Option 4 — operator hand-creates every role
+
+- Pro: no printed SQL to maintain.
+- Con: the same result as option 1 with more error surface and nothing CI exercises (the fresh-machine job runs the printed SQL verbatim).
+
+## More Information
+
+- [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE2, AE7 ruled); [P-0006](P-0006-v0-tenant-enforcement.md) and [P-0009](P-0009-rls-admin-token.md) own the host-side `WorkspaceCtx` enforcement this sits beneath; [P-0020](P-0020-report-execution-context.md)'s report role is included in the setup SQL when the reporting engine is enabled.
+- The #3591 batch defines the RLS manifest, the policy template and the tenant key; R-0117-e reports `not_applicable` while the manifest is empty.
+- Threat rows: overview retype subsection — the serving role (E), `DF-setup-sql` (T).
+
+<!-- ===== docs/src/adrs/P-0028-requirements-check-integrity.md ===== -->
+
+---
+title: "P-0028: Requirements-check integrity"
+summary: "The instance check is itself a control, so it fails closed: one implementation over injected facts, a fresh dedicated connection per run, a per-check deadline, a supervised task, unverifiable treated as unmet, not_applicable permitted on two named clauses only, readiness withdrawn when the last completed check is stale under a schedule-derived bound, SIGHUP coalesced, the MCP surface given only a coarse code while unauthenticated, and a seeded failing case per clause. Control-class ADR 3 of the operator-Postgres amendment."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-10-19"
+decision-makers: ["the maintainer"]
+consulted: ["Warden (security review)", "Bolt (operations review)", "Charon (canon review)"]
+informed: []
+supersedes: null
+superseded_by: null
+---
+
+# P-0028: Requirements-check integrity
+
+## Status
+
+`accepted` — authored `proposed` 2026-10-19 at the #4018 gate (ruling 7793, ADR 3). Accepted 2026-10-19 by the maintainer (#4018 activity 7800) with the operator-run Postgres amendment at commit `08f4b8e`.
+
+## Context and Problem Statement
+
+The operator-Postgres amendment makes every delegated policy a requirement the host verifies before serving (maintainer ruling 7261). That check is therefore the control that stands between a misconfigured instance and a served request, and a control is software: it can be wedged, stale, over-trusting of a value it could not read, or leak what it learned to a caller who has not authenticated. The reviews found each of these in the first draft: a persistent check session would miss a role-level `ALTER ROLE … SET`; a 70-second staleness bound masked the 300-second `auth_failed` backoff; `not_applicable` passed for any clause; an unauthenticated stdio caller received the full reasons list; a dead checker left a stale `met` in place.
+
+## Decision Drivers
+
+- **A control fails closed** — on error, on timeout, on a dead task, on a value it could not read (`P-SecurityLayered`).
+- **The signal means what it reports** — a stale `met` is withdrawn; inconclusive is never pass (V-Observability, `P-TrustworthySignal`).
+- **The check is keyed on what the claim is about** — durability on a session shaped like a writer's; readiness from the consumer's side (`P-CheckCoversTheClaim`, `P-ReliabilityTarget`).
+- **Testable by design** — a pure decision over injected facts, so every clause has one passing and one failing unit case (`P-TestableByDesign`).
+- **No configuration detail to an unauthenticated caller** (V-Security).
+
+## Considered Options
+
+1. **One bounded, supervised check over injected facts, fresh connection per run, schedule-derived staleness, coarse MCP error (chosen).**
+2. **A persistent check session reused across runs, fixed staleness bound, full reasons on every surface.**
+3. **No scheduled re-check — verify at boot only, rely on per-call errors to surface drift.**
+
+## Decision Outcome
+
+Chosen option: **1.** The R-0117 clauses are one decision over an `InstanceFacts` record a probe fills on a dedicated connection opened for that run and closed at its end, with the serving pool's exact options. Results are `met` / `unmet` / `unverifiable` / `not_applicable`; `unverifiable` on a hard clause is `unmet`; `not_applicable` is permitted only on R-0117-e (empty RLS manifest) and the report-role presence check, and is `unmet` anywhere else. A 10-second deadline over a 5-second connect timeout bounds every run; the task is supervised and a restart records a synthetic `unverifiable` for every clause. Readiness requires the most recent completed check to be fresh under 2 × the current scheduled interval + 10 s, so the bound tracks the backoff and never masks `auth_failed`. `SIGHUP` during a run coalesces into one re-run. The RLS manifest check requires found-count = manifest length and reconciles the catalog with opt-out polarity. While not ready, the MCP surface answers with `host_not_ready { kind, next_retry_s }` only; the reasons live on `GET /ready` and `mnemra check-db`. Every clause ships one seeded failing case, and the `/ready` status code is a property test over all clause statuses seeded with the embedded-era 200-on-down defect. *(Anchors: maintainer rulings 7261 (verify, fail closed) and 7749/7761 (stay up, refuse to serve); `P-SecurityLayered`; V-Observability — inconclusive reported as such, a silent stop detected; `P-TrustworthySignal`; `P-CheckCoversTheClaim`; `P-ReliabilityTarget`; `P-TestableByDesign`.)*
+
+**Implemented by** spec R-0118-a (one check, deadline, supervision, fresh connection, coalescing), R-0118-f (staleness bound, `not_applicable` enumeration, property test, `known_gaps`), R-0118-h (coarse MCP error; reconciliation with R-0010-c), R-0117-d (writer-shaped session), R-0117-e (reconciliation), R-0117-i (hysteresis), R-0118-c (backoff), R-0118-m (out-of-cycle check on error) in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`.
+
+### Consequences
+
+**Good:** the check cannot pass by absence, by staleness, by a value it could not read, or by a session that predates a drift; an operator reads one endpoint for the why; an unauthenticated caller learns nothing.
+
+**Bad / Trade-offs:** one short-lived connection per run (a connect every 30 s while serving) — counted in the connection budget; two consecutive successes before ready adds one interval at first start; the two implementation-time transport mechanisms appear as `known_gaps` on an otherwise `met` clause until they land.
+
+## Pros and Cons of the Options
+
+### Option 1 (chosen)
+
+- Pro: every failure class the reviews found has a seeded test and a fail-closed path.
+- Con: more moving parts than a boot-only check (a scheduler, a supervisor, a staleness clock).
+
+### Option 2 — persistent session, fixed bound, full reasons everywhere
+
+- Pro: fewer connects; simpler bound.
+- Con: a reused session keeps the defaults it was opened with and misses `ALTER ROLE … SET` (Bolt's round-1 H1, writer-session drift, moved onto the check); a fixed bound masks longer backoffs; full reasons on stdio disclose configuration to a caller the host cannot authenticate while the database is down.
+
+### Option 3 — boot-only verification
+
+- Pro: simplest.
+- Con: drift after boot is served until a call happens to fail; the stay-up ruling needs a scheduled retry anyway, so the schedule exists and the re-check costs nothing extra.
+
+## More Information
+
+- [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE3, DE4; AE1 and AE4 ruled 2026-10-19, activities 7787); the probe surface itself (`/health`, `/ready`, exec probes, listener) is ADR 7, P-0032, written with #4127.
+- Threat rows: overview retype subsection — `P-instance-check` (D, I), `P-readiness-handler` (I).
+
+<!-- ===== docs/src/adrs/P-0029-db-credential-files.md ===== -->
+
+---
+title: "P-0029: Secrets management for the DB credential files"
+summary: "The two database credentials live only in files: the serving password file read safely on every use (O_NOFOLLOW, fstat on the descriptor, no world read, owner = host uid, with an opt-in evidence-gated container shape), stay-up-and-report on a bad file with the old secret dropped, reloaded on SIGHUP; the owner password file read by `mnemra init` only and absent at serve time; passwords set client-side through `\\password` so no secret lands in SQL history; rotation is the operator's with SIGHUP as the reload path. Control-class ADR 4 of the operator-Postgres amendment."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-10-19"
+decision-makers: ["the maintainer"]
+consulted: ["Warden (security review, rounds 1–4)", "Bolt (operations review)"]
+informed: []
+supersedes: null
+superseded_by: null
+---
+
+# P-0029: Secrets management for the DB credential files
+
+## Status
+
+`accepted` — authored `proposed` 2026-10-19 at the #4018 gate (ruling 7793, ADR 4). Accepted 2026-10-19 by the maintainer (#4018 activity 7800) with the operator-run Postgres amendment at commit `08f4b8e`.
+
+## Context and Problem Statement
+
+R-0116-e (superseded) held no database secret at all. Under the operator-run instance a password can exist for each of the two roles ([P-0027](P-0027-db-authorization-role-separation.md)), and the questions the embedded design dissolved return: where the secret lives, how it is read without a check-then-open window, what happens when it is wrong, how it rotates, and how the serving process is kept from the owner's secret. Warden measured that the existing startup file-mode check wires only the admin token, checks no ownership and is path-based (`libs/mnemra-host/mnemra_host.rs:521`, `startup/file_mode_check.rs:67,:106` at `57cfeca`); Bolt measured that Kubernetes mounts Secrets root-owned at `0644` by default, so an exit on a bad mode crash-loops the default setup — the failure the restart-loop ruling forbids; the maintainer ruled the database password file stay-up-and-report (activity 7762).
+
+## Decision Drivers
+
+- **No secret in the environment, argv, SQL history or logs** (V-Security, V-DataMinimization).
+- **The check is on the descriptor the read uses** — no path-based TOCTOU (`P-CheckCoversTheClaim`).
+- **Stay up and report** on a misconfigured file (maintainer ruling 7762; V-Reliability).
+- **Least authority at serve time** — the owner secret is not reachable from the serving process (`P-LeastAuthority`).
+- **Consistency** with the existing file-shaped secrets (R-0008-e, R-0014-d) in shape, not in mechanism.
+
+## Considered Options
+
+1. **Files only, descriptor-checked on every read, stay-up on failure, container shape opt-in and evidence-gated, owner secret absent at serve time, `\password` for setting (chosen).**
+2. **Password in the URL or an environment variable.**
+3. **Reuse the existing 5-pre file-mode check and exit on failure, as R-0008-e / R-0014-d do.**
+4. **One credential file shared by `init` and the serving host.**
+
+## Decision Outcome
+
+Chosen option: **1.** The serving password lives only in `MNEMRA_DATABASE_PASSWORD_FILE` (default beside the admin token file), opened `O_NOFOLLOW` and `fstat`-checked on the open descriptor at boot, on every `SIGHUP` and by `mnemra check-db`: a regular file, no group or world write bit, no world read bit, owner = host uid at `0600`; the root-owned group-readable Secret-mount shape is accepted only with `MNEMRA_CREDENTIAL_MOUNT=1` **and** container evidence (marker files, cgroup runtime line, or an orchestrator variable — markers labelled INFERRED; residual named). A failed check is the hard not-ready reason `credential_file_rejected` with a remedy, never an exit, and it drops any previously loaded secret so a stale one cannot shadow a later good read. Rotation is the operator's: set the password on the instance through `\password`, write the file, `SIGHUP`; the pool is rebuilt. The owner credential (`MNEMRA_DATABASE_OWNER_URL` / `_PASSWORD_FILE`) is read by `mnemra init` only, and its presence at serve time — either variable set, or the default owner file readable by the host uid — is the hard not-ready reason `owner_credential_present`; the limit of that check (it sees the two variables and the default path only) is named, and "unreachable from the serving uid at all" stays an operator obligation. `--setup-sql` prints no password literal. *(Anchors: maintainer ruling 7762; V-Security; V-DataMinimization; `P-CheckCoversTheClaim`; `P-LeastAuthority`; V-Consistency — the R-0008-e / R-0014-d file shape; `P-GuaranteeByMechanism` — refusals are mechanisms.)*
+
+**Implemented by** spec R-0119-b (serving file), R-0119-g (owner credential), R-0119-a (no password in URL or environment; `PG*` scrub), R-0118-d (`\password` in the setup SQL), R-0118-b (stay-up), R-0117-j item 5 (the obligation) in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`.
+
+### Consequences
+
+**Good:** a mis-mounted Secret is a visible not-ready state with a remedy, not a crash loop; the serving process cannot be handed the owner secret by configuration; no secret transits SQL history or logs; rotation has one documented path.
+
+**Bad / Trade-offs:** the container relaxation is a new variable with an evidence gate whose markers are plantable by a root-level writer (residual named); a bare host that wants a root-owned Secret-style file is refused unless it says so; the two pre-existing own-file checks (admin token, signing material, LLM key) still exit — moving them is #4125.
+
+## Pros and Cons of the Options
+
+### Option 1 (chosen)
+
+- Pro: closes the measured TOCTOU and ownership gaps; honours the stay-up ruling; keeps the owner secret off the serving process.
+- Con: a second credential-file code path beside the existing 5-pre check until #4125 unifies them.
+
+### Option 2 — password in URL or environment
+
+- Pro: zero file handling.
+- Con: readable by every same-uid process, present in crash dumps and diagnostics; refused by mechanism, not convention.
+
+### Option 3 — reuse the 5-pre check, exit on failure
+
+- Pro: one mechanism.
+- Con: the mechanism is path-based and ownership-blind (measured), and an exit crash-loops the default Kubernetes Secret mount — rejected by ruling 7762.
+
+### Option 4 — one credential file for `init` and serving
+
+- Pro: one file to manage.
+- Con: the serving process would hold the schema-changing credential as standing capability — the first draft's single-role defect in file form.
+
+## More Information
+
+- [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE5); [P-0026](P-0026-db-connection-authentication-transport.md) decides where a password may travel; [P-0027](P-0027-db-authorization-role-separation.md) decides what each role may do; [P-0008](P-0008-admin-token-shape.md) is the file-shaped precedent.
+- Threat rows: overview retype subsection — `DS-db-password-serving`, `DS-db-password-owner` (I).
+- Follow-up: #4125 (own-file refusals to the stay-up posture).
+
+<!-- ===== docs/src/adrs/P-0030-delegated-policy-inventory-supply-chain.md ===== -->
+
+---
+title: "P-0030: Delegated-policy inventory and supply chain"
+summary: "Every policy the host delegates to the operator's PostgreSQL instance is either a hard clause the host verifies on every check (server major and minor floor, pgvector floor from security history, durability settings on a writer-shaped session, UTF8, schema version, password_encryption = scram-sha-256, parameter logging off) or a named operator obligation the host emits and the deployment document carries verbatim (twelve items, NOT VERIFIED BY MNEMRA, including the lost host-side supply-chain verification). Control-class ADR 5 of the operator-Postgres amendment."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-10-19"
+decision-makers: ["the maintainer"]
+consulted: ["Warden (security review)", "Bolt (operations review)", "Charon (canon review)", "Sage (the version floors, in progress)"]
+informed: []
+supersedes: null
+superseded_by: null
+---
+
+# P-0030: Delegated-policy inventory and supply chain
+
+## Status
+
+`accepted` — authored `proposed` 2026-10-19 at the #4018 gate (ruling 7793, ADR 5). Accepted 2026-10-19 by the maintainer (#4018 activity 7800) with the operator-run Postgres amendment at commit `08f4b8e`. The two version floors were filled the same day from Sage's measurement (ruling 7793, AE6): **PostgreSQL 16.15** and **pgvector 0.8.7**; the evidence is cited on spec R-0117-a/-b and summarised below.
+
+## Context and Problem Statement
+
+The embedded engine wrote its own configuration and hash-pinned the binaries it ran (`KNOWN_GOOD_HASHES`, `libs/mnemra-host/storage/postgres/engine.rs:306` at `57cfeca`). Under the operator-run instance every one of those policies is the operator's, and the maintainer ruled (#4018 activity 7261 item 1; verbatim at 7260: "when we defer required policy to an external entity we need to do due diligence") that each is a requirement verified at startup and failing closed, with anything uncheckable named explicitly as the operator's. No canon principle reaches runtime verification of a policy a product delegates to an external party (`P-VerifyInheritedState` covers agent handoffs); the canon question is filed as #4050 and not invented here. Warden's review widened the inventory (password hashing, server-side parameter logging, `pg_hba`, exposure, certificate rotation) and asked that the lost supply-chain verification be labelled a loss, not a transfer.
+
+## Decision Drivers
+
+- **A delegated policy is verified or named, never assumed** (ruling 7261; `P-SecurityLayered` — a control that errors denies).
+- **Honesty about what the host cannot see** — the obligations list is emitted by the binary and asserted equal to the document (V-Honesty; `P-GuaranteeByMechanism`).
+- **Floors from security history, not feature history** — a version floor is a security requirement, so it is set from the advisories it closes (ruling 7793; V-Security).
+- **Every clause hard at V0** (ruling 7761) — no capability-scoped degradation machinery until a clause needs it.
+
+## Considered Options
+
+1. **An explicit inventory: hard checked clauses plus an emitted, document-mirrored obligations list; floors from security history (chosen).**
+2. **Check what is convenient; document the rest in prose.**
+3. **Keep a host-side pin table for the operator's binaries.**
+4. **Floors from feature history (the HNSW-introducing pgvector release; the pinned PG minor).**
+
+## Decision Outcome
+
+Chosen option: **1.** The host verifies, as the serving role on every check: the PostgreSQL major (`16`) and a minor floor; the pgvector extension present at or above a floor; `fsync`, `full_page_writes`, `synchronous_commit` ≠ `off`, `data_sync_retry = off` on a session shaped like a writer's; `server_encoding = UTF8`; the schema at the binary's version with no auto-migration at start; `password_encryption = scram-sha-256`; `log_parameter_max_length` and `_on_error` = `0`. Both floors are the latest release that closes the published advisories, labelled with what each closes, MEASURED by Sage 2026-10-19: **PostgreSQL 16.15** (`server_version_num ≥ 160015`; 55 CVEs affect 16.x, all fixed by 16.15 and 25 only there — representative CVSS 8.8 items CVE-2026-16239, CVE-2026-14669, CVE-2026-14664, CVE-2026-15741, CVE-2026-14670, and the RLS-relevant CVE-2026-14666; source `postgresql.org/support/security/`) and **pgvector 0.8.7** (set by CVE-2026-103484 / GHSA-pw7q-9788-x566, CNA CVSS 8.8, IVFFlat out-of-bounds write → arbitrary code execution, every earlier release affected; also closes CVE-2026-18022 and CVE-2026-3172; sources NVD, OSV, the GitHub global advisory database). The floors have a **re-check mechanism**, not a cadence: the weekly R-0120-c workflow fails when a newer 16.x minor (next scheduled 2026-11-12) or pgvector release exists above the recorded floor, or when the CI image falls below either floor. Measured for the record: the embedded design's pins (16.4.0; portalcorp 0.16.105 bundling pgvector 0.8.0) were below both floors, and its pgvector channel could not reach 0.8.7 at all. Twelve obligations the host cannot verify are held as one code constant, printed by `mnemra check-db --obligations` under "Not verified by mnemra", and asserted equal to the deployment document by a docs test: persistent storage for the data directory; backups and point-in-time recovery; the Postgres and pgvector install's supply chain — **a loss relative to the embedded pins, labelled as such** (accepted risk `AR-0011`); `max_connections` arithmetic including the pool-rebuild transient; the owner credential unreachable from the serving uid and the ident map; `pg_hba` never `trust`/`password`/`md5`; existing passwords SCRAM; `listen_addresses` and firewall exposure; TLS certificate expiry and CA rotation; minor-version patching; disk-full and WAL archiving; the server log treated as content-bearing unless `log_error_verbosity = terse` (constraint-violation `DETAIL` lines; INFERRED). *(Anchors: maintainer rulings 7261, 7761, 7771 (`AR-0011`–`AR-0013` signed off), 7793 (floors from security history); `P-SecurityLayered`; `P-GuaranteeByMechanism`; V-Honesty; V-Security; `P-Defer` — the unverifiable half is named, not dropped; canon gap #4050.)*
+
+**Implemented by** spec R-0117-a/-b (floors with their advisory citations), R-0117-d, R-0117-g, R-0117-h, R-0117-k, R-0117-l (checked clauses), R-0117-j (the twelve obligations), R-0118-d (`--obligations`), R-0120-c (the CI image digest pin and its scheduled bump trigger — the test substrate's own supply chain) in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`; register entries `AR-0011`–`AR-0013` in `docs/src/architecture/overview.md`.
+
+### Consequences
+
+**Good:** the operator knows exactly what the host checks and exactly what it does not; a drifted setting is a visible not-ready reason within one interval; floors move with advisories rather than with features.
+
+**Bad / Trade-offs:** the host verifies nothing about the binaries it talks to — named as a loss and an accepted risk; twelve obligations are a real operator burden; a minor floor turns an unpatched instance into a not-ready host, which is the intended pressure but is operationally loud; `log_error_verbosity` is left to the operator because forcing `terse` would take away every operator's diagnostics.
+
+## Pros and Cons of the Options
+
+### Option 1 (chosen)
+
+- Pro: complete and honest; every item is either checked with a seeded failing case or printed and mirrored.
+- Con: a long list to maintain; the docs test is what keeps it from drifting.
+
+### Option 2 — check the convenient, prose for the rest
+
+- Pro: less to build.
+- Con: the prose half is a convention a future reader must recall; the omission that matters is the one nobody wrote down.
+
+### Option 3 — a host-side pin table for the operator's binaries
+
+- Pro: looks like the embedded posture.
+- Con: the host does not install or run the binaries, so a pin would check a path it never executes — a false instrument (V-Observability).
+
+### Option 4 — floors from feature history
+
+- Pro: easy to state (`0.5.0` for HNSW; the embedded pin for PG).
+- Con: a floor set by what happened to be installed or needed is a measurement, not a target (`P-ReliabilityTarget`); rejected by ruling 7793.
+
+## More Information
+
+- [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE2, DE9 "what exits", AE6 floors); [P-0027](P-0027-db-authorization-role-separation.md) owns the role-model clauses (R-0117-c/-e), which are delegated policies too but decided there.
+- Accepted risks `AR-0011` (supply chain and storage), `AR-0012` (durability window), `AR-0013` (hostile operator / other principals), overview register.
+- Packaging — who supplies Postgres, pgvector and the host binary — is #4019's, not this ADR's.
+
+<!-- ===== docs/src/adrs/P-0031-test-substrate-isolation.md ===== -->
+
+---
+title: "P-0031: Test-substrate isolation"
+summary: "Tests get their Postgres from an operator- or CI-provided server through the existing fixture entry point and never start one: two required URLs (fail, never skip), three roles per run (harness, run-scoped owner, run-scoped serving), per-test databases from a template under a gate-level run id that fits the 63-byte identifier limit, the superuser URL confined to one gated binary, a fail-closed refusal of any server holding a production store, an orphan sweep keyed on dead pids and a 24-hour age bound, a digest-pinned CI service with a scheduled bump trigger, a fail-not-skip proof step, and a fresh-machine job inside the required check. Control-class ADR 6 of the operator-Postgres amendment."
+primary-audience: agent
+---
+
+---
+status: "accepted"
+date: "2026-10-19"
+decision-makers: ["the maintainer"]
+consulted: ["Warden (security review)", "Bolt (operations review, rounds 1–4)", "Charon (canon review)"]
+informed: ["the CI tier-2 spec amendment, #4119"]
+supersedes: null
+superseded_by: null
+---
+
+# P-0031: Test-substrate isolation
+
+## Status
+
+`accepted` — authored `proposed` 2026-10-19 at the #4018 gate (ruling 7793, ADR 6). Accepted 2026-10-19 by the maintainer (#4018 activity 7800) with the operator-run Postgres amendment at commit `08f4b8e`. The CI tier-2 spec (`docs/specs/2026-07-02-ci-flake-tier2-shared-engine.md`) still names the embedded engine; its amendment is #4119 and this ADR states what transfers.
+
+## Context and Problem Statement
+
+With no embedded engine, every Postgres-backed test needs a server it did not start. The repository has already been burned by a skip-with-no-assertion trap and by a cross-lane reap of another session's postmaster (`CLAUDE.md`), so the substrate must fail loudly when absent and must never touch another run's objects. Two lanes share one machine and may share one server; CI runs a service container; the host-under-test must satisfy R-0117-c, which the harness role (which needs `CREATEDB` and `CREATEROLE`) cannot; a superuser connection is needed for a handful of negative tests and nowhere else; PostgreSQL truncates identifiers at 63 bytes silently; and the production-store guard must not fail open on a database the harness cannot connect to.
+
+## Decision Drivers
+
+- **No skip, no environment-dependent red** (`P-TrustworthySignal`; R-0018-b — a real Postgres, never a mock).
+- **The server is an injected input** (`P-TestableByDesign`).
+- **Least authority** — superuser confined to one binary; the host-under-test never runs as the harness role (`P-LeastAuthority`).
+- **Fail closed on the production-store guard** (`P-SecurityLayered`).
+- **One mechanism for local, CI and smoke** (V-Consistency); the supply chain of the CI image pinned by digest with a firing bump (`P-SecurityLayered`; Dependabot is disabled here).
+
+## Considered Options
+
+1. **Operator/CI-provided server, two required URLs, three roles per run, template databases, gate-level run id, dead-pid and age sweeps, confined superuser, fail-closed guard, digest-pinned service with a bump trigger (chosen).**
+2. **A fixture-started disposable cluster from the operator's `initdb`/`pg_ctl`.**
+3. **Skip Postgres tests when no server is configured.**
+4. **One role for harness and host-under-test.**
+
+## Decision Outcome
+
+Chosen option: **1.** The fixture reads `MNEMRA_TEST_DATABASE_URL` (harness role: `LOGIN CREATEDB CREATEROLE`, not superuser) and `MNEMRA_TEST_SUPERUSER_URL` (read by one gated binary only, enforced by a source check); either absent or unreachable fails the first acquiring test by name. Per run it creates a run-scoped owner and serving role so the smoke host satisfies R-0117-c, and per test a database cloned from `mnemra_test_template` (pgvector pre-installed by the setup). `<run>` is the gate invocation — `MNEMRA_TEST_RUN_ID` exported once by `just ci`, generated by a standalone binary otherwise — as `<hosthash>_<pid>_<epoch>`, the hash over hostname, boot id and container id, every name built to fit 63 bytes and parsed from the right. Before provisioning, the fixture refuses a server holding any non-test database that carries the migrations table or that it cannot connect to, caching the scan per run. The sweep removes the run's own objects, same-hash objects whose pid is dead or whose epoch mismatches, and any `mnemra_test_*` object older than 24 h; it never touches another hash's live run (pid-namespace limit stated). CI provides a digest-pinned pgvector/PostgreSQL 16 service with a `pg_isready` wait, a scheduled workflow that fails when the tag's digest moves, an env-unset step proving fail-not-skip, a `just ci` preflight naming the variables, and a fresh-machine job inside the required "CI gates" check that runs the documented operator path end to end. Expected failures for the two implementation-time transport mechanisms are named entries with a signature, a count pin, an admission rule and an sqlx-version exit detector. *(Anchors: R-0018-b; `P-TrustworthySignal`; `P-TestableByDesign`; `P-LeastAuthority`; `P-SecurityLayered`; `P-CheckCoversTheClaim` — "a fresh machine reaches serving" is claimed only by a job that does it; V-Consistency; maintainer ruling 7091 — no host-driven lifecycle.)*
+
+**Implemented by** spec R-0120-a through R-0120-h and R-0121-c in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`; the tier-2 spec's own amendment (#4119) restates its R-0026/R-0027/R-0032 words against this.
+
+### Consequences
+
+**Good:** no test can run against a production store, start a server, skip silently, or sweep another lane's live run; the operator's documented setup path is the tested path; the host-under-test is exercised as exactly the role it will run as.
+
+**Bad / Trade-offs:** a local developer must provide a server (two documented paths); three roles and a run id are more fixture than before; the 24-hour age sweep assumes no run lives that long (stated); the orchestrator-marker and container-id reads are INFERRED until measured in the CI container.
+
+## Pros and Cons of the Options
+
+### Option 1 (chosen)
+
+- Pro: every trap the repository has recorded has a mechanism and a seeded case.
+- Con: the most fixture code of the options.
+
+### Option 2 — fixture-started disposable cluster
+
+- Pro: zero operator setup for tests.
+- Con: re-creates the host-driven lifecycle the engine decision rejected (ruling 7091, option 2), and packaging the binaries it would need is #4019's open question.
+
+### Option 3 — skip when unconfigured
+
+- Pro: convenient locally.
+- Con: the skip-with-no-assertion class this repository was burned by; coverage narrows while the gate stays green.
+
+### Option 4 — one role for harness and host
+
+- Pro: simpler.
+- Con: cannot satisfy R-0117-c (the harness needs `CREATEDB`); the smoke host could never serve.
+
+## More Information
+
+- [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE6, DE9 — what exits in CI and tests); [P-0026](P-0026-db-connection-authentication-transport.md) for the expected-failure entries' subject; the tier-2 spec amendment #4119; the ingestion re-read #4121 is unrelated to this ADR.
+- Packaging and local install experience: #4019.
+
 <!-- ===== docs/src/adrs/placeholder-resolution.md ===== -->
 
 ---
@@ -7475,3 +8283,13 @@ Numbers are reserved in Frame Tier-A order for paused slots; authored slots fill
 | P-0014 | `{{P-0014}}` (retrieval-cluster Frame §8) | authored |
 | P-0015 | `{{P-0015}}` (retrieval-cluster Frame §8) | authored |
 | P-0016 | `{{P-0016}}` (retrieval-cluster Frame §8) | authored |
+| P-0017 – P-0025 | *(storage-cluster model, core-entity manifest, plugin contract, report execution context, report definition type, coordination cluster, plugin distribution, ingest pipeline shape, job queue)* | authored — files present; entered in this ledger 2026-10-19 when the next reservation was made, since the ledger had stopped at P-0016 |
+| P-0026 | *(no placeholder — control-class ADR 1, DB connection authentication and transport; #4018 gate ruling 7793)* | authored `proposed` and accepted 2026-10-19 — [P-0026-db-connection-authentication-transport.md](P-0026-db-connection-authentication-transport.md) |
+| P-0027 | *(control-class ADR 2, DB authorization and role separation)* | authored `proposed` and accepted 2026-10-19 — [P-0027-db-authorization-role-separation.md](P-0027-db-authorization-role-separation.md) |
+| P-0028 | *(control-class ADR 3, requirements-check integrity)* | authored `proposed` and accepted 2026-10-19 — [P-0028-requirements-check-integrity.md](P-0028-requirements-check-integrity.md) |
+| P-0029 | *(control-class ADR 4, secrets management for the DB credential files)* | authored `proposed` and accepted 2026-10-19 — [P-0029-db-credential-files.md](P-0029-db-credential-files.md) |
+| P-0030 | *(control-class ADR 5, delegated-policy inventory and supply chain)* | authored `proposed` and accepted 2026-10-19 — [P-0030-delegated-policy-inventory-supply-chain.md](P-0030-delegated-policy-inventory-supply-chain.md) |
+| P-0031 | *(control-class ADR 6, test-substrate isolation)* | authored `proposed` and accepted 2026-10-19 — [P-0031-test-substrate-isolation.md](P-0031-test-substrate-isolation.md) |
+| P-0032 | *(control-class ADR 7, probe and readiness surface)* | **reserved** 2026-10-19 — written with the HTTPS shared-service transport amendment, tracker #4127 (ruling 7793: "Probe surface (with transport)") |
+
+Collision check before the 2026-10-19 reservations: `ls docs/src/adrs/ | grep -oE 'P-00[0-9]{2}'` returned P-0001 – P-0025 and `grep -rnoE 'P-00(2[6-9]|3[0-9])' docs/` returned no live reference (one draft note in P-0010 naming a hypothetical `P-0026` for the supersession alternative was removed in the same change).
