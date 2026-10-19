@@ -1,0 +1,305 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>ADR Overview - mnemra-core</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-02503b1b.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-5d081ac2.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">mnemra-core</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/mnemra/mnemra-core" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="architecture-decision-records"><a class="header" href="#architecture-decision-records">Architecture Decision Records</a></h1>
+<p>This section tracks the architectural decisions made in mnemra-core using the <a href="https://adr.github.io/madr/">MADR</a> (Markdown Architectural Decision Records) format.</p>
+<h2 id="what-is-an-adr"><a class="header" href="#what-is-an-adr">What is an ADR?</a></h2>
+<p>An Architecture Decision Record (ADR) captures a single architectural decision along with its context and rationale. ADRs are immutable once accepted — they are not edited to reflect changing opinions, but superseded by newer ADRs when decisions evolve.</p>
+<h2 id="adr-lifecycle"><a class="header" href="#adr-lifecycle">ADR Lifecycle</a></h2>
+<p>Each ADR moves through the following statuses:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Status</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>proposed</code></td><td>Under discussion; not yet accepted</td></tr>
+<tr><td><code>rejected</code></td><td>Discussed and explicitly declined</td></tr>
+<tr><td><code>accepted</code></td><td>The current decision in effect</td></tr>
+<tr><td><code>deprecated</code></td><td>Was accepted; no longer applies (context changed)</td></tr>
+<tr><td><code>superseded</code></td><td>Replaced by a newer ADR; see <code>superseded_by</code> field</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="gp-prefix-projection-pattern"><a class="header" href="#gp-prefix-projection-pattern">G/P Prefix Projection Pattern</a></h2>
+<p>ADRs in this project use a two-tier identifier convention that reflects where a decision originates and how it propagates.</p>
+<ul>
+<li><strong>G-NNNN (general)</strong> — workspace-wide architecture decisions. These do not live as individual files in this directory. Instead, they are projected once into <a href="DEFAULTS.html"><code>DEFAULTS.md</code></a> — a one-time snapshot recording each general standard as a concise entry, without the full rationale chain. DEFAULTS.md is frozen at projection time; upstream changes to a G-* decision do not auto-sync into this file.</li>
+<li><strong>P-NNNN (project)</strong> — project-specific architecture decisions, stored as individual <code>P-NNNN-*.md</code> files in this directory. Two sub-categories:
+<ul>
+<li><em>Project-specific:</em> a decision with no workspace-wide analog — a constraint or tradeoff unique to mnemra-core.</li>
+<li><em>Override:</em> a deviation from a <code>DEFAULTS.md</code> baseline entry. An override P-ADR names the default it overrides explicitly in its Status field (e.g., <code>Status: accepted, Overrides G-0017</code>).</li>
+</ul>
+</li>
+</ul>
+<p><em>The default is the starting point; any deviation is a new P-ADR.</em></p>
+<h2 id="using-the-template"><a class="header" href="#using-the-template">Using the Template</a></h2>
+<p>To record a new project ADR, copy <a href="template.html"><code>template.md</code></a> to a numbered file (e.g., <code>adrs/P-0001-topic.md</code>), fill in all frontmatter fields, and write the body sections. If the decision overrides a <code>DEFAULTS.md</code> entry, state that explicitly in the Status section.</p>
+<h2 id="current-adrs"><a class="header" href="#current-adrs">Current ADRs</a></h2>
+<p>Nine Tier-A ADRs authored in WS-E-2 Stage 3, plus the storage substrate/engine ADR (P-0010) folded in 2026-06-08 from a post-spec-lock storage-engine evaluation, plus the logging-facade ADR (P-0011) recording the <code>tracing</code> facade-from-binary choice merged 2026-06-17, plus the plugin-runtime + MCP-SDK ADR (P-0012) recording the raw-Wasmtime-over-Extism runtime choice (retroactive; shipped Tasks 20–22) and the official-<code>rmcp</code>-SDK-over-hand-rolled-MCP protocol choice (forward; implemented by Task 23) — correcting the two halves of the never-ratified <code>adr-001-plugin-runtime</code> research proposal, which the build reversed on both halves without an ADR. The 2026-06-09 observability re-derivation (P-0010 D8’s E1 disposition — generation⊥storage separation) was <strong>re-altituded out of the project-ADR layer</strong>: observability <em>shape</em> is a theory trait + chassis mechanism, not a per-project ADR, so its decisions live in the <a href="../architecture/overview.html#observability">observability baseline</a> and the original observability ADR P-0004 is <code>deprecated</code> (no successor ADR). P-0011 is <em>not</em> an observability-shape ADR — it is a dependency-selection + crate-topology decision (P-0010-shaped: a concrete library choice behind a locked contract), and is the plumbing foundation under that baseline. All Tier-A placeholder slots resolved (see <a href="placeholder-resolution.html"><code>placeholder-resolution.md</code></a> for full status). The three retrieval-cluster ADRs (P-0014/P-0015/P-0016, authored 2026-07-02 at the retrieval-cluster Stage 3) resolve that cluster’s Frame slots; they are <code>accepted</code> (2026-07-02, at the retrieval-cluster spec-exit gate). The two reporting-engine ADRs (P-0020/P-0021, authored 2026-07-04 at the reporting-engine Stage 3) resolve that cluster’s Frame slots; they are <code>accepted</code> (2026-07-04, at the reporting-engine spec-exit gate). The single coordination-cluster ADR (P-0022, authored 2026-07-07 at the coordination-wedge Stage 3) resolves that cluster’s one Frame slot (<code>{{P-CoordinationCluster}}</code> — a single slot, not a split); it is <code>accepted</code> (2026-07-07, at the coordination-wedge spec-exit gate, as part of the Stage-3 package the gate reviewed alongside <a href="../../specs/2026-07-06-coordination-wedge.html">the cluster spec</a>). The distribution ADR (P-0023, authored 2026-07-07 at the plugin-distribution Stage 3) resolves that Frame’s <code>{{P-PluginDistribution}}</code> slot; it is <code>accepted</code> (2026-07-11, at the plugin-distribution spec-exit gate, as part of the Stage-3 package the gate reviewed alongside <a href="../../specs/2026-07-07-plugin-distribution.html">the cluster spec</a>).</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>ADR</th><th>Summary</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="P-0001-storage-layout.html">P-0001-storage-layout</a></td><td>C1 single-document layout: whole artifact in one row, JSONB frontmatter + body + system fields, per-artifact-type tables; non-breaking C2 evolution path via the projection layer. Sits under P-0010 (the Postgres implementation under the swap trait).</td></tr>
+<tr><td><a href="P-0002-core-plugin-partition.html">P-0002-core-plugin-partition</a></td><td>Verb-on-content cohesion criterion: 4 <code>core: true</code> plugins (tasks / repos / two further artifact-family plugins) covering <code>0.2.0</code>–<code>0.13.0</code>; 7 builtins covering foundational substrate; <code>0.14.0</code> migration as builtin handler.</td></tr>
+<tr><td><a href="P-0003-plugin-manifest.html">P-0003-plugin-manifest</a></td><td>V0 manifest schema: universal <code>content.emit</code> verb shape, <code>schema_version: 1</code>, typed host-fn allowlist compiled per-instance from signed manifest; <code>workspace_id</code> structurally excluded from write-path ABI.</td></tr>
+<tr><td><a href="P-0004-observability-shape.html">P-0004-observability-shape</a></td><td><strong><code>deprecated</code> — no successor ADR.</strong> (Historical.) Per-verb metrics surface, TimescaleDB retention policies (90d/365d/30d), health-endpoint detail body, and 1-hour continuous-aggregate window — conflated observability storage (TimescaleDB hypertables) into the app’s own Postgres substrate. Its storage core was falsified by P-0010 D8; the generation-side decisions were re-altituded to the <a href="../architecture/overview.html#observability">observability baseline</a> (a theory-trait baseline, not an ADR).</td></tr>
+<tr><td><a href="P-0005-v0-signing-chain.html">P-0005-v0-signing-chain</a></td><td>V0 minimum-viable signing-key custody: build-host-on-disk at mode 600, synchronous fail-closed plugin load verification, multi-deployment trip-wire to <code>{{P-SigningKeyCustodyHardening}}</code> (Tier C).</td></tr>
+<tr><td><a href="P-0006-v0-tenant-enforcement.html">P-0006-v0-tenant-enforcement</a></td><td>Typed <code>WorkspaceCtx</code> parameter binding at the host-fn boundary as the V0 application-layer workspace isolation mechanism; WHERE-clause-mandatory discipline; upstream of RLS policy enforcement (V0.1+).</td></tr>
+<tr><td><a href="P-0007-plugin-resource-limits.html">P-0007-plugin-resource-limits</a></td><td>Wasmtime per-instance resource limits: fuel (10B ticks), epoch-interruption (5s), memory ceiling (64 MiB), table/instance limits at Wasmtime defaults; both fuel and epoch ON at V0.</td></tr>
+<tr><td><a href="P-0008-admin-token-shape.html">P-0008-admin-token-shape</a></td><td>Static admin token: opaque 32-byte random value, BLAKE3-hashed in DB, workspace claim from server-side lookup row; trivial revocation, no second signing key at V0.</td></tr>
+<tr><td><a href="P-0009-rls-admin-token.html">P-0009-rls-admin-token</a></td><td>Binary admin/read-observer role enum; permission matrix per role for MCP verb categories and CLI control-plane ops; <code>WorkspaceCtx</code> carries <code>token_id</code> for write attribution; V0 app-layer enforcement with V0.1+ RLS policy hardening path.</td></tr>
+<tr><td><a href="P-0010-storage-substrate-engine.html">P-0010-storage-substrate-engine</a></td><td>PostgreSQL ratified on merits behind an engine-agnostic swappable <code>Storage</code> trait (one implementation); V0 embedded Postgres; A1-clean V0 stack (pgvector HNSW + native FTS + recursive CTEs + JSONB); keyword/graph/time-series on named trip-wires (D3/D4/D8 — TimescaleDB demoted); D6 method-borrows deferred to the retrieval ADR; D7 managed-tier skipped. Reframes P-0001/Frame/overview. Escalation E1 (D8 vs observability hypertables) dispositioned 2026-06-09 → re-altituded out of the ADR layer to the <a href="../architecture/overview.html#observability">observability baseline</a>; P-0004 <code>deprecated</code>, no successor ADR.</td></tr>
+<tr><td><a href="P-0011-logging-facade.html">P-0011-logging-facade</a></td><td><code>tracing</code> + <code>tracing-subscriber</code> (Green/MIT) as the logging facade, wired <strong>facade-from-binary</strong>: the binary (<code>cmd/mnemra</code>) owns the one global subscriber (JSON → stdout + <code>EnvFilter</code>); library crates use <code>tracing</code> macros only and never depend on <code>tracing-subscriber</code>. Macros = locked contract, subscriber = binary-owned implementation. Foundation + crate-topology only (impl-crate-only); the full emission layer (semantics, per-verb metrics, OTel export, redaction) is deferred to Task 25 / R-0004. A dependency/topology choice (P-0010-shaped), not an observability <em>shape</em> decision (which the 2026-06-09 E1 disposition keeps in the <a href="../architecture/overview.html#observability">observability baseline</a>).</td></tr>
+<tr><td><a href="P-0012-plugin-runtime-and-mcp-sdk.html">P-0012-plugin-runtime-and-mcp-sdk</a></td><td>Two orthogonal substrate-layer choices the never-ratified <code>adr-001-plugin-runtime</code> proposal had bundled, and the build reversed on both halves without an ADR. <strong>Decision A (retroactive; shipped Tasks 20–22):</strong> host plugins on <strong>raw Wasmtime, not Extism</strong> — P-0007’s resource-limit mechanism (fuel + epoch + <code>ResourceLimiter</code>) needs direct Wasmtime <code>Config</code>/<code>Store</code> control an Extism abstraction would mediate. <strong>Decision B (forward; implemented by Task 23):</strong> adopt the official MCP Rust SDK <strong><code>rmcp</code> v1.7.0 (Apache-2.0/Green)</strong> for the single stdio MCP server rather than hand-rolling MCP/JSON-RPC — R-0010-a mandates MCP-2025-06-18 conformance and the MCP server is the auth+dispatch trust boundary, the worst place to hand-roll a mandated external wire contract; mnemra’s R-0010 handler logic rides on top as the <code>rmcp</code> <code>ServerHandler</code>, unchanged. Dependency-selection decisions (P-0010/P-0011-shaped), anchored to <code>P-StackDiscipline</code> applied per-layer.</td></tr>
+<tr><td><a href="P-0013-plugin-invocation-model.html">P-0013-plugin-invocation-model</a></td><td>Typed per-verb <code>content</code> exports (create/get/list/update/delete) invoked per authenticated verb; the universal <code>run(input: string) -&gt; string</code> string-dispatch export is RETIRED; symmetric typing both directions, no string verb-resolution on the V0 surface. Fills the export/invocation-side gap P-0012 scoped out; accepted-on-landing (maintainer lock 2026-06-20).</td></tr>
+<tr><td><a href="P-0014-retrieval-architecture.html">P-0014-retrieval-architecture</a></td><td>Retrieval topology for the retrieval cluster: per-shape chunking + one collapsed-tree multi-resolution index behind a <code>TreeBuilder</code> seam (authored-first under a named eval); hybrid FTS+dense fused by application-side RRF with local cross-encoder rerank; three host-served MCP verbs with disclosure-budget mechanics; degraded-mode matrix (zero-egress a supported configuration; model artifacts deploy-time-provisioned, never runtime-fetched); instrumentation shape; model pin+verify (TB-5) + encoder footprint disclosure. P-0010 D6’s four method-borrows land here (deferral closed).</td></tr>
+<tr><td><a href="P-0015-provenance-envelope-source-roles.html">P-0015-provenance-envelope-source-roles</a></td><td>The two-axis envelope contract: a policy permissions record (<code>dont_use</code> / <code>model_egress</code> / <code>visibility</code> / <code>tenant_share</code> — mechanical validators, permissive not-set DDL defaults, named enforcement points, undecidable-only fail-closed poles) under the eight ratified mechanics and a single PARC-shaped decision port with per-channel serving-predicate placement + differential conformance; a trust axis (<code>outdated</code>/<code>authoritative</code>/<code>background</code>, origin-weighted supersession); freshness schema (handle kinds, decay classes, structural overrides); the closed three-kind displacement-event registry; citation form + per-dimension citation dispositions (<code>dont_use</code> stub vs <code>visibility</code> not-found); the V0 write-authorization invariant. <code>sensitive</code> dissolves into <code>model_egress: deny</code> + <code>visibility: admin-only</code>.</td></tr>
+<tr><td><a href="P-0016-edge-schema.html">P-0016-edge-schema</a></td><td>One superset edge table extending the <code>0.8.0</code> substrate: closed eight-type vocabulary; <code>edge_class</code> + <code>origin</code> discriminating columns with the <code>supersedes</code> classing rule; one-logical-edge uniqueness with origin-authority upgrade (<code>system</code> &gt; <code>declared</code> &gt; <code>extracted</code>); the <code>superseded-by</code> forward pointer defined as the directional view of the origin-weighted <code>supersedes</code> edge (no second field); extraction contract (source-span provenance, idempotent re-extraction, per-run measured coverage); recursive-CTE traversal contract carrying workspace + policy predicates at every recursion level with the D4 instrument field set; dual-writer manifest ownership.</td></tr>
+<tr><td><a href="P-0017-storage-cluster-model.html">P-0017-storage-cluster-model</a></td><td>Refines P-0001: per-artifact-type tables classified by a closed four-shape data-shape taxonomy (state-bearing / narrative / reference / associative), with cluster membership — not the table — carrying the shared index/RLS/retention/projection/promotion policy. Locks the source-of-truth principle (content row authoritative; derived surfaces rebuildable; cross-plugin refs are soft, only core entities are hard FK targets) and the column-promotion policy (JSONB default; additive/non-destructive; physical extraction forbidden at V0). Carves out P-0001’s <code>tasks_history</code> trigger-shadow, superseded by host-fn audit emission.</td></tr>
+<tr><td><a href="P-0018-core-entity-manifest.html">P-0018-core-entity-manifest</a></td><td>The core opinionated entity set every plugin may reference: projects, actors (single table, <code>actor_type ∈ {human, agent, system}</code>), tags, attachments as the four hard-FK-target core entities, plus audit-log/events as a core-owned emit-target surface (storage deferred to the observability baseline + event-bus ADR). Locks the negative space: workflow primitives (tasks, dispatches, skill-runs, specs, comments) are NOT core — they are plugin-introduced.</td></tr>
+<tr><td><a href="P-0019-plugin-contract.html">P-0019-plugin-contract</a></td><td>Foundational plugin-contract capstone: Path B (WebAssembly Component Model + WIT), locked 2026-05-04, proven by the V0.01 spike (<code>c9018e3</code>). Locks the cross-cutting contract no sibling owns — WIT ABI shape invariants (sync WIT both directions, Layer-1 async, per-concern interfaces, <code>@since</code>/<code>@unstable</code>/<code>@deprecated</code> gates, host-derived workspace-ctx), Wasmtime <code>&gt;=44</code> floor, <code>wasm32-wasip2</code>-via-<code>wit-bindgen</code> toolchain, the closed Extism door, and the composite lifecycle. Four tripwired deferrals; cites P-0003/P-0007/P-0012/P-0013 for the detail each owns; supersedes/overrides null.</td></tr>
+<tr><td><a href="P-0020-report-execution-context.html">P-0020-report-execution-context</a></td><td>The reporting engine’s dedicated read-only Postgres execution context: a SELECT-only report role + <code>READ ONLY</code> transaction (two independent write-blocks), table + function-EXECUTE allow-lists with default-deny exclusions (<code>admin_tokens</code>, policy-audit stores), a scoped RLS exception keyed on per-execution <code>SET LOCAL</code> session settings with session-key tamper-resistance via GUC-setter revocation (chosen over <code>SET ROLE</code>/<code>current_user</code> keying), the ownership/<code>BYPASSRLS</code>/<code>FORCE ROW LEVEL SECURITY</code> model as a correctness precondition, timeout/row-cap/bounded-pool cost containment, and the OC-10 reconciliation check. Scoped exception to the P-0006/P-0009 deferred-RLS posture on exactly the caller-authored-SQL path; converges with the general R-0001 activation. Resolves the reporting-engine Frame <code>{{P-ReportExecutionContext}}</code> slot.</td></tr>
+<tr><td><a href="P-0021-report-definition-type.html">P-0021-report-definition-type</a></td><td>The report-definition content type: a host-core-owned <code>reference</code>-cluster content artifact written through the existing content-write machinery — argued deliberately OFF the P-0018 core-entity short list (referenced by name at lookup, never a hard FK target; a third host-owned-content category). Locks the definition schema, write-time validation (including rejection of data-modifying CTEs so an invalid definition never registers), full P-0015 policy-record inheritance (<code>visibility</code> not-found / <code>dont_use</code> stub dispositions), reserved-built-in-name reservation, and <code>(workspace_id, name)</code> uniqueness. Resolves the reporting-engine Frame <code>{{P-ReportDefinitionType}}</code> slot.</td></tr>
+<tr><td><a href="P-0022-coordination-cluster.html">P-0022-coordination-cluster</a></td><td>The coordination cluster’s one-slot contract record: a <strong>core host subsystem</strong> (the P-0002 verb-on-content walk — not a plugin, mints no signed artifact, does not fire the P-0013 domain-verb tripwire) with actors as durable role-instance identity (sessions are ephemeral host-derived attachments; one-live-attachment, agent-type-only, audited succession), leases as the mutual-exclusion primitive on the duration line (substrate-atomic acquisition, TTL, expired-only always-audited takeover, a registered resource-identifier scheme), and addressed messages as rows with post-send immutability, a monotonic <code>sent→delivered→acknowledged→dispositioned</code> lifecycle, a closed <code>{completed, declined, obsolete}</code> disposition vocabulary, and code-registered types (<code>merge-request</code> v1 + <code>handoff</code> v1). Two agent-visible MCP tools (<code>claim</code> + <code>message</code>, actions as closed enums) inside the 8-of-≤9 verb budget; reads default-visible in-workspace / writes strictly authority-scoped with a multi-team + trust-differentiated-actor tripwire; own storage placement outside the P-0017 four-shape content taxonomy, hard-FK to core entities only, standalone over zero content. Merger stays instance-shaped (re-arm on push transport). Log topology, audit-store detail, and the auth-bundle policy composition are explicitly out of slot. Resolves the coordination-wedge Frame <code>{{P-CoordinationCluster}}</code> slot.</td></tr>
+<tr><td><a href="P-0023-plugin-distribution.html">P-0023-plugin-distribution</a></td><td>The distribution layer’s contract record (W2-1): uniform multi-artifact OCI bundle (N≥1, wasm = <code>layers[0]</code>, signed inner manifest as config descriptor, one flat manifest, uncompressed-only at V0); keyed-in-tree package signature (P-0005 root over the domain-separated outer-manifest digest, OCI 1.1 referrer, signer-key-pinned, never TOFU); two R-NoExternalHost transports (image-layout fs, self-hosted distribution API) behind one store contract; the bounds-first pre-phase (<code>fetch-within-bounds → verify-package-signature → verify-blob-digests → unpack-within-bounds</code>) behind the locked <code>PackageVerifier</code> seam (TUF slots behind it at R-0005-e); hard cutover, no bare/legacy load path; single-root custody exposure recorded (register R-0009). Pulls P-0019 DEF-2’s single-publisher scope ahead of its tripwire and supersedes its cosign-on-<code>wkg</code> shape; the <code>[[artifacts]]</code> schema lands as P-0003 §Amendment 2026-07-07. Resolves the plugin-distribution Frame <code>{{P-PluginDistribution}}</code> slot.</td></tr>
+</tbody>
+</table>
+</div>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../specs/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../adrs/DEFAULTS.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../specs/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../adrs/DEFAULTS.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
