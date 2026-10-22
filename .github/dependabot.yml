@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Keep the pinned Rust toolchain (rust-toolchain.toml) on the latest release,
+  # point and security releases included. Other ecosystems are deliberately absent.
+  - package-ecosystem: "rust-toolchain"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      # 0 overrides Dependabot's default 3-day delay on version updates.
+      default-days: 0

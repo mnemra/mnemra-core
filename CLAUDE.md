@@ -139,13 +139,31 @@ locally on the same machine, so treat it as network-dependent rather than fixed.
 - **Each gate prints `GATE <name> PASS|FAIL`.** Read those lines, not just the exit status.
   ⛔ `just ci-full | tail` exits with **tail's** status, so a failing gate reports success. Capture
   the output to a file and check `$?`.
-- **The toolchain is pinned** (`#4107`) in `rust-toolchain.toml` (`channel = "1.99.1"`), the single
-  source: locally rustup reads it, and every CI install step runs `rustup toolchain install`
-  against the same file. A clippy or trybuild red with no code change is no longer a new stable
-  release; check `rustc --version` against the file. **Bump:** edit `channel` in
-  `rust-toolchain.toml`, run `just ci-full`, commit that one line (plus any new lint fixes).
-  **Parked (Peter, 2026-10-22, `#4107`):** no mechanism fires a bump. The pin is checked by hand at
-  each new Rust stable release, about every 6 weeks.
+- **The toolchain is pinned** (`#4107`) in `rust-toolchain.toml` (the exact three-part `channel`),
+  the single source: locally rustup reads it, and every CI install step runs
+  `rustup toolchain install` against the same file. A clippy or trybuild red with no code change is
+  no longer a new stable release; check `rustc --version` against the file. **Bump:** edit
+  `channel` in `rust-toolchain.toml`, run `just ci-full`, commit that one line (plus any new lint
+  fixes). **Dependabot opens the bump** (`#4155`; policy is Peter's 2026-10-22 "always be on the
+  latest update", and the cross-repo form of it is `#4154` in the shared tracker, not this repo):
+  `.github/dependabot.yml` has one `rust-toolchain` entry, daily, `cooldown.default-days: 0` so a
+  security point release is not held for Dependabot's default 3 days. It opens a PR per Rust
+  release, point releases included, because the pin has three parts; a two-part pin would never
+  receive them. The entry's shape is MEASURED against GitHub's Dependabot options reference on
+  2026-10-22. ⛔ **The Dependabot path is INFERRED, and the hand check stays in force until it has
+  been seen to run:** check the pin by hand at each new Rust stable release (about every 6 weeks)
+  until a "Dependabot Updates" workflow run for `rust-toolchain` has been observed
+  (`gh run list -R mnemra/mnemra-core --workflow "Dependabot Updates"`; its log should show it
+  found `rust-toolchain.toml` and that the pin is current). **How a bump lands:** Dependabot's PR
+  is not merged as-is. Its change, plus any lint fixes, is re-cut in a worktree as a normal commit
+  carrying a tracker task number and landed through the usual PR; Dependabot then closes its own PR
+  because the pin matches (Peter, 2026-10-22: "Re-cut as a task commit"). ⚠ **"A merge waits on
+  Peter's go-ahead" is a convention, not a gate** (MEASURED 2026-10-22, `gh api
+  repos/mnemra/mnemra-core/rulesets/25405721`: the `protect-main` pull-request rule has
+  `required_approving_review_count: 0`; `gh api repos/mnemra/mnemra-core --jq .allow_auto_merge`:
+  `true`), so anyone with write access can merge a green PR. Cargo and GitHub Actions are not
+  covered by version updates (scope open on `#4154`); Dependabot security updates for Cargo run
+  from the repo setting (open example: PR #1, rmcp).
 
 | Surface | Green means | ⛔ What it does NOT cover |
 |---|---|---|
@@ -297,10 +315,22 @@ Sources: the design lane (MEASURED in its worktree, 2026-09-14) and the Sage fac
   match for the held names hits 20 tracked files (MEASURED 2026-10-22). The breakdown and
   a reading of each hit are on `#4147`, not here, because describing them would narrow which names are
   held. ⛔ **Do not add new occurrences, and do not mass-rewrite the existing ones unasked.**
-- ⛔ **No platform safety net catches a leak.** On this repo, GitHub secret scanning, push protection
-  and Dependabot security updates are all **disabled** (MEASURED 2026-09-14,
-  `gh api repos/mnemra/mnemra-core --jq .security_and_analysis`). A pushed secret or personal detail
-  is public the moment it lands.
+- ⛔ **The platform safety net is partial.** GitHub secret scanning, secret scanning push protection,
+  generic (non-provider) pattern scanning and Dependabot security updates are all **enabled**
+  (MEASURED 2026-10-22, `gh api repos/mnemra/mnemra-core --jq .security_and_analysis`). On
+  2026-09-14 the first, second and fourth read **disabled**; who changed them and when is not
+  known. Generic patterns were turned on through the API on 2026-10-22 by Puck on Peter's
+  go-ahead. Per GitHub's supported-patterns page
+  (`docs.github.com/en/code-security/secret-scanning/introduction/supported-secret-scanning-patterns`,
+  read 2026-10-22), the generic set covers private keys (RSA, EC, OpenSSH, PGP, generic PEM),
+  PostgreSQL, MySQL and MongoDB connection strings, and HTTP Basic and Bearer authentication
+  headers. Still **disabled** on 2026-10-22: AI detection, validity checks and delegated bypass
+  and dismissal. **Still uncovered:** personal details, machine paths and hostnames pass every
+  scanner, and push protection blocks only the patterns it supports. The same page's capability
+  table marks generic patterns as not covered by push protection by default and covered by
+  configurable push protection; whether this repo's setting blocks generic patterns at push is
+  **unverified** (the API field shows push protection enabled, not which pattern sets it blocks).
+  A pushed secret or personal detail is public the moment it lands.
 - Commit bodies and branch names publish too. Keep machine paths, hostnames and personal details
   out of them.
 
