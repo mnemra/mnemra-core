@@ -938,22 +938,29 @@ verify-cold-start:
         is_apparatus=1
     fi
 
-    # Known upstream defect (brain #4159, MEASURED from main CI run
-    # 39811906413): postgresql_archive 0.20.4's `get_release` pages the
-    # postgresql-binaries releases list and stops at the first empty page,
-    # and the releases API intermittently answers 200 with `[]` for page 1,
-    # so the lookup fails with `version not found for '=16.4.0'` /
-    # `ArchiveError(VersionNotFound(...))`. Both lookups show it: `=16.4.0`
-    # (Postgres, theseus-rs) and `=0.16.105` (pgvector); the pgvector path
-    # is INFERRED to share the empty-page break (its code was not read).
-    # Accepted by Peter 2026-10-22
-    # until #4018 removes the download path; delete this block and the
-    # branch below then. Same rule as the apparatus signatures: checked only
-    # when no regression signature matched, and the label NEVER claims the
-    # run is not a regression (a different test in the same output can still
-    # be a real failure).
+    # Known upstream defect (brain #4159). The SYMPTOM is MEASURED from main
+    # CI run 39811906413: `version not found for '=16.4.0'` and
+    # `VersionNotFound("=16.4.0")` / `VersionNotFound("=0.16.105")`. The
+    # CAUSE comes from reading the crate: postgresql_archive 0.20.4's
+    # `get_release` pages the releases list and stops at the first empty
+    # page, and the releases API intermittently answers 200 with `[]` for
+    # page 1. Both lookups show it: `=16.4.0` (Postgres, theseus-rs) and
+    # `=0.16.105` (pgvector). The pgvector path is MEASURED to register
+    # postgresql_archive's GitHub repository (postgresql_extensions 0.20.4,
+    # portal_corp/repository.rs:35-42), which shares `get_release`; it was not
+    # traced end to end. Accepted by Peter 2026-10-22 until #4161 (the #4018
+    # implementation) removes the download path; delete this block and the
+    # branch below then.
+    # The label names the SIGNATURE, not the cause: a repeat on re-run is NOT
+    # #4159. The regex is tied to the two pins in
+    # libs/mnemra-host/storage/postgres/engine.rs (EMBEDDED_PG_VERSION,
+    # PGVECTOR_VERSION); a pin change drops the run to the conservative
+    # label, which fails safe. Checked only when no regression signature
+    # matched AND no apparatus signature matched: the apparatus label
+    # (403, rate limit) carries no re-run concession, so it wins. The label
+    # NEVER claims the run is not a regression.
     is_empty_page=0
-    if [[ "$is_regression" -eq 0 ]] && grep -qE 'version not found for|VersionNotFound' <<< "$output"; then
+    if [[ "$is_regression" -eq 0 && "$is_apparatus" -eq 0 ]] && grep -qE "version not found for '=(16\.4\.0|0\.16\.105)'|VersionNotFound\(\"=(16\.4\.0|0\.16\.105)\"\)" <<< "$output"; then
         is_empty_page=1
     fi
 
@@ -961,7 +968,7 @@ verify-cold-start:
         if [[ "$is_regression" -eq 1 ]]; then
             echo "GATE cold-start FAIL (regression)"
         elif [[ "$is_empty_page" -eq 1 ]]; then
-            echo "GATE cold-start FAIL (upstream release list returned an empty page — known defect #4159; this does NOT rule out a regression, read every failed test above)"
+            echo "GATE cold-start FAIL (VersionNotFound for a pinned version — matches the #4159 signature; a repeat on re-run is NOT #4159; if the template build failed, the tamper scenarios never reached their assertions)"
         elif [[ "$is_apparatus" -eq 1 ]]; then
             echo "GATE cold-start FAIL (network/rate-limit errors present — this does NOT rule out a regression; read every failed test above)"
         else
