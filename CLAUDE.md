@@ -260,11 +260,9 @@ Sources: the design lane (MEASURED in its worktree, 2026-09-14) and the Sage fac
   - implementation plans: brain, not here
 - ⛔ **A spec whose frontmatter says `status: approved` is LOCKED.** It changes by a recorded amendment
   or erratum, never by a silent edit. **An implementer who finds a spec wrong reports the deviation;
-  they never correct the spec inside a code diff.** ⚠ **Accepted ADRs have changed two ways:** by
-  supersession, or by a dated `§Amendment` section added in place (precedent:
-  `P-0003-plugin-manifest.md` "Amendment 2026-07-07"). `docs/src/adrs/README.md` says supersession
-  only; practice diverged (MEASURED). Follow the precedent and flag the conflict; don't pick
-  silently.
+  they never correct the spec inside a code diff.** ⚠ **An accepted ADR changes by a dated, in-place
+  `## Amendment YYYY-MM-DD` section** (maintainer ruling 2026-10-19), with supersession kept for a
+  decision wholly replaced by a new record. The rule is stated in `docs/src/adrs/README.md`.
 - **Register tiers:** idea → proposed → designed → committed → live, validated by which artifacts
   exist. Per the design lane, no tier authorizes a build, not even `committed`.
 - ⛔ **Requirement IDs collide.** R-NNNN is meant to be one series across all specs (highest R-0115
