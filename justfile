@@ -570,6 +570,33 @@ verify-coverage-membership:
 # loop's first iteration (`bans`) reports its missing token and the gate
 # FAILs — the loop exits on the first miss, it does not accumulate every
 # missing token in one run (verified during authoring, then reverted).
+#
+# Index freshness (#4096): the `yanked` check reads yanked state from cargo's
+# LOCAL crates.io index cache, and neither `cargo deny check` nor `cargo deny
+# fetch` refreshes it. A cache last written before a registry change (a yank,
+# or an un-yank) makes this gate read stale data and disagree with a run whose
+# cache is current (measured 2026-10-19 under #4017: the local gate printed
+# PASS on zip@8.6.0 while CI failed it with `yanked-not-detected`). CI is not
+# immune: Swatinem/rust-cache keeps the sparse-index entries of packages in use,
+# so it can read a stale cache too, and the refresh hardens it as well.
+# So the recipe first runs `cargo update --dry-run --locked`, a full
+# re-resolve that revalidates the cache entry of every package in the lock
+# against the registry (`--workspace` would make no index requests) and
+# writes nothing to Cargo.lock. `--locked` does nothing while `--dry-run` is
+# present; `--dry-run` plus the `cmp` check against a snapshot is the real
+# guard. Failure is classified on cargo's OUTPUT, never on its exit code:
+#   - `failed to select a version` / `is yanked`: a locked or required
+#     version is yanked and the resolve cannot avoid it. That is a real
+#     supply-chain finding, so plain `GATE advisories FAIL` with cargo's text.
+#   - a recognisable network shape (`failed to query`, `spurious network
+#     error`, curl [6]/[7]/[28], HTTP 429/5xx, offline): `GATE advisories
+#     FAIL (apparatus — crates.io index refresh)`.
+#   - anything else: plain FAIL; erring to the plain label is the safe side.
+# Also apparatus FAILs: cargo does not print `Updating crates.io index`
+# (offline config, `term.quiet` / CARGO_TERM_QUIET, or a changed output
+# format; the index is then not shown to be fresh), Cargo.lock differs
+# afterwards, or mktemp / cp / cmp itself errors. One GATE line per run. A
+# refresh failure never falls back to the cached index.
 verify-advisories:
     #!/usr/bin/env bash
     set -uo pipefail
@@ -582,6 +609,46 @@ verify-advisories:
         echo "verify-advisories: cargo-deny is not available to \`cargo deny\` (checked via \`cargo deny --version\`, not raw PATH — cargo also resolves a subcommand through \$CARGO_HOME/bin, which a plain \`command -v cargo-deny\` would miss). Install it: cargo install --locked cargo-deny --version 0.19.0 (the version .github/workflows/ci.yml pins)."
         echo "GATE advisories FAIL (apparatus — cargo-deny missing)"
         exit 1
+    fi
+    # Refresh cargo's crates.io index cache before cargo-deny reads it (#4096).
+    apparatus_fail() {
+        echo "verify-advisories: $1"
+        echo "GATE advisories FAIL (apparatus — $2)"
+        exit 1
+    }
+    lock_snapshot="$(mktemp)" || apparatus_fail "mktemp failed; cannot snapshot Cargo.lock." "Cargo.lock snapshot"
+    trap 'rm -f "$lock_snapshot"' EXIT
+    cp Cargo.lock "$lock_snapshot" || apparatus_fail "could not snapshot Cargo.lock." "Cargo.lock snapshot"
+    set +e
+    refresh_output="$(cargo update --color never --dry-run --locked 2>&1)"
+    refresh_code=$?
+    set -e
+    if [[ "$refresh_code" -ne 0 ]]; then
+        echo "$refresh_output"
+        if grep -qE 'failed to select a version|is yanked' <<< "$refresh_output"; then
+            echo "verify-advisories: cargo's fresh resolve rejected a yanked version that a pinned or required dependency cannot avoid. This is a real supply-chain finding, not a network fault; cargo-deny was not run."
+            echo "GATE advisories FAIL"
+            exit 1
+        fi
+        if grep -qiE 'failed to query|spurious network error|Could not resolve host|Couldn.t connect|\[(6|7|28)\]|(status|HTTP)[^0-9]{0,15}(429|5[0-9][0-9])|offline' <<< "$refresh_output"; then
+            apparatus_fail "the crates.io index refresh (cargo update --dry-run --locked) failed with a network-shaped error, so cargo-deny's yanked check cannot be shown to read current data. Fix connectivity or rate limiting and rerun; the gate does not fall back to the cached index." "crates.io index refresh"
+        fi
+        echo "verify-advisories: cargo update --dry-run --locked failed with an unclassified error (see above); treated as a finding, not as a network fault."
+        echo "GATE advisories FAIL"
+        exit 1
+    fi
+    if ! grep -qF 'Updating crates.io index' <<< "$refresh_output"; then
+        echo "$refresh_output"
+        apparatus_fail "cargo did not report \`Updating crates.io index\` — it may have run offline (net.offline / CARGO_NET_OFFLINE), in quiet mode (term.quiet / CARGO_TERM_QUIET), or changed its output; in every case the index cache is not shown to be fresh." "crates.io index refresh"
+    fi
+    set +e
+    cmp -s Cargo.lock "$lock_snapshot"
+    cmp_code=$?
+    set -e
+    if [[ "$cmp_code" -eq 1 ]]; then
+        apparatus_fail "the index refresh modified Cargo.lock; a gate is a read, never a write." "Cargo.lock changed"
+    elif [[ "$cmp_code" -ne 0 ]]; then
+        apparatus_fail "cmp could not compare Cargo.lock with its snapshot." "Cargo.lock snapshot"
     fi
     set +e
     output="$(cargo deny --color never --locked check 2>&1)"
