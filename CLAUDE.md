@@ -12,7 +12,7 @@ naming anything.
 
 Written 2026-09-14 (task `#3567`) as the repo's first `CLAUDE.md`, when mnemra moved onto the new
 working method. Every claim carries an evidence label and a date. **MEASURED** means run or read
-against the code at `1faf996`. **INHERITED** means taken from a record and not re-checked. **INFERRED**
+against the code at `cf8210e` (the #4064 rewrite of the measured commit; the rewrite changed wording in docs only, INFERRED). **INHERITED** means taken from a record and not re-checked. **INFERRED**
 means reasoned, not observed.
 
 ## Read this before treating anything here as settled
@@ -117,7 +117,7 @@ persisted on the local filesystem."* And: *"the whole point of mnemra was to kee
 ## Verify command — what green means, per surface
 
 **The local gate is `just ci-full`.** It runs `just ci` (the full verify chain, coverage included,
-inside the postmaster-reap wrapper) and then `just docs-check`. MEASURED 2026-09-14 on `1faf996`:
+inside the postmaster-reap wrapper) and then `just docs-check`. MEASURED 2026-09-14 on the commit that `cf8210e` rewrites (#4064; the rewrite changed wording in docs only, INFERRED):
 exit 0 in 14 minutes **with a warm cache** (`~/.theseus` and `target/` already populated). A cold
 machine is substantially slower; that was not measured. Since `#3597` the chain also carries
 `verify-cold-start`, which downloads on every run regardless of cache: measured between 25s and 131s
@@ -214,10 +214,10 @@ is the whole tenant boundary.
   and pgvector (portalcorp). It needs network access, and `GITHUB_TOKEN` is read if set (MEASURED).
   Roughly 6 API calls per cold install, against 60 an hour unauthenticated — which is why
   `verify-cold-start` demands a token up front.
-- **The empty-`~/.theseus` failure is FIXED** (`#3597`, landed `72f6437`). The pgvector pin check used
+- **The empty-`~/.theseus` failure is FIXED** (`#3597`, landed `fd4f807`). The pgvector pin check used
   to run before `install_extension()` wrote the file, so a cold install could never start and every
   Postgres CI job went red once the cache expired. Verification is now split by artifact kind. CI run
-  `35159636684` proves it cold: all three jobs logged `Cache not found` and passed.
+  `35159636684` (a pre-#4064 run that no longer resolves) proves it cold: all three jobs logged `Cache not found` and passed.
 - **Postgres test binaries run with `--test-threads 1`** because of a teardown race (`#1852`). ⛔ Do
   not parallelise them to save time.
 - ⛔ **`just ci` reaps leaked postmasters on failure or interrupt, and it can reap SOMEONE ELSE'S.**
