@@ -289,9 +289,10 @@ Sources: the design lane (MEASURED in its worktree, 2026-09-14) and the Sage fac
   family names. ⛔ **Which names are held is deliberately NOT written here**, because writing them
   here would publish them. The ruling is at
   `~/work/brain/projects/mnemra/2026-07-15-blog-outline-gate-decisions.md`.
-- ⚠ **Open, NOT RULED: whether gate #3 binds source code** (`#3377`). A held family name already
-  appears in 17 tracked files (MEASURED 2026-09-14). ⛔ **Do not add new occurrences, and do not
-  mass-rewrite the existing ones unasked.**
+- ⚠ **Open, NOT RULED: whether gate #3 binds source code** (`#3377`). A whole-word, case-insensitive
+  match for the held names hits 20 tracked files (MEASURED 2026-10-22). The breakdown and
+  a reading of each hit are on `#4147`, not here, because describing them would narrow which names are
+  held. ⛔ **Do not add new occurrences, and do not mass-rewrite the existing ones unasked.**
 - ⛔ **No platform safety net catches a leak.** On this repo, GitHub secret scanning, push protection
   and Dependabot security updates are all **disabled** (MEASURED 2026-09-14,
   `gh api repos/mnemra/mnemra-core --jq .security_and_analysis`). A pushed secret or personal detail
