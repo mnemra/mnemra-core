@@ -139,9 +139,13 @@ locally on the same machine, so treat it as network-dependent rather than fixed.
 - **Each gate prints `GATE <name> PASS|FAIL`.** Read those lines, not just the exit status.
   ⛔ `just ci-full | tail` exits with **tail's** status, so a failing gate reports success. Capture
   the output to a file and check `$?`.
-- ⚠ **The toolchain floats.** `rust-toolchain.toml` says `channel = "stable"`, and CI uses
-  `@stable`. A clippy or trybuild red with no code change may be a new stable release; check
-  `rustc --version` before debugging the diff.
+- **The toolchain is pinned** (`#4107`) in `rust-toolchain.toml` (`channel = "1.99.1"`), the single
+  source: locally rustup reads it, and every CI install step runs `rustup toolchain install`
+  against the same file. A clippy or trybuild red with no code change is no longer a new stable
+  release; check `rustc --version` against the file. **Bump:** edit `channel` in
+  `rust-toolchain.toml`, run `just ci-full`, commit that one line (plus any new lint fixes).
+  **Parked (Peter, 2026-10-22, `#4107`):** no mechanism fires a bump. The pin is checked by hand at
+  each new Rust stable release, about every 6 weeks.
 
 | Surface | Green means | ⛔ What it does NOT cover |
 |---|---|---|
