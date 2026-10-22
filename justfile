@@ -938,9 +938,30 @@ verify-cold-start:
         is_apparatus=1
     fi
 
+    # Known upstream defect (brain #4159, MEASURED from main CI run
+    # 39811906413): postgresql_archive 0.20.4's `get_release` pages the
+    # postgresql-binaries releases list and stops at the first empty page,
+    # and the releases API intermittently answers 200 with `[]` for page 1,
+    # so the lookup fails with `version not found for '=16.4.0'` /
+    # `ArchiveError(VersionNotFound(...))`. Both lookups show it: `=16.4.0`
+    # (Postgres, theseus-rs) and `=0.16.105` (pgvector); the pgvector path
+    # is INFERRED to share the empty-page break (its code was not read).
+    # Accepted by Peter 2026-10-22
+    # until #4018 removes the download path; delete this block and the
+    # branch below then. Same rule as the apparatus signatures: checked only
+    # when no regression signature matched, and the label NEVER claims the
+    # run is not a regression (a different test in the same output can still
+    # be a real failure).
+    is_empty_page=0
+    if [[ "$is_regression" -eq 0 ]] && grep -qE 'version not found for|VersionNotFound' <<< "$output"; then
+        is_empty_page=1
+    fi
+
     if [[ "$code" -ne 0 ]]; then
         if [[ "$is_regression" -eq 1 ]]; then
             echo "GATE cold-start FAIL (regression)"
+        elif [[ "$is_empty_page" -eq 1 ]]; then
+            echo "GATE cold-start FAIL (upstream release list returned an empty page — known defect #4159; this does NOT rule out a regression, read every failed test above)"
         elif [[ "$is_apparatus" -eq 1 ]]; then
             echo "GATE cold-start FAIL (network/rate-limit errors present — this does NOT rule out a regression; read every failed test above)"
         else
