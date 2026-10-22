@@ -44,16 +44,17 @@ toml = "0.8"
 # Features: rt (spawn), sync (Mutex in DrainHandle).
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
 # Task 21: Wasmtime WASM runtime — fuel metering, epoch interruption, memory limits.
-# R-0007-i: version PINNED (exact, no open caret). 48.0.6 is the first 48.x release
-# clearing RUSTSEC-2026-0359/-0362/-0363 as well as 0269/0222/0316/0327; any
-# change of version needs an explicit plan AC.
+# R-0007-i: version PINNED (exact, no open caret). 48.0.7 is the first 48.x release
+# clearing RUSTSEC-2026-0378/-0379 as well as 0359/0362/0363 and 0269/0222/0316/0327;
+# a minor or major change needs an explicit plan AC; a patch bump for an advisory
+# needs maintainer approval (#4136).
 # default-features = false: the defaults carry component-model-async (and async,
 # threads, gc, ...), none of which the host uses. Component-model async is OFF
 # by feature and again on Config (plugin/limits.rs); tests/component_async_rejected.rs
 # pins the rejection. The `async` crate feature (distinct from `component-model-async`)
 # is expected back per P-0019 D3 for the async host-fn path; re-adding it does not
 # turn on component-model async (CM_ASYNC).
-wasmtime = { version = "=48.0.6", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
+wasmtime = { version = "=48.0.7", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
 # Task 21: serde + serde_derive for manifest TOML deserialization.
 # Replaces manual toml::Value traversal with typed structs (cleaner + exhaustive).
 serde = { version = "1.0", features = ["derive"] }
@@ -70,7 +71,7 @@ uuid = { version = "1.23.3", features = ["v4", "v5"] }
 anyhow = "1.0.102"
 # Test fixtures compile component-WAT text directly (Component::new on &str);
 # the `wat` feature is test-only so the text parser never ships in the host.
-wasmtime = { version = "=48.0.6", default-features = false, features = ["cranelift", "component-model", "runtime", "std", "wat"] }
+wasmtime = { version = "=48.0.7", default-features = false, features = ["cranelift", "component-model", "runtime", "std", "wat"] }
 # Task 23: rmcp client feature for in-process test transport (serve_client, Peer::call_tool).
 # The runtime rmcp dep above uses server+macros+transport-io only (R-0010-e compliance);
 # the client feature is dev-only so it does not activate in production builds.
