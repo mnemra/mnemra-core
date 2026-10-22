@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 # Least-authority floor (brain #3597 Q3 / #3616): every step across all
-# three jobs below — checkout, the toolchain install actions, and every
+# three jobs below — checkout, the toolchain install steps, and every
 # `just`-invoked gate — only ever reads this repository's contents. None
 # uploads or downloads an artifact, posts a PR comment, creates a check
 # run, or writes a package. (actions/cache and Swatinem/rust-cache are
@@ -72,11 +72,17 @@ jobs:
       # coverage-rest jobs, R-0094), so it needs only clippy + rustfmt for
       # verify-lint and the wasm target for the plugin build — NOT
       # llvm-tools-preview (coverage-only tooling now lives in the shard jobs).
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip2
-          components: clippy, rustfmt
+      # The toolchain version, targets and components come from
+      # rust-toolchain.toml, the single source (#4107). `rustup toolchain
+      # install` with no argument installs exactly what that file names; a
+      # bump is a one-line edit there.
+      - name: Install Rust toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
+          want="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          got="$(rustc --version | cut -d' ' -f2)"
+          test -n "$want" && test -n "$got" && test "$got" = "$want" || { echo "toolchain mismatch: active rustc '$got' vs rust-toolchain.toml channel '$want'" >&2; exit 1; }
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -166,11 +172,16 @@ jobs:
           echo "=== disk after ==="
           df -h /
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip2
-          components: llvm-tools-preview
+      # Version, target and clippy/rustfmt come from rust-toolchain.toml (#4107);
+      # only the coverage-only llvm-tools-preview is added here.
+      - name: Install Rust toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustup component add llvm-tools-preview
+          rustc --version
+          want="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          got="$(rustc --version | cut -d' ' -f2)"
+          test -n "$want" && test -n "$got" && test "$got" = "$want" || { echo "toolchain mismatch: active rustc '$got' vs rust-toolchain.toml channel '$want'" >&2; exit 1; }
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -254,11 +265,16 @@ jobs:
           echo "=== disk after ==="
           df -h /
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip2
-          components: llvm-tools-preview
+      # Version, target and clippy/rustfmt come from rust-toolchain.toml (#4107);
+      # only the coverage-only llvm-tools-preview is added here.
+      - name: Install Rust toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustup component add llvm-tools-preview
+          rustc --version
+          want="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          got="$(rustc --version | cut -d' ' -f2)"
+          test -n "$want" && test -n "$got" && test "$got" = "$want" || { echo "toolchain mismatch: active rustc '$got' vs rust-toolchain.toml channel '$want'" >&2; exit 1; }
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2

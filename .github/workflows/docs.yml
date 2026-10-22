@@ -26,10 +26,15 @@ jobs:
       - name: Lint workflow (actionlint)
         uses: rhysd/actionlint@011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: stable
+      # Version from rust-toolchain.toml, the single source (#4107); the
+      # cargo install below runs in the checkout, so rustup resolves to it.
+      - name: Install Rust toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install
+          rustc --version
+          want="$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)"
+          got="$(rustc --version | cut -d' ' -f2)"
+          test -n "$want" && test -n "$got" && test "$got" = "$want" || { echo "toolchain mismatch: active rustc '$got' vs rust-toolchain.toml channel '$want'" >&2; exit 1; }
 
       - name: Install mdbook-d2
         run: cargo install --locked mdbook-d2

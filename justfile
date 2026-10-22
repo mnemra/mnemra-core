@@ -156,6 +156,7 @@ NONPG_TEST_FLAGS := "--test abi_contract --test build_gate --test ci_reap_baseli
 verify-type:
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     if cargo check --workspace 2>&1; then
         echo "GATE type PASS"
     else
@@ -167,6 +168,7 @@ verify-type:
 verify-lint:
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     # Run every lint check; any failure routes to the FAIL branch so the GATE
     # contract (exactly one GATE line + correct exit) holds. A command in the
     # `if` condition is exempt from errexit, so a failing check reaches the else
@@ -201,6 +203,7 @@ verify-lint:
 verify-test: plugin
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     if cargo test -p mnemra-host {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
         && cargo test -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
         && cargo test -p mnemra-host --lib 2>&1 \
@@ -304,6 +307,7 @@ verify-test: plugin
 verify-test-hooks: plugin
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     if cargo test -p mnemra-host --features test-hooks {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
         && cargo test -p mnemra-host --features test-hooks {{NONPG_TEST_FLAGS}} 2>&1 \
         && cargo test -p mnemra-host --features test-hooks --lib 2>&1; then
@@ -524,9 +528,9 @@ verify-coverage-membership:
 # No `plugin` / `build` prerequisite: cargo-deny reads Cargo.lock and cargo
 # metadata only, never compiles anything.
 #
-# `--color never`: CI's `dtolnay/rust-toolchain@stable` step writes
-# `CARGO_TERM_COLOR=always` into GITHUB_ENV for every later step in the job,
-# and cargo-deny honours it — its summary line then carries ANSI codes
+# `--color never`: any CI or local environment may set
+# `CARGO_TERM_COLOR=always` (a developer's config, or any future CI action; CI once got
+# it from a toolchain action), and cargo-deny honours it — its summary line then carries ANSI codes
 # around each `ok`/`FAILED` token, and the non-vacuity grep below never
 # matches, so every CI run of this gate FAILs regardless of the real result
 # (found in review, reproduced locally with `CARGO_TERM_COLOR=always`).
@@ -686,6 +690,7 @@ verify-advisories:
 verify-coverage-pg: plugin
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     cargo llvm-cov clean --workspace
     if cargo llvm-cov --no-report -p mnemra-host {{PG_TEST_FLAGS}} -- --test-threads 1 2>&1 \
         && cargo llvm-cov report 2>&1; then
@@ -701,6 +706,7 @@ verify-coverage-pg: plugin
 verify-coverage-rest: plugin
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     cargo llvm-cov clean --workspace
     if cargo llvm-cov --no-report -p mnemra-host {{NONPG_TEST_FLAGS}} 2>&1 \
         && cargo llvm-cov --no-report -p mnemra-host --lib 2>&1 \
@@ -746,6 +752,7 @@ verify-coverage: verify-coverage-pg verify-coverage-rest
 verify-build:
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     if cargo build --workspace --exclude mnemra-echo 2>&1; then
         echo "GATE build PASS"
     else
@@ -773,15 +780,25 @@ verify-build:
 # behavioral suite verify-test / verify-test-hooks / verify-coverage already
 # run three times over. Scoped invocation mirrors verify-signing-root's
 # `cargo test --test <name>` pattern.
-verify-smoke: build
+verify-smoke: _gate-build
     #!/usr/bin/env bash
     set -euo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     if cargo test -p mnemra-host --test smoke_e2e -- --test-threads 1 2>&1; then
         echo "GATE smoke PASS"
     else
         echo "GATE smoke FAIL"
         exit 1
     fi
+
+# Debug build of the default member (cmd/mnemra) for verify-smoke, which spawns
+# the real binary. Stands in for the dev-loop `build` recipe so the gate's build
+# carries CARGO_INCREMENTAL=0 like every other gate cargo call (#4107).
+_gate-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export CARGO_INCREMENTAL=0
+    cargo build
 
 # ---------------------------------------------------------------------------
 # Cold-start regression guard (brain #3597).
@@ -823,6 +840,7 @@ verify-smoke: build
 verify-cold-start:
     #!/usr/bin/env bash
     set -uo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
 
     # GITHUB_TOKEN precheck (Peter's decision, 2026-09-15; brain #3597 Q2 /
     # #3616) — this gate ALWAYS pays a genuinely cold network download of
@@ -1046,6 +1064,7 @@ ci-full: ci docs-check
 verify-signing-root:
     #!/usr/bin/env bash
     set -uo pipefail
+    export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
     set +e
     output="$(cargo test -p mnemra-host --test build_gate -- --exact root_pin_gate_matches_embedded 2>&1)"
     code=$?

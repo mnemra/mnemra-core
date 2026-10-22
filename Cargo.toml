@@ -30,3 +30,11 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# Build cost (#4107): third-party crates carry no debuginfo; workspace members
+# keep the default debug = 2. Without this, registry crates were compiled twice
+# -- once debug-off (the build-script / proc-macro side, where build-override
+# defaults to debug = false) and once debug = 2 -- doubling their compile time.
+# Trade: a debugger or backtrace has no line info inside a dependency.
+[profile.dev.package."*"]
+debug = false
