@@ -218,8 +218,8 @@ fn echo_blake3_hex() -> String {
 // ---------------------------------------------------------------------------
 
 /// Build a `Meta` carrying the auth token in the `token` key.
-fn token_meta(token_str: &str) -> rmcp::model::Meta {
-    let mut meta = rmcp::model::Meta::new();
+fn token_meta(token_str: &str) -> rmcp::model::RequestMetaObject {
+    let mut meta = rmcp::model::RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }

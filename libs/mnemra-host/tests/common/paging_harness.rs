@@ -50,7 +50,7 @@ use mnemra_host::plugin::pool::PluginPool;
 use mnemra_host::plugin::runtime::PluginRuntime;
 use mnemra_host::signing::root_material::ROOT;
 use mnemra_host::storage::postgres::engine::{EmbeddedEngine, TestDatabase};
-use rmcp::model::{CallToolRequestParams, CallToolResult, Meta};
+use rmcp::model::{CallToolRequestParams, CallToolResult, RequestMetaObject};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -78,8 +78,8 @@ pub async fn seed_admin_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> AdminT
 }
 
 /// Build a `Meta` carrying the auth token in the `token` key (open seam #1).
-pub fn token_meta(token_str: &str) -> Meta {
-    let mut meta = Meta::new();
+pub fn token_meta(token_str: &str) -> RequestMetaObject {
+    let mut meta = RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }

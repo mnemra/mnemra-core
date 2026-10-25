@@ -64,7 +64,7 @@ mod shared_engine;
 #[path = "common/slice1_harness.rs"]
 mod slice1_harness;
 
-use rmcp::model::{CallToolRequestParams, ContentBlock, ErrorCode, Meta};
+use rmcp::model::{CallToolRequestParams, ContentBlock, ErrorCode, RequestMetaObject};
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
 
@@ -95,8 +95,8 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> Ad
 
 /// Build a `Meta` carrying the auth token in the `token` key.
 /// Mirrors `token_meta` from `mcp_server.rs` (same open seam #1).
-fn token_meta(token_str: &str) -> Meta {
-    let mut meta = Meta::new();
+fn token_meta(token_str: &str) -> RequestMetaObject {
+    let mut meta = RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }

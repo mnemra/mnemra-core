@@ -374,11 +374,11 @@ impl RunHandle {
     /// `.await` below. `self`'s `impl Drop` runs at the end of this method
     /// (or on early return via `?`), after the `.await`s complete.
     ///
-    /// Wires `self._server` to `rmcp::transport::io::stdio()` — the
-    /// `(tokio::io::Stdin, tokio::io::Stdout)` pair that satisfies the
-    /// generic `(R, W)` `IntoTransport` blanket impl (`transport-io`
-    /// feature, already declared) — via `rmcp::service::serve_server`, then
-    /// awaits the returned `RunningService` to completion. No HTTP MCP
+    /// Wires `self._server` to stdin/stdout through
+    /// `crate::mcp::transport::stdio_transport()` (an over-cap incoming line
+    /// ends the session, #4295) and `crate::mcp::gate::serve` (no request is
+    /// served before `initialize`, #4295), then awaits the returned
+    /// `RunningService` to completion. No HTTP MCP
     /// transport is opened (R-0010-e — the `transport-streamable-http-*`
     /// rmcp features are not compiled in, `tests/mcp_feature_guard.rs`).
     ///
@@ -402,9 +402,9 @@ impl RunHandle {
             ._server
             .take()
             .expect("_server is Some from construction until drop");
-        let running = rmcp::service::serve_server(server, rmcp::transport::io::stdio())
+        let running = crate::mcp::gate::serve(server, crate::mcp::transport::stdio_transport())
             .await
-            .map_err(|e| ServeError::Mcp(Box::new(e)))?;
+            .map_err(|e| ServeError::Mcp(e))?;
         running
             .waiting()
             .await

@@ -304,6 +304,168 @@ async fn production_binary_serves_mcp_over_stdio_with_health_only_listener() {
     let _ = child.start_kill();
 }
 
+/// Pins the production wiring of the incoming-line cap (#4295): an over-cap line
+/// written to the REAL binary's stdin ends the session visibly (stdout closes and
+/// the process exits) rather than being dropped with the pipe left open.
+///
+/// A source-level check could not tell whether `serve_stdio` is wired to the capped
+/// transport; only the spawned binary can. Nothing is written to stdout: it
+/// carries MCP only.
+#[tokio::test]
+async fn production_binary_ends_the_session_on_an_over_cap_incoming_line() {
+    let repo_root = startup_probe::repo_root();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let token_path = startup_probe::write_admin_token_file(tmp.path(), 0o600);
+    let health_addr = startup_probe::reserve_loopback_addr();
+    let binary_path = repo_root.join("target/debug/mnemra");
+    assert!(
+        binary_path.is_file(),
+        "the host binary must already be built at {binary_path:?} — verify-smoke's `build` \
+         prerequisite is expected to produce it before this test runs"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .current_dir(&repo_root)
+        .env("MNEMRA_TOKEN_FILE", &token_path)
+        .env("MNEMRA_HEALTH_PORT", health_addr.port().to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawning the production mnemra binary must succeed");
+    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
+    let stderr_task: tokio::task::JoinHandle<Vec<u8>> = tokio::spawn(async move {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf).await;
+        buf
+    });
+    let mut stdout = child.stdout.take().expect("stdout was piped");
+    let mut stdin = child.stdin.take().expect("stdin was piped");
+
+    // One byte past the cap, no newline. Written from a task because the pipe
+    // fills until the child finishes starting up and begins reading; a write
+    // error after the child has closed its end is the expected outcome.
+    let over_cap = vec![b'x'; mnemra_host::mcp::transport::MAX_INCOMING_LINE_BYTES + 1];
+    let writer = tokio::spawn(async move {
+        use tokio::io::AsyncWriteExt;
+        let _ = stdin.write_all(&over_cap).await;
+        stdin
+    });
+
+    let mut stdout_bytes = Vec::new();
+    let closed =
+        tokio::time::timeout(HANDSHAKE_CEILING, stdout.read_to_end(&mut stdout_bytes)).await;
+    if closed.is_err() {
+        let _ = child.start_kill();
+        let stderr_tail = collect_stderr_tail(stderr_task).await;
+        panic!(
+            "stdout did not close within {HANDSHAKE_CEILING:?} of an over-cap incoming line — \
+             the line was dropped with the session left open, or the binary is not wired to the \
+             capped transport. Child stderr tail:\n{stderr_tail}"
+        );
+    }
+    assert!(
+        stdout_bytes.is_empty(),
+        "stdout carries MCP only; an over-cap line before initialize must produce no output, \
+         got {} bytes",
+        stdout_bytes.len()
+    );
+    let status = tokio::time::timeout(Duration::from_secs(30), child.wait())
+        .await
+        .expect("the binary exits once its MCP session ends")
+        .expect("wait on the child");
+    assert!(
+        !status.success(),
+        "a session ended by an over-cap line is a failed serve, not a clean shutdown; got {status:?}"
+    );
+    writer.abort();
+
+    // The session must end because of the cap, not by some other failure: the
+    // child's log carries the reader's error text.
+    let stderr_bytes = tokio::time::timeout(Duration::from_secs(5), stderr_task)
+        .await
+        .expect("stderr closes once the child has exited")
+        .expect("stderr drain task did not panic");
+    let stderr_text = String::from_utf8_lossy(&stderr_bytes);
+    assert!(
+        stderr_text.contains("incoming line exceeds the"),
+        "the child's stderr must carry the LineCappedReader cap error; got:\n{stderr_text}"
+    );
+}
+
+/// Pins the production wiring of the initialize gate (#4295): against the REAL
+/// binary, a first message that is not `initialize` but carries complete inline
+/// `_meta` naming a released version is refused with -32600 "initialize
+/// required", where rmcp alone would serve it.
+#[tokio::test]
+async fn production_binary_refuses_a_request_before_initialize() {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let repo_root = startup_probe::repo_root();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let token_path = startup_probe::write_admin_token_file(tmp.path(), 0o600);
+    let health_addr = startup_probe::reserve_loopback_addr();
+    let binary_path = repo_root.join("target/debug/mnemra");
+    assert!(
+        binary_path.is_file(),
+        "the host binary must already be built at {binary_path:?} — verify-smoke's `build` \
+         prerequisite is expected to produce it before this test runs"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .current_dir(&repo_root)
+        .env("MNEMRA_TOKEN_FILE", &token_path)
+        .env("MNEMRA_HEALTH_PORT", health_addr.port().to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawning the production mnemra binary must succeed");
+    let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
+    let stderr_task: tokio::task::JoinHandle<Vec<u8>> = tokio::spawn(async move {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf).await;
+        buf
+    });
+    let stdout = child.stdout.take().expect("stdout was piped");
+    let mut stdin = child.stdin.take().expect("stdin was piped");
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/list",
+        "params": {"_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2025-11-25",
+            "io.modelcontextprotocol/clientCapabilities": {}
+        }}
+    });
+    let mut line = serde_json::to_vec(&request).expect("request serializes");
+    line.push(b'\n');
+    stdin.write_all(&line).await.expect("write request");
+
+    let mut lines = BufReader::new(stdout).lines();
+    let reply = tokio::time::timeout(HANDSHAKE_CEILING, lines.next_line()).await;
+    let _ = child.start_kill();
+    let reply = match reply {
+        Ok(Ok(Some(reply))) => reply,
+        other => {
+            let stderr_tail = collect_stderr_tail(stderr_task).await;
+            panic!("no reply line from the binary: {other:?}. Child stderr tail:\n{stderr_tail}");
+        }
+    };
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("reply is JSON");
+    assert_eq!(
+        reply["error"]["code"],
+        serde_json::json!(-32600),
+        "a pre-initialize request must be refused by the gate; got {reply}"
+    );
+    assert_eq!(
+        reply["error"]["message"],
+        serde_json::json!("initialize required"),
+        "got {reply}"
+    );
+}
+
 /// Join the stderr-draining task with a short bound and render its buffer
 /// as a display-friendly tail (last 4 KiB) for a panic message. Never
 /// panics itself — diagnostic-only, used from inside another panic path.
