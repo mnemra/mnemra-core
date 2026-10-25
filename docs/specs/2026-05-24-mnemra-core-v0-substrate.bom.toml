@@ -21,16 +21,23 @@ spec_type = "architecture"
 
 [audit_chain.intent]
 ref = "docs/src/intent/mnemra-core.md"
-# RE-LOCKED 2026-06-10 (dispatch 963): reconciled to P-0010 D8 (TimescaleDB demoted; content+state
+# RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119): the pin moves to the brief's
+# current blob. The landings that changed it since the 2026-06-29 re-lock are listed under the spec
+# block below. Prior version: f1fd2581391aa0ad608b79296e2a4f66e02b1c0b, locked_at 2026-06-10.
+#
+# PRIOR: RE-LOCKED 2026-06-10 (dispatch 963): reconciled to P-0010 D8 (TimescaleDB demoted; content+state
 # persisted in-app, timeseries+log emit-not-store) to close the Charon /verify finding (dispatch 962,
 # High/88 — the intent lagged the fold's locked D8). Prior version 20be537 carried the stale
 # TimescaleDB Hard constraint (L116-117) + the four-shape 0.1.0 description (L281-282).
-version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
-locked_at = 2026-06-10
+version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
+locked_at = 2026-10-25
 
 [audit_chain.frame]
 ref = "docs/src/intent/mnemra-core-frame.md"
-version = "d80ccf0b1b738cbb83d915e0aa3df7207671dbfe"
+# RE-LOCKED 2026-10-25 (#4119): the pin moves to the core Frame's current blob; the landings that
+# changed it are listed under the spec block below. Prior version:
+# d80ccf0b1b738cbb83d915e0aa3df7207671dbfe.
+version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
 # PROVENANCE (thin — read before trusting): the fold reviews 958/959/961 reviewed
 # the Frame's FOLD EDITS (P-0011 dissolution record, observability re-home,
 # frame:232/550 emission reconciliation) for coherence/correctness. A discrete
@@ -42,12 +49,34 @@ version = "d80ccf0b1b738cbb83d915e0aa3df7207671dbfe"
 internal_conformance = "pass"
 
 [audit_chain.frame.generated_against]
-intent_version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
+intent_version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
 
 [audit_chain.spec]
 ref = "docs/specs/2026-05-24-mnemra-core-v0-substrate.md"
-version = "3118fbb3f5f81c45f3ea1e7c42bd6448114f123f"
-# RE-LOCKED 2026-06-29 (spec-exit, #1847 artifact-list keyset pagination): spec amended in place
+version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
+# RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119). Prior version:
+# 3118fbb3f5f81c45f3ea1e7c42bd6448114f123f. The three prior pins (spec 3118fbb3, brief f1fd2581,
+# Frame d80ccf0b) resolve to no object in this repository; the landings below are therefore those
+# after 39a5f42 (#1847, the subject of the 2026-06-29 re-lock) on main over the three pinned paths,
+# eleven in all:
+#   - 65e58e0 (#4018, operator-run PostgreSQL replaces the embedded engine): four review rounds plus
+#     a final pass by Warden, Bolt and Charon; maintainer approval #4018 activity 7800.
+#   - 988b784 (#3377 gate #3 disclosure erratum): no review recorded.
+#   - e943dd2 (R-0116, durability): two review rounds; maintainer gate 2026-09-17.
+#   - 14998c9, 01d6516, a598af5, 3093171, 674f172, b8332ca, d61b468 and 063c42d: brief and register
+#     rows only (each touched only docs/src/intent/mnemra-core.md); no review recorded.
+# Then #4119 (R-0120 amended in place, and R-0119-a's repeated-key refusal from round 4, ruling
+# #4119 activity 8289). Its reviews ranged over R-0120 and, from round 4, that R-0119-a clause only;
+# no other requirement of this spec was re-reviewed. Reviews (#4119 activities): round 1 (7846);
+# round 2 (7868); round 3 (7972); the threat model (8063); round-4 verification reviews by Bolt,
+# Warden and Charon (8372); the round-4 fix pass (8432, ordered by ruling 8382) and its scoped
+# re-checks (Bolt 8436, Warden 8446, Charon 8453); the executor pass (8475, ordered by ruling 8452)
+# and Warden's final re-check of it (8494); the landing-prep text pass, ordered at 8494, with no
+# further review round. Measurements: 8047, 8064. Rulings: 7849, 7867, 8037, 8067, 8289, 8382, 8420,
+# 8438, 8452; and #4249 activity 8380 (provenance mentions keep their version). Spec-exit approval:
+# the maintainer's conditional approval (8420, tightened by 8438 and 8452), recorded as met at 8494.
+#
+# PRIOR: RE-LOCKED 2026-06-29 (spec-exit, #1847 artifact-list keyset pagination): spec amended in place
 # (R-0020 + R-0012-a/-f/-e + R-0019-a + R-0017-a) and committed 05a2ba4; version re-locked to the new
 # blob, reconciling the prior dc0ed3b -> committed-spec drift in the same move. Stage-3 review: Warden
 # 1164 + Bolt 1165 + Glitch 1166 (all approve-with-conditions, no Critical/High); conditions folded
@@ -62,8 +91,8 @@ version = "3118fbb3f5f81c45f3ea1e7c42bd6448114f123f"
 internal_conformance = "pass"
 
 [audit_chain.spec.generated_against]
-intent_version = "f1fd2581391aa0ad608b79296e2a4f66e02b1c0b"
-frame_version = "d80ccf0b1b738cbb83d915e0aa3df7207671dbfe"
+intent_version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
+frame_version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
 
 [signals.auditor]
 applicable = true

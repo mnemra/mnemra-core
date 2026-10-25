@@ -1,6 +1,6 @@
 ---
 date: 2026-07-02
-status: draft
+status: locked   # corrected 2026-10-20 (#4119), maintainer ruling 2026-10-22 (#4119 activity 8037, "Lock it now"): the spec cites this Frame as locked at blob 35ec75e3; the frontmatter had never been updated
 revision: r2 (Warden Stage-2 review r1 folded — 2 medium, 1 low; 2026-07-02)
 intake: ./ci-flake-tier2-shared-engine.md
 modulation: brownfield-extension
@@ -14,6 +14,8 @@ modulation_override: >
 ---
 
 # Frame: Tier-2 CI test-infra — shared engine per binary, per-test databases
+
+> ⚠ **Historical record — engine superseded (banner added 2026-10-20, #4119; nothing below is edited).** This Frame was written against the embedded Postgres engine (`postgresql_embedded`, `EmbeddedEngine`), which [P-0010](../src/adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (#4018) replaced with a separate PostgreSQL instance the operator installs and runs; test fixtures now obtain their server per **R-0120** in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`. F-1's "one embedded engine per test binary, booted lazily" and the named method on `EmbeddedEngine`, F-3's chokepoint symbols (`EmbeddedEngine::start`, `start_embedded`, `postgresql_embedded`) and the `start_embedded()` production path are superseded in their words; the seams they lock — one fixture entry point, a database per test, a guard lint on the class "a test reaches a database by a path the fixture does not control", a source-derived enumerator — stand, and the spec this Frame bounds, `docs/specs/2026-07-02-ci-flake-tier2-shared-engine.md`, re-states them in place (§Amendment 2026-10-20) with the symbol list R-0120-f delegated to it. F-5's don't-adopt on nextest is noted there as resting on a weakened reason and is not re-opened. The frontmatter `status: draft` that contradicted the spec's lock citation is corrected to `locked` in this change (maintainer ruling 2026-10-22, #4119 activity 8037: "Lock it now").
 
 ## Operating constraints
 

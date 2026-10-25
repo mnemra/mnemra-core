@@ -74,8 +74,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "dc23e3914169ec1e19b60b0837b09dfa5a50466906d8b3730e1567757707afe3",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "ac7c65db8d922f020dc8145f78d08b14b0646e406abc6c814450967978b6c9b0",
+      "translated_at": "2026-10-25T21:30:25Z"
     },
     "adrs/P-0011-logging-facade.md": {
       "primary_audience": "agent",
@@ -221,8 +221,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "3709169b8c7cbc7d4f03b4f87180fbc7a2fdd8352dff7d418a7ec44550dc751c",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "7f7e45a770dd64da506b7d9d72a80bc0b9da63b0c0133bc880f88427fbf62275",
+      "translated_at": "2026-10-25T21:30:25Z"
     },
     "adrs/README.md": {
       "primary_audience": "human",
@@ -249,8 +249,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "f62d16ad92d436517fd0f126c335609d5b84cbce32c5811d20f611246fd662f1",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "033967e2e011c18a25c9dd7007d384a224ed756a633e596570bedca2e7b5816a",
+      "translated_at": "2026-10-25T21:30:25Z"
     },
     "intent/mnemra-core-frame.md": {
       "primary_audience": "agent",

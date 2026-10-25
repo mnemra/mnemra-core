@@ -650,11 +650,157 @@ The extension also adds these typed elements. [P-0023](../adrs/P-0023-plugin-dis
 
 One case is out of model, and signed off as such (ruling 7771): a hostile operator. The operator owns the data by construction (`AR-0013`). For this amendment the accepted-risk register below gains `AR-0011` through `AR-0013` (Warden B2). The rest of the register's sweep (the R-0003, R-0007 and R-0010 triggers) stays inside the #3591 batched amendment (maintainer ruling 2026-10-16, #3591 activity 7321). The operator obligations the host can't verify are a named delegation (spec R-0117-j). Items 1 to 3 of that delegation are the accepted risk `AR-0011`.
 
+### Test substrate (Amended 2026-10-22, #4119 — threat-modeled test substrate, spec R-0120)
+
+**Why it is here.** The test substrate's typed DFD sits in this file, next to the operator-instance retype, for two reasons. First, `TB-test-postgres` is the same kind of zone as the retyped `TB-postgres`: a server mnemra doesn't run, in this case holding a throwaway population. Second, the tier-2 CI Frame (`docs/intent/ci-flake-tier2-shared-engine-frame.md`) carries a banner saying nothing below it is edited, so this file is where later reviews can annotate one diagram. `TB-test-postgres` is a **separate** boundary from `TB-postgres`, so test-only roles never appear inside the production zone.
+
+**Source.** The diagram comes from the #4119 threat model (Warden, 2026-10-22, finding F-1). Its IDs follow that model's finding F-3, which keeps them namespace-disjoint from the `TB-*` and `DF-*` names above. It's drawn here for the design as amended by spec R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`) on 2026-10-22. That amendment changes the threat model's draft in three places:
+- the production-store scan cache and its read flow are gone, because the store guard is a name allowlist (R-0120-a(8));
+- the superuser location is named (R-0120-a(1));
+- the fresh-machine job is a second instance of `TB-ci-job`, with its own container and no test binary (R-0120-g).
+
+```d2
+direction: right
+
+TB-github-platform: {
+  label: "TB-github-platform (log service, masking, GITHUB_ENV processing)"
+  DS-ci-logs: { label: "DS-ci-logs\n(PUBLIC job logs)"; shape: cylinder }
+  EE-github-runner: { label: "EE-github-runner\n(hosted VM provider)" }
+}
+
+TB-ci-job: {
+  label: "TB-ci-job (one runner VM, one uid, docker group: every step is one trust zone, accepted risk AR-0014)"
+  P-ci-steps: { label: "P-ci-steps\n(cert gen, container start, password gen,\nadd-mask, setup SQL incl. IS_TEMPLATE,\nsuperuser-location write, GITHUB_ENV export, docker logs)" }
+  EE-third-party-actions: { label: "EE-third-party-actions\n(checkout, toolchain, caches, installers;\ntag-pinned, #4153)" }
+  DS-github-env: { label: "DS-github-env\n(GITHUB_ENV / GITHUB_OUTPUT files)"; shape: cylinder }
+  DS-tls-material: { label: "DS-tls-material\n(CA cert; CA key deleted; server key/cert)"; shape: cylinder }
+  DS-su-location: { label: "DS-su-location\n(~/.config/mnemra/test-superuser/, 0700:\nurl + 0600 password)"; shape: cylinder }
+  TB-ci-container: {
+    label: "TB-ci-container (server uid; reachable by docker exec)"
+    EE-container-image: { label: "EE-container-image\n(pgvector/pgvector@sha256)" }
+  }
+}
+
+TB-contributor-tree: {
+  label: "TB-contributor-tree (the just ci process tree, one OS uid; local or in TB-ci-job)"
+  P-just-ci: { label: "P-just-ci\n(preflight: harness URL, no superuser or PG* var;\nrun-id export; chain; EXIT trap:\nleftover check, teardown, GATE leaked-objects)" }
+  P-cargo-build: { label: "P-cargo-build\n(cargo, rustc, build scripts, proc-macros)" }
+  P-teardown-executor: { label: "P-teardown-executor\n(non-default workspace binary, no argument;\nrefuses bad run id, URL or PG* before connecting;\nharness parse + role checks, datdba before drop,\ndir identity before remove; one teardown_report)" }
+  P-test-binary: {
+    label: "P-test-binary (each Postgres test binary)"
+    P-shared-fixture: { label: "P-shared-fixture\n(parse in harness mode, PG* refusal,\nrole-authority allowlist, name-allowlist store guard,\nrun roles + self-grant, pw files, per-binary DB drop)" }
+  }
+  TB-gated-cell: {
+    label: "TB-gated-cell (ENV-INHERITANCE boundary only, not an OS boundary)"
+    P-gated-su-recipe: { label: "P-gated-su-recipe\n(reads DS-su-location, builds without,\nexecs with env; never exits 0 on a skip)" }
+    P-gated-su-cell: { label: "P-gated-su-cell\n(instance_check_privileged:\naccessor, superuser pool)" }
+  }
+  TB-host-under-test: {
+    label: "TB-host-under-test (env_clear + explicit list)"
+    P-spawned-host: { label: "P-spawned-host\n(production binary; serving role,\nor superuser in the R-0117-c case)" }
+  }
+  DS-procfs: { label: "DS-procfs\n(/proc/<pid>/environ same-uid; cmdline)"; shape: cylinder }
+}
+
+TB-shared-tmp: {
+  label: "TB-shared-tmp (OS temp dir; on Linux a shared /tmp, INFERRED)"
+  DS-run-dir: { label: "DS-run-dir\n(<tmp>/mnemra_test_<run>/, 0700)"; shape: cylinder }
+  DS-pw-files: { label: "DS-pw-files\n(run-scoped owner/serving plaintext, 0600)"; shape: cylinder }
+}
+
+TB-test-postgres: {
+  label: "TB-test-postgres (the contributor's server, or the CI container's)"
+  EE-pg-server: { label: "EE-pg-server\n(contributor- or CI-run server, PostgreSQL >= 16)" }
+  DS-pg-instance: { label: "DS-pg-instance\n(pg_database, pg_roles, template,\ntest DBs, other runs' objects)"; shape: cylinder }
+  DS-pg-server-log: { label: "DS-pg-server-log\n(STATEMENT lines on error;\nSCRAM verifiers, never plaintext)"; shape: cylinder }
+  EE-other-lane: { label: "EE-other-lane\n(concurrent run, same server)" }
+}
+
+DS-run-dir-record: { label: "DS-run-dir-record\n(location record, the locator's record branch only;\nowner-only, opened without following links;\nwhere it lives is task #4164's)"; shape: cylinder }
+
+EE-contributor: { label: "EE-contributor\n(runs just ci; owns env)" }
+EE-other-local-user: { label: "EE-other-local-user\n(multi-user Linux host)" }
+EE-pr-author: { label: "EE-pr-author\n(test code under test)" }
+
+EE-contributor -> TB-contributor-tree.P-just-ci: "DF-01 env: harness URL (userinfo pw), MNEMRA_TEST_RUN_ID"
+TB-contributor-tree.P-just-ci -> TB-contributor-tree.P-cargo-build: "DF-02 inherited env"
+TB-contributor-tree.P-just-ci -> TB-contributor-tree.P-test-binary: "DF-03 inherited env + run id"
+TB-contributor-tree.P-cargo-build -> TB-contributor-tree.P-teardown-executor: "DF-23 build, after the preflight and before the trap and the chain"
+TB-contributor-tree.P-just-ci -> TB-contributor-tree.P-teardown-executor: "DF-24 EXIT trap spawn: inherited env: harness URL (userinfo pw), run id; no argument"
+TB-contributor-tree.P-teardown-executor -> TB-test-postgres.DS-pg-instance: "DF-25 TLS verify-full to postgres db, harness role: role checks, parse + datdba, DROP DATABASE WITH (FORCE), DROP ROLE"
+TB-contributor-tree.P-teardown-executor -> TB-shared-tmp.DS-run-dir: "DF-26 locate (the fixture's locator), check identity, remove"
+TB-contributor-tree.P-teardown-executor -> TB-github-platform.DS-ci-logs: "DF-27 teardown_report, parsed-field messages"
+TB-contributor-tree.P-teardown-executor -> TB-contributor-tree.P-just-ci: "DF-28 stdout and exit status: the teardown_report the trap's closed outcome set decides on"
+TB-contributor-tree.P-test-binary.P-shared-fixture -> DS-run-dir-record: "DF-29 run-dir location: written by the first acquirer, read by later acquirers (record branch only)"
+DS-run-dir-record -> TB-contributor-tree.P-teardown-executor: "DF-30 run-dir location read (record branch only)"
+TB-ci-job.DS-su-location -> TB-contributor-tree.TB-gated-cell.P-gated-su-recipe: "DF-04 su URL + file path (not env)"
+TB-contributor-tree.TB-gated-cell.P-gated-su-recipe -> TB-contributor-tree.TB-gated-cell.P-gated-su-cell: "DF-05 exec env: su URL + su pw file path"
+TB-contributor-tree.P-test-binary.P-shared-fixture -> TB-shared-tmp.DS-run-dir: "DF-06 mkdir, pw files"
+TB-contributor-tree.P-test-binary.P-shared-fixture -> TB-test-postgres.DS-pg-instance: "DF-08 TLS verify-full to postgres db, harness role: name allowlist, sweep, CREATE ROLE ... PASSWORD '<SCRAM verifier>', GRANT ... WITH SET TRUE, CREATE/DROP DATABASE"
+TB-contributor-tree.P-test-binary.P-shared-fixture -> TB-contributor-tree.TB-host-under-test.P-spawned-host: "DF-09 env_clear + URL (no pw) + pw file path"
+TB-contributor-tree.TB-host-under-test.P-spawned-host -> TB-test-postgres.DS-pg-instance: "DF-10 serving role, verify-full"
+TB-contributor-tree.TB-gated-cell.P-gated-su-cell -> TB-test-postgres.DS-pg-instance: "DF-11 superuser, verify-full"
+TB-ci-job.P-ci-steps -> TB-ci-job.TB-ci-container: "DF-12 docker run: su password, key mount, -c flags"
+TB-ci-job.P-ci-steps -> TB-ci-job.DS-github-env: "DF-13 harness URL + CA path export"
+TB-ci-job.DS-github-env -> TB-ci-job.EE-third-party-actions: "DF-14 later steps' env"
+TB-test-postgres.DS-pg-server-log -> TB-github-platform.DS-ci-logs: "DF-15 docker logs (on failure)"
+TB-contributor-tree.P-test-binary -> TB-github-platform.DS-ci-logs: "DF-16 test stdout/stderr"
+TB-ci-job.EE-third-party-actions -> TB-ci-job.TB-ci-container: "DF-17 docker exec (any step)"
+EE-other-local-user -> TB-shared-tmp.DS-run-dir: "DF-18 pre-create / plant (Linux)"
+EE-other-local-user -> TB-contributor-tree.DS-procfs: "DF-19 cmdline read"
+TB-test-postgres.EE-other-lane -> TB-test-postgres.DS-pg-instance: "DF-20 own sweep, age sweep, clone lock"
+EE-pr-author -> TB-contributor-tree.P-test-binary: "DF-21 PR code runs as the test"
+TB-ci-job.TB-ci-container.EE-container-image -> TB-ci-job.TB-ci-container: "DF-22 image pull by digest"
+```
+
+**Elements.** Each element is created by the spec clause named beside it. Unless a row names a tier-2 spec, its R-IDs are those of `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`.
+
+| ID | Type | What it is | Source |
+|---|---|---|---|
+| `P-just-ci` | process | the `ci` recipe: preflight, run-id export, the chain, the `EXIT` trap (leftover check, teardown, `GATE leaked-objects`) | R-0120-a(5), R-0120-c(1) |
+| `P-cargo-build` | process | `cargo`, `rustc`, build scripts and proc-macros, inheriting the `just ci` environment | R-0120-a(1) |
+| `P-teardown-executor` | process | the teardown executor: built by `P-cargo-build` after the preflight, spawned by `P-just-ci`'s `EXIT` trap, connecting as the harness role (the fixture's equivalent flow is DF-08) | R-0120-a(5) |
+| `P-test-binary` / `P-shared-fixture` | process / in-process | each Postgres test binary and its one fixture entry point | tier-2 R-0026; R-0120-a(2)–(9) |
+| `P-gated-su-recipe`, `P-gated-su-cell` | process | the `instance_check_privileged` recipe and binary: the accessor and the superuser pool | R-0120-a(1); tier-2 R-0033 (4) |
+| `P-spawned-host` | process | the production binary spawned by `smoke_e2e` or by the gated cell | R-0120-e(1), R-0120-a(1) |
+| `P-ci-steps` | process | the job steps that start the container and set it up | R-0120-c(1) |
+| `DS-su-location` | data store | `~/.config/mnemra/test-superuser/` (`url`, `password`), `0700` | R-0120-a(1), R-0120-c(1), R-0120-d |
+| `DS-run-dir`, `DS-pw-files` | data stores | the per-run directory and the run-scoped role password files (no scan cache) | R-0120-a(2), (5), (8) |
+| `DS-run-dir-record` | data store | the record the locator reads the per-run directory's location from, present only if task #4164 chooses that branch of R-0120-a(5); owner-only and opened without following a link; drawn outside every boundary because where it lives is task #4164's | R-0120-a(2), (5) |
+| `DS-pg-instance`, `DS-pg-server-log` | data stores | the catalog and databases; the server log | R-0120-a; R-0120-a(2) (SCRAM verifiers) |
+| `DS-ci-logs`, `DS-github-env`, `DS-tls-material`, `DS-procfs` | data stores | public job logs; `GITHUB_ENV`/`GITHUB_OUTPUT`; the CA, server certificate and key; `/proc/<pid>/environ` and `cmdline` | R-0120-c(1), R-0120-d, R-0120-e(1) |
+| `EE-pg-server`, `EE-container-image`, `EE-other-lane` | external entities | the server (PostgreSQL 16 or later), the digest-pinned image, a concurrent run on the same server | R-0120-a(9), R-0120-c(1), R-0120-a |
+| `EE-third-party-actions`, `EE-github-runner` | external entities | marketplace actions (tag-pinned, task #4153) and the hosted runner | `.github/workflows/ci.yml` |
+| `EE-contributor`, `EE-other-local-user`, `EE-pr-author` | external entities | who runs `just ci`; another uid on a multi-user host; code under test in a pull request | R-0120-d; R-0120-a(2) |
+
+**Trust boundaries.** Each row gives the boundary's trust direction and the numbered flows that cross it, then says where its control or its accepted risk sits.
+
+| Boundary | Trust direction | Crossing flows | Where the control or the acceptance sits |
+|---|---|---|---|
+| `TB-github-platform` | the job writes and the world reads; masking is the only filter | DF-15, DF-16, DF-27 | SCRAM verifiers keep plaintext out of DF-15 (R-0120-a(2)); DF-27 carries parsed fields only, never URL text (R-0120-a(2), (5)); residual `AR-0019`; masking controls are task #4163 |
+| `TB-ci-job` | every step trusts every other step | DF-12, DF-13, DF-14, DF-17 | accepted risk `AR-0014`; SHA-pinning is task #4153 |
+| `TB-ci-container` | trusts any `docker exec`; TCP gated by `pg_hba` only | DF-12, DF-17, DF-22 | digest pin and drift job (R-0120-c); `AR-0014` |
+| `TB-contributor-tree` | the tree trusts what the shell exported | DF-01, DF-02, DF-03, DF-19, DF-23, DF-24, DF-28, DF-29, DF-30 | `PG*` refused, harness URL parsed in `harness` mode (R-0120-a(7)), by the executor as by the fixture; the preflight runs before the executor's build (R-0120-a(5)); the trap decides on DF-28 by its closed outcome set (R-0120-a(5)) |
+| `TB-gated-cell` | environment-inheritance boundary only | DF-04, DF-05, DF-11 | holder confinement (R-0120-a(1)); same-uid reads accepted, `AR-0015` |
+| `TB-host-under-test` | the host trusts only its explicit variable list | DF-09, DF-10 | `env_clear()` (R-0120-a(1)); the spawn-site detector is task #4165 |
+| `TB-shared-tmp` | the fixture trusts a directory it created | DF-06, DF-18, DF-26 | no cache under the name allowlist (R-0120-a(8)); the executor finds the directory through the fixture's locator and checks its identity before removing it, and a location record (`DS-run-dir-record`, drawn outside every boundary until task #4164 places it) is owner-only and opened without following a link (R-0120-a(5)); directory ownership, `O_NOFOLLOW` controls, the locator's mechanism and the identity check's mechanism and seeds are task #4164 |
+| `TB-test-postgres` | trusted after `verify-full`, the role-authority allowlist and the store guard; between runs and lanes, by parse plus `datdba` under a privilege floor | DF-08, DF-10, DF-11, DF-20, DF-25 | R-0120-a(3), (6), (8), (9), and for DF-25 the same checks run by the executor (R-0120-a(5)); the shared harness role across lanes is accepted, `AR-0016` |
+
+**Threat rows for the executor flows (INFERRED).** INFERRED marks a reading reasoned from the design rather than observed. The #4119 threat model (Warden, 2026-10-22) predates the teardown executor, so it has no rows for DF-23 to DF-30 or for `DS-run-dir-record`. Each of those inherits the rows of the fixture flow or store it duplicates, because R-0120-a(5) has the executor run the fixture's own checks through the fixture's own functions:
+- DF-23 inherits DF-02's rows (`T4119-01`).
+- DF-24 inherits DF-01's and DF-03's (`T4119-01`, `T4119-16`, `T4119-29`).
+- DF-25 inherits DF-08's on the connection and the drops (`T4119-19`, `T4119-21`, `T4119-23`), but not `T4119-41`, the clone lock, which R-0120-a(5) doesn't give the executor.
+- DF-26 inherits `DS-run-dir`'s (`T4119-27`). DF-29, DF-30 and `DS-run-dir-record` inherit `DS-run-dir`'s and `DS-pw-files`' (`T4119-27`, `T4119-28`) until task #4164 places the record.
+- DF-27 inherits DF-16's and `DS-ci-logs`' (`T4119-10`).
+- DF-28 inherits `P-just-ci`'s (`T4119-38`, `T4119-42`).
+
+No threat-model pass has drawn rows for these flows on their own. The mapping is the design's reading, not a finding.
+
 ## Accepted risks
 
 The Stage 2 terminal security review filled this in on 2026-05-22. Each entry is a risk the V0 architecture accepts, on the basis of the V0-dogfood-versus-commercial-tier carve-out that the locked product brief authorizes. Entries are numbered `R-NNNN`. Following the workspace threat-modeling skill's convention, every entry carries a **trip-wire** that names the condition under which the deferred mitigation has to be revisited. At V0 the owner is the maintainer; ownership passes to a named role when the project moves to a commercial tier. *(Amended 2026-10-19 r3, #4018: for now the register mixes two prefixes on purpose. The original rows keep `R-0001` through `R-0010`, which collide with the specs' requirement series (`CLAUDE.md`, #2126). The entries this amendment adds use the register's own disjoint prefix, `AR-`. Renaming or confirming the old rows belongs to the #3591 batch's register sweep (ruling 7321), not to this amendment.)*
 
-The placeholder columns get one addition, a **Rationale** column, so the basis for each deferral is legible without chasing an external reference. Every entry maps back to one or more threat rows above by its Risk ID.
+The placeholder columns get one addition, a **Rationale** column, so the basis for each deferral is legible without chasing an external reference. Every entry maps back to one or more threat rows above by its Risk ID. Rows `AR-0014` through `AR-0019` come from the 2026-10-22 test-substrate amendment (#4119) and use the same `AR-` prefix; their threat IDs (`T4119-*`) point into the #4119 threat model behind the test-substrate DFD above.
 
 | Risk ID | Description | Owner | Trip-wire | Rationale |
 |---|---|---|---|---|
@@ -671,6 +817,12 @@ The placeholder columns get one addition, a **Rationale** column, so the basis f
 | `AR-0011` *(Amended 2026-10-19 r2, #4018; signed off by the maintainer 2026-10-19, #4018 activity 7771)* | **The operator owns the Postgres and pgvector supply chain and the persistent storage the data lives on.** The host verifies nothing about the binaries it talks to and cannot see the instance's data directory: the embedded design's hash-pinning of the engine binaries (`KNOWN_GOOD_HASHES`) is **lost, not replaced** — a loss, labelled as such (P-0010 §Amendment DE9). Spec R-0117-j items 1–3, emitted by `mnemra check-db --obligations` under "Not verified by mnemra". | maintainer | Retires only if a packaging shape under #4019 lets the host verify what it talks to (a host-verified image digest, for example) — none is designed; otherwise standing. Re-examined at the #4019 gate. | The operator model (ruling 7470) places the instance outside the host's authority by construction; a host that cannot install or run the binaries cannot pin them. Named in the obligations list and the deployment document rather than implied. Rejected: keeping a host-side pin table for an install the host does not perform — it would check a path it never runs. |
 | `AR-0012` *(Amended 2026-10-19 r2, #4018; signed off 2026-10-19, activity 7771)* | **Up to one drift interval of writes acknowledged under a weakened durability setting.** An operator- or role-level change to `fsync` / `full_page_writes` / `synchronous_commit` / `data_sync_retry` is observed by the next instance check (30 s cadence plus one check duration, spec R-0118-c); writes acknowledged in that window may be lost on an instance crash. Spec R-0117-d, R-0121-b. | maintainer | **Mechanical trip-wire (r3):** the window only ever opens on a `durability_off` transition, and every such transition is counted (`instance_check_total{clause="R-0117-d",status="unmet"}`, spec R-0118-j) and alerted (`host_ready == 0`); the trip-wire is **the first such transition observed on a production instance**, which re-opens this entry — a lost write itself is not detectable, so the detector is keyed on the event that creates the window, not on the loss. The window shrinks if the drift interval shrinks (AE4, ruled fixed at 30 s on 2026-10-19, activity 7787) and closes only if every writer session re-checked the settings per transaction, a per-call cost this amendment does not take. | The settings are the operator's instance's; the host verifies them on the sessions writers use and rebuilds the pool after a drift, which is the structural mitigation. The residual is the interval, stated as a number rather than hidden. |
 | `AR-0013` *(Amended 2026-10-19 r2, #4018; signed off 2026-10-19, activity 7771)* | **A hostile operator, or other principals on a shared or managed instance, are out of model.** The operator holds superuser authority inside `TB-postgres`; `EE-other-principals` are bounded by the instance's grants, not by the host. `EE-other-principals`/I,E. | maintainer | A managed or shared-instance offering (the brief's `idea`-tier managed/appliance entries) — self-announcing through the register: that entry's design is where the model is re-drawn. | The operator owns the data by construction (the brief's self-hostable success criterion); modelling the owner as an adversary would make every control a control against the deployment's own principal. The host's side is least-authority (R-0117-c) and the exposure obligations are named (R-0117-j items 6, 8). **Not** accepted alongside this: local server spoofing, which is mitigated (spec R-0117-f, R-0119-c/-d). |
+| `AR-0014` *(Amended 2026-10-22, #4119; accepted by Peter 2026-10-22, #4119 activity 8067; threat model candidate AC4119-1)* | **The CI job is one trust zone.** In the job that runs the Postgres tests (spec R-0120-c(1)), every step can read the superuser location, `docker exec` into the server and hold the harness URL. That includes tag-pinned third-party actions and the pull request's own test code. Threats `T4119-01`, `-02`, `-44`, `-45`, `-47`, `-49` (the #4119 threat model; zone `TB-ci-job` in the test-substrate DFD above). **Cost, as stated in the threat model:** in CI, the superuser "confinement" defends against accidental inheritance only, and a moved action tag can falsify the gate's own verdict. That was already true before #4119; #4119 adds a server and credentials to the zone. | maintainer | **PARKED — human-noticed:** revisited at each change to `.github/workflows/ci.yml` (the review of that change re-reads this row), and at task #4153 (SHA-pin the third-party actions with an update mechanism), whose landing narrows the entry to the pull-request-code half. | The credentials are throwaway: generated per job, for a container that dies with the job, with no repository secret in the job by design and a `pull_request` trigger, so nothing beyond the job is reachable. The alternative is SHA-pinning plus `local all all reject` in the container's `pg_hba` (threat model D4), at a maintenance cost on every action release; it is filed as #4153 rather than taken in #4119. |
+| `AR-0015` *(Amended 2026-10-22, #4119; accepted by Peter 2026-10-22, #4119 activity 8067; candidate AC4119-2)* | **Same-uid processes on a development machine can read every test credential**: the gated cell's environment through `/proc/<pid>/environ`, and the `0600` superuser and run-scoped password files. Threat `T4119-07`. **Cost:** any same-uid malware gets superuser on the developer's test server. This matches R-0119-a's own premise for host credentials. The delivered property is "not inherited through any environment" (spec R-0120-a(1); P-0031 §Amendment 2026-10-22), not "held by that process alone". | maintainer | **PARKED — human-noticed:** revisited at each change to the deployment document's local-test section (spec R-0120-d), which is where a supported multi-user development host would first be described. | No cheaper alternative exists: the uid is the boundary the operating system gives a single user's processes. The test server is dedicated to tests (R-0120-a(8)), so the superuser reached is a throwaway one. |
+| `AR-0016` *(Amended 2026-10-22, #4119; accepted by Peter 2026-10-22, #4119 activity 8067; candidate AC4119-3, decision D2)* | **Lanes sharing one server and one harness role are mutually trusted.** Between runs and lanes, protection is code (the parse-and-`datdba` rule of spec R-0120-a(3)), not privilege. The harness holds `ADMIN` on every role it created, and `SET` and `INHERIT` on every run role it self-granted (R-0120-a(9)). The 24-hour age sweep assumes synchronised clocks. Threats `T4119-18` (cross-lane part) and `-40`. **Cost:** a buggy, stalled or clock-skewed lane can drop the other lane's live objects, and detection is the other lane's red run. | maintainer | **PARKED — human-noticed:** revisited on the first red run attributed to a cross-lane drop, and at task #4166 (bounded clone lock and the run-lifecycle hardening), which narrows the window. The fallback is D2: one harness role per lane. | The server holds nothing of value: it is dedicated to tests and its contents are recreated per run. The privilege floor still holds: the harness can drop only databases owned by roles it holds `SET` on, and R-0120-a(6) admits only run-grammar roles, so even a parse bug cannot reach a non-test database. The alternative (D2) costs one more setup step per lane, plus its documentation. |
+| `AR-0017` *(Amended 2026-10-22, #4119; accepted by Peter 2026-10-22, #4119 activity 8067; candidate AC4119-4)* | **A local run proves less than CI.** The `/proc/<child>/environ` assertion of spec R-0120-e(1) compiles on Linux only, so a macOS `just ci` does not prove that a spawned host's environment holds no `MNEMRA_TEST_*` variable. Threat `T4119-36`. **Cost:** the required check is the only authority for `env_clear` and for the superuser negative cases. The gated cell itself runs locally (ruling 8067 item 3), so only the environ assertion is CI-only. | maintainer | **PARKED — human-noticed, with a detector for its platform half:** revisited at each change to `.github/workflows/ci.yml` (the review of that change re-reads this row). The platform half is detected: the required "CI gates" job fails unless its output holds the Linux-only marker line of `smoke_e2e` and of the gated binary (spec R-0120-e(4) as amended), so moving the required check off Linux turns it red whatever `CI` is set to. Deleting that step from `ci.yml` is the residual, and the cadence above covers it. The local half stays parked: a macOS `just ci` proves less than CI, and no detector changes that. | A platform limit; no alternative exists short of a Linux-only local workflow. |
+| `AR-0018` *(Amended 2026-10-22, #4119; accepted by Peter 2026-10-22, #4119 activity 8067; candidate AC4119-5)* | **Nothing listens on loopback port 1.** The red-phase sentinel pools of spec R-0120-f(ii) target `127.0.0.1:1`; that nothing listens there is INFERRED, and on macOS an unprivileged bind may be possible. Threat `T4119-26`. **Cost:** a local listener makes red-phase tests flake; only dummy credentials are exposed. | maintainer | **Self-announcing:** a listener on port 1 turns the sentinel tests' refusal assertions red (`libs/mnemra-host/tests/coordination_failclosed.rs:292-325` asserts a refused connection), which is a loud red. | The alternative is to measure it (threat model I-17). |
+| `AR-0019` *(Amended 2026-10-22, #4119; accepted by Peter 2026-10-22, #4119 activity 8067; candidate AC4119-6)* | **A SCRAM verifier of a 32-byte random secret may appear in a public log on a red run.** Run-scoped passwords are set as client-computed SCRAM-SHA-256 verifiers (spec R-0120-a(2)), so a failing role statement logs the verifier and never the plaintext (MEASURED on PostgreSQL 16.4, #4119 activity 8064, I-18), and `docker logs` publishes the server log on a red CI run. Residual of threat `T4119-03`. **Cost:** offline recovery is infeasible (INFERRED); the role dies with the container. | maintainer | **PARKED — human-noticed:** revisited at each change to `.github/workflows/ci.yml` (the review of that change re-reads this row). The exposure depends on a throwaway CI container, and a change that makes the CI server persistent is a change to R-0120-c(1)'s container steps in that file. | A verifier does not let anyone log in under SCRAM without the plaintext (INFERRED), and brute force against a 256-bit random secret (32 bytes) is infeasible. |
 
 **Cross-reference.** Each accepted risk maps to one or more threat rows in the threats-by-element table. A future risk-register file holds the long-form record per entry, with review dates. Workspace canon calls that storage shape `RISK-REGISTER.md`, but the durable register lives with the project itself, following [P-PerRepoFirst](../glossary.md#p-perrepofirst) (keep things per-repo first, and extract a shared abstraction only once you've seen the same need a third time). This table is the per-Frame snapshot that the Spec stage works against.
 
