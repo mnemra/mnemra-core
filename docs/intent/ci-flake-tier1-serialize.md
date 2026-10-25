@@ -9,6 +9,8 @@ frame_relevant: true
 
 # Intake: Tier-1 CI-flake fix — serialize the PG/plugin test group
 
+> ⚠ **Historical record — engine superseded (banner added 2026-10-20, #4119; nothing below is edited).** This intake was written against the embedded Postgres engine (`postgresql_embedded`), which [P-0010](../src/adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (#4018) replaced with a separate PostgreSQL instance the operator installs and runs. Test fixtures now obtain their server per **R-0120** in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`. The spec this intake fed, `docs/specs/2026-06-26-ci-flake-tier1-serialize.md`, is amended in place (§Amendment 2026-10-20): the serialization decision stands; the engine-symbol membership grep and the postmaster reap are superseded. Read "embedded Postgres" here as the engine of its date.
+
 ## JTBD
 mnemra-core's CI cannot be trusted: the embedded-Postgres / plugin integration
 test group flakes on a SIGABRT *teardown* race (#1852, ~15% on `mcp_server`),

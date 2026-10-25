@@ -2,25 +2,49 @@ spec_type = "code"
 
 [audit_chain.intent]
 ref = "../intent/ci-flake-tier1-serialize.md"
-version = "de320c4b58a3f06699de875a548ebcbe9e44108c"
-locked_at = 2026-06-26T18:03:46Z
+# RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119): the intake gained only the
+# historical banner of 2026-10-20 (#4119); nothing below the banner is edited.
+# Prior version: de320c4b58a3f06699de875a548ebcbe9e44108c, locked_at 2026-06-26T18:03:46Z.
+version = "5b7a56b1fb3c1b947ea61fa13dcc32b15385981d"
+locked_at = 2026-10-25
 
 [audit_chain.frame]
 ref = "../intent/ci-flake-tier1-serialize-frame.md"
-version = "2004d97083865629a18e9e998c0da2c880ec7661"
+# RE-LOCKED 2026-10-25 (#4119): the Frame gained only the historical banner of 2026-10-20 (#4119);
+# nothing below the banner is edited.
+# Prior version: 2004d97083865629a18e9e998c0da2c880ec7661, locked_at 2026-06-26T18:04:53Z.
+version = "340043f7ba1b0fbe46f0c7b7974029bf0bfc40dd"
 internal_conformance = "pass"
-locked_at = 2026-06-26T18:04:53Z
+locked_at = 2026-10-25
 
 [audit_chain.frame.generated_against]
+# Unchanged on purpose: the intake's only change since de320c4b is the historical banner, and the
+# Frame was not re-derived from it.
 intent_version = "de320c4b58a3f06699de875a548ebcbe9e44108c"
 
 [audit_chain.spec]
 ref = "./2026-06-26-ci-flake-tier1-serialize.md"
-version = "f2b6b6ec3a723a07cd24e68a47685531cd98d0c2"
+# RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119): spec amended in place for the
+# operator-run Postgres engine (Amended 2026-10-20 and later markers in the body).
+# Reviews (#4119 activities): round 1 (7846); round 2 (7868); round 3 (7972); the threat model
+# (8063); round-4 verification reviews by Bolt, Warden and Charon (8372); the round-4 fix pass (8432,
+# ordered by ruling 8382) and its scoped re-checks (Bolt 8436, Warden 8446, Charon 8453); the
+# executor pass (8475, ordered by ruling 8452) and Warden's final re-check of it (8494); the
+# landing-prep text pass, ordered at 8494, with no further review round.
+# Measurements: 8047, 8064.
+# Rulings: 7849, 7867, 8037, 8067, 8289, 8382, 8420, 8438, 8452; and #4249 activity 8380
+# (provenance mentions keep their version).
+# Spec-exit approval: the maintainer's conditional approval (8420, tightened by 8438 and 8452),
+# recorded as met at 8494.
+# Prior version: f2b6b6ec3a723a07cd24e68a47685531cd98d0c2, locked_at 2026-06-26T18:53:21Z.
+version = "2c748132139e199ee2d97c2f23861382aae89000"
 internal_conformance = "pass"
-locked_at = 2026-06-26T18:53:21Z
+locked_at = 2026-10-25
 
 [audit_chain.spec.generated_against]
+# Unchanged on purpose: the #4119 amendment takes its requirements from V0 spec R-0120 and the
+# P-0010/P-0031 amendments of 2026-10-22, not from this intake or Frame, whose only changes are the
+# historical banners.
 intent_version = "de320c4b58a3f06699de875a548ebcbe9e44108c"
 frame_version = "2004d97083865629a18e9e998c0da2c880ec7661"
 

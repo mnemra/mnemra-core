@@ -17,6 +17,8 @@ modulation_override: >
 
 # Frame: Postmaster ownership marker (concurrent ci-reap safety) — #2170
 
+> ⚠ **Historical record — the problem has no object (banner added 2026-10-20, #4119; nothing below is edited).** This Frame resolves a per-run data-directory marker against `postgresql_embedded` 0.20.4 and `EmbeddedEngine::start()`. [P-0010](../src/adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (#4018) replaced that engine with a separate PostgreSQL instance the operator installs and runs; under **R-0120** in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md` no test spawns a postmaster and the host owns no data directory, so the mechanism evaluated here has nothing to mark. Its successor — a per-run **name grammar** on test databases and roles, parsed field by field and compared for equality (never a prefix test), with a dead-pid and age-bounded sweep — is locked at R-0120-a, which is where the "own versus other run" discrimination this Frame worked out now lives. The crate-source citations below name a dependency that is leaving the tree.
+
 Mechanism evaluation for the concurrent-own-vs-other reap window that
 `scripts/ci-reap.sh:27-38` documents and names #2170 to close. This is a
 **Frame-only, brownfield-extension** run: #2170 closes at Frame-accept; the

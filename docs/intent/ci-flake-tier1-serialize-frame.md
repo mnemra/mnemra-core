@@ -12,6 +12,8 @@ modulation_override: >
 
 # Frame: Tier-1 CI-flake fix — serialize the PG/plugin test group
 
+> ⚠ **Historical record — engine superseded (banner added 2026-10-20, #4119; nothing below is edited).** This Frame was locked against the embedded Postgres engine (`postgresql_embedded`), which [P-0010](../src/adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (#4018) replaced with a separate PostgreSQL instance the operator installs and runs; test fixtures now obtain their server per **R-0120** in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`. The R-0018-b reading below ("real embedded Postgres … never mock or externalize") is superseded in its "externalize" half by the engine decision; "never mock" stands. The spec this Frame bounds, `docs/specs/2026-06-26-ci-flake-tier1-serialize.md`, is amended in place (§Amendment 2026-10-20). No Frame lock is re-opened.
+
 ## Operating constraints
 - **R-0018-b** (real embedded Postgres + pgvector; serialize/share, never mock or
   externalize) — `refines` the fix's mechanism space: the only admissible

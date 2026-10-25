@@ -5,6 +5,8 @@ frame_relevant: true
 
 # Intake: Postmaster ownership marker (concurrent ci-reap safety)
 
+> ⚠ **Historical record — the problem has no object (banner added 2026-10-20, #4119; nothing below is edited).** This intake solves ownership of postmasters the embedded Postgres engine spawned under `$TMPDIR`. [P-0010](../src/adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (#4018) replaced that engine with a separate PostgreSQL instance the operator installs and runs; under **R-0120** in `docs/specs/2026-05-24-mnemra-core-v0-substrate.md` no test spawns a postmaster, so there is no own-versus-other reap window to close. The successor concern is orphaned **test databases** on a server two lanes may share, and R-0120-a's orphan sweep — names parsed field by field, dead-pid and age bounded — is its mechanism. Both reaps are retired by requirement: `scripts/ci-reap.sh` under R-0120-e as amended 2026-10-20, and the `scripts/flake-runner.sh` reap under tier-1 R-0024 as amended in `docs/specs/2026-06-26-ci-flake-tier1-serialize.md`.
+
 **Stakes:** medium
 **Date:** 2026-07-07
 **Status:** locked
