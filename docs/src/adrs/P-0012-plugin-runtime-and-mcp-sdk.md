@@ -1,6 +1,6 @@
 ---
 title: "P-0012: Plugin Runtime (raw Wasmtime) + MCP SDK (`rmcp`)"
-summary: "Two implementation decisions for the V0 plugin substrate that an unratified research proposal (ADR-001) had bundled into a single Extism + rmcp + hyper-mcp stack — and that the build reversed on both halves without recording either. Decision A (retroactive, shipped in Tasks 20–22): host plugins on raw Wasmtime, not Extism, because P-0007's per-instance resource-limit mechanism (fuel + epoch + ResourceLimiter) needs direct Wasmtime control that Extism's abstraction fights. Decision B (forward, implemented by Task 23): adopt the official MCP Rust SDK `rmcp` v1.7.0 (Apache-2.0, Green-tier) for the single stdio MCP server rather than hand-rolling the JSON-RPC/MCP wire layer — the MCP server is the auth+dispatch trust boundary and R-0010-a mandates conformance to MCP 2025-06-18, the worst place to hand-roll a mandated external wire contract. mnemra's R-0010 handler logic (auth-check, single WorkspaceCtx construction, per-verb capability check, distinguishable JSON-RPC error codes) rides on top as the rmcp ServerHandler, unchanged by the SDK choice."
+summary: "Two implementation decisions for the V0 plugin substrate that an unratified research proposal (ADR-001) had bundled into a single Extism + rmcp + hyper-mcp stack — and that the build reversed on both halves without recording either. Decision A (retroactive, shipped in Tasks 20–22): host plugins on raw Wasmtime, not Extism, because P-0007's per-instance resource-limit mechanism (fuel + epoch + ResourceLimiter) needs direct Wasmtime control that Extism's abstraction fights. Decision B (forward, implemented by Task 23): adopt the official MCP Rust SDK `rmcp` v1.7.0 (Apache-2.0, Green-tier) (Amendment 2026-10-25, #4249: no crate version is a design value; Decision B is the official SDK with a stdio server transport and no HTTP transport, and Decision A is raw Wasmtime with the surface P-0007 drives, at whatever releases `Cargo.toml` pins) for the single stdio MCP server rather than hand-rolling the JSON-RPC/MCP wire layer — the MCP server is the auth+dispatch trust boundary and R-0010-a mandates conformance to MCP 2025-06-18, the worst place to hand-roll a mandated external wire contract. mnemra's R-0010 handler logic (auth-check, single WorkspaceCtx construction, per-verb capability check, distinguishable JSON-RPC error codes) rides on top as the rmcp ServerHandler, unchanged by the SDK choice."
 primary-audience: agent
 ---
 
@@ -181,3 +181,28 @@ This ADR records *how* the substrate is built; it does not alter *what* the spec
 - `rmcp` on crates.io: v1.7.0, Apache-2.0, official MCP Rust SDK (`github.com/modelcontextprotocol/rust-sdk`).
 
 **Follow-up:** Task 23 implements Decision B (the `rmcp` `ServerHandler` MCP server). The three Task-23 plugin-runtime carries (limit-attach test, `can_invoke` invoke-path wiring, epoch-hook gating) and the Task-23 plan reshape are tracked separately and are out of scope for this ADR.
+
+## Amendment 2026-10-25 — Crate versions are not design values (version citations only)
+
+Applied 2026-10-25 under the maintainer's rulings on #4249: activity 8285 (design records carry no crate or library version), 8303 (confirming 8296: a crate version stays out as a pin or as a floor; a design dependency on a crate names the capability it needs) and 8380 (versioned provenance stays). The reason given is that a version change, for example a bump forced by a security advisory, must never require reopening a locked record. The measured case behind the ruling includes this record: it named `wasmtime = "=45.0.2"` after `libs/mnemra-host/Cargo.toml` had moved past it, with no amendment and no signal.
+
+**Scope.** This amendment touches the crate-version citations only. It does not touch the MCP protocol revision this record cites (2025-06-18, R-0010-a); that is a separate amendment, and a second amendment section with the same date may follow this one.
+
+**What each decision depends on.** These two statements supersede every version clause listed below.
+
+- **Decision A** depends on a Wasmtime release that exposes the raw `Engine` / `Store` / `Config` surface P-0007 drives (fuel metering through `Store::set_fuel`, epoch interruption through `Store::set_epoch_deadline`, a per-instance `ResourceLimiter`), with the `cranelift` and `component-model` features. Which release meets that is an implementation fact held in `libs/mnemra-host/Cargo.toml`, not in this record.
+- **Decision B** depends on the official MCP Rust SDK `rmcp` (`github.com/modelcontextprotocol/rust-sdk`) providing a `ServerHandler` server over a stdio transport (the `transport-io` feature), with no HTTP-transport feature enabled. The release in use is the `rmcp` entry in the workspace `Cargo.toml`, not a design value.
+
+The Decision B revisit tripwire is unchanged. It was already keyed on a capability (a concrete `rmcp` limitation that blocks a spec requirement), so an `rmcp` release change that keeps the Decision B capability above does not fire it.
+
+**Superseded (the text above is kept as the record):**
+
+- the frontmatter summary's "`rmcp` v1.7.0", Decision B Option 1's "Depend on `rmcp` v1.7.0" and the Decision B outcome's "(v1.7.0)": the choice is the SDK, not a release of it;
+- "the version locked here is the current 1.7.0" at the end of "`rmcp` facts": no version is locked;
+- the version quoted in the Decision A reference bullet "Wasmtime dependency pin" (`wasmtime = "=45.0.2"`): the bullet still points at `libs/mnemra-host/Cargo.toml` as where the shipped pin and features live, and the quoted value is that file as recorded on 2026-06-19.
+
+**Kept as provenance (not superseded):**
+
+- the other "`rmcp` facts" (latest version, license, download count) and the References entry "`rmcp` on crates.io: v1.7.0": a reading of crates.io taken when this record was written, 2026-06-19;
+- "rmcp 1.5" in the title and description of the unratified ADR-001 proposal (Status, Context, More Information): a historical quotation;
+- "post-1.0" in the SDK-maturity argument: the maturity the decision was weighed on in June 2026.

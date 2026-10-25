@@ -2,23 +2,60 @@ spec_type = "architecture"
 
 [audit_chain.intent]
 ref = "../intent/signing-to-runnable.md"
-version = "1c6820e726720e76f60aa5c76735af0223de5207"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "1c6820e726720e76f60aa5c76735af0223de5207"
+version = "27dae9868db9060cff822739aa8639b6675dad10"
+# locked_at unchanged: no stage-exit gate was re-run for #4249, so the original lock time stands.
 locked_at = 2026-06-30T16:45:19Z
 
 [audit_chain.frame]
 ref = "../intent/signing-to-runnable-frame.md"
-version = "83bba6a5ba76e6dab97b74799212107332e0198d"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "83bba6a5ba76e6dab97b74799212107332e0198d"
+version = "399bb199d5d8aec537f79165f4196a9648be5518"
+# internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
+# prior pin above; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 phase 1 does not decide.
 internal_conformance = "pass"
 
 [audit_chain.frame.generated_against]
+# generated_against unchanged: it records the upstream blob this artifact was produced against.
+# The upstream was amended in place under #4249 without regenerating this artifact, so the
+# mismatch with the upstream's re-pinned version above is expected.
 intent_version = "1c6820e726720e76f60aa5c76735af0223de5207"
 
 [audit_chain.spec]
 ref = "2026-06-30-signing-to-runnable.md"
-version = "479852a28124727ca3eafdb6cd29f0ad95d76f76"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "479852a28124727ca3eafdb6cd29f0ad95d76f76"
+version = "4c86968b01207af0ab636d3c5f68e419814786f0"
+# internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
+# prior pin above; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 phase 1 does not decide.
 internal_conformance = "pass"
 
 [audit_chain.spec.generated_against]
+# generated_against unchanged: it records the upstream blobs this artifact was produced against.
+# Both upstreams were amended in place under #4249 without regenerating this artifact, so the
+# mismatch with their re-pinned versions above is expected.
 intent_version = "1c6820e726720e76f60aa5c76735af0223de5207"
 frame_version = "83bba6a5ba76e6dab97b74799212107332e0198d"
 

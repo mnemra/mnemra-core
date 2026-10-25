@@ -14,8 +14,20 @@ locked_at = 2026-07-04T23:27:00Z
 
 [audit_chain.frame]
 ref = "docs/intent/retrieval-cluster-frame.md"
-version = "22090762c250c015c80c363093322521e7ed56ae"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "22090762c250c015c80c363093322521e7ed56ae"
+version = "0a7c4ebe7d820617eb2aad35de553c83c2533c27"
+# internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
+# prior pin above; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 phase 1 does not decide.
 internal_conformance = "pass"
+# locked_at unchanged: no stage-exit gate was re-run for #4249, so the original lock time stands.
 locked_at = 2026-07-04T23:56:00Z
 
 [audit_chain.frame.generated_against]
@@ -29,6 +41,9 @@ locked_at = 2026-07-05T01:10:00Z
 
 [audit_chain.spec.generated_against]
 intent_version = "fa74ac11fcdd6b2f3ac497a44e85ba1617b3880e"
+# frame_version unchanged: it records the Frame blob this spec was produced against. The Frame
+# was amended in place under #4249 without regenerating this spec, so the mismatch with the
+# Frame's re-pinned version above is expected.
 frame_version = "22090762c250c015c80c363093322521e7ed56ae"
 
 [signals.auditor]

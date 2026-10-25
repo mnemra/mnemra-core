@@ -7,8 +7,20 @@ locked_at = 2026-07-07T22:42:46Z
 
 [audit_chain.frame]
 ref = "docs/intent/plugin-distribution-frame.md"
-version = "60c437c5e569eacbf00329e92cae2e7c42cebba6"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "60c437c5e569eacbf00329e92cae2e7c42cebba6"
+version = "14e7fea67f56c2a2d04b3c6ea261e3e7fa68878d"
+# internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
+# prior pin above; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 phase 1 does not decide.
 internal_conformance = "pass"
+# locked_at unchanged: no stage-exit gate was re-run for #4249, so the original lock time stands.
 locked_at = 2026-07-08T01:35:55Z
 
 [audit_chain.frame.generated_against]
@@ -16,12 +28,27 @@ intent_version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
 
 [audit_chain.spec]
 ref = "docs/specs/2026-07-07-plugin-distribution.md"
-version = "10554ccdd6ae91731086b6fa6cba3de281a4fd49"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "10554ccdd6ae91731086b6fa6cba3de281a4fd49"
+version = "0326e5d125fb7bef164280927a96032da0a58ca3"
+# internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
+# prior pin above; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 phase 1 does not decide.
 internal_conformance = "pass"
+# locked_at unchanged: no stage-exit gate was re-run for #4249, so the original lock time stands.
 locked_at = 2026-07-11T12:19:38Z
 
 [audit_chain.spec.generated_against]
 intent_version = "9c8e1577ed345cbcef546ba51d252a0df4db1144"
+# frame_version unchanged: it records the Frame blob this spec was produced against. The Frame
+# was amended in place under #4249 without regenerating this spec, so the mismatch with the
+# Frame's re-pinned version above is expected.
 frame_version = "60c437c5e569eacbf00329e92cae2e7c42cebba6"
 
 [signals.auditor]

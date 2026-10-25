@@ -194,6 +194,9 @@ applies).
       substitution, not a rewrite"; cedar-policy 4.x, Apache-2.0/Green); P-LockContract; G-0017
       FlagProvider precedent; P-0010 D5 Storage-trait precedent. Maintainer's stated intent:
       bound the blast radius of the future flexible-policy engine to the PDP module.
+      *(Amended 2026-10-25, #4249: "cedar-policy 4.x" is provenance, the release line that
+      research assessed. It is not a pin or floor, and no crate version is a design value;
+      maintainer rulings, #4249 activities 8285, 8303 and 8380.)*
 6. **Labels demoted to proposed-initial-set** — dimension names and value enums are finalized
    at `{{P-0015}}` and explicitly easy-to-change; the mechanics above are the hard part locked
    now (R3 carries the proposed set).
@@ -565,7 +568,9 @@ walk record is the ratification audit trail — carried there verbatim, applied 
    module. *(Anchors: the Cedar/NGAC permission-model research (maintainer record, locked
    2026-05-18) — "the engine sits behind mnemra's policy port… port substitution, not a
    rewrite"; cedar-policy 4.x, Apache-2.0/Green; P-LockContract; G-0017 FlagProvider precedent;
-   P-0010 D5 Storage-trait precedent.)* Maintainer's stated intent: bound the blast radius of
+   P-0010 D5 Storage-trait precedent.)* *(Amended 2026-10-25, #4249: "cedar-policy 4.x" is
+   provenance, the release line that research assessed, not a pin or floor; maintainer rulings,
+   #4249 activities 8285, 8303 and 8380.)* Maintainer's stated intent: bound the blast radius of
    the future flexible-policy engine to the PDP module — QA-9 renders this as the port-swap
    scenario.
 
