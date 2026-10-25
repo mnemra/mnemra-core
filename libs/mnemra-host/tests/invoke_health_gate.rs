@@ -77,8 +77,8 @@ use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 
 /// Build a `Meta` carrying the auth token in the `token` key.
 /// Mirrors `token_meta` from `mcp_server.rs` (same open seam #1).
-fn token_meta(token_str: &str) -> rmcp::model::Meta {
-    let mut meta = rmcp::model::Meta::new();
+fn token_meta(token_str: &str) -> rmcp::model::RequestMetaObject {
+    let mut meta = rmcp::model::RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }

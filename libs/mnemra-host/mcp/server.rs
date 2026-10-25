@@ -34,8 +34,8 @@ use std::sync::Arc;
 use rmcp::RoleServer;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ContentBlock, ListToolsResult, PaginatedRequestParams,
-    ServerInfo, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, InitializeRequestParams,
+    InitializeResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use sqlx::PgPool;
@@ -73,6 +73,22 @@ const QUERY_SCAN_TIMEOUT_CODE: rmcp::model::ErrorCode = rmcp::model::ErrorCode(-
 /// under this name (T11 startup / the slice-1 harness); `call_tool` borrows a
 /// pooled instance by it.
 pub const ECHO_PLUGIN_NAME: &str = "mnemra-echo";
+
+/// The MCP protocol revisions this host serves, oldest first (#4294).
+///
+/// Ruling (#4294): exactly the released 2025-06-18 and 2025-11-25. A client
+/// requesting either gets it back; any other `initialize` request (the draft
+/// 2026-07-28, or an unknown version) is answered with 2025-11-25, the
+/// spec-conformant downgrade rather than an `initialize` error. The host owns
+/// this set, advertised through `ServerHandler::supported_protocol_versions`,
+/// so an rmcp upgrade that learns more versions cannot widen what is served.
+/// rmcp checks inline `_meta` version negotiation against this same set, so a
+/// pre-`initialize` request naming the draft is refused. That closes the draft
+/// paths only: any other request before the handshake, including one naming a
+/// released version, is refused by the initialize gate
+/// (`crate::mcp::gate::InitializeGated`), not by this set.
+pub const SUPPORTED_PROTOCOL_VERSIONS: [ProtocolVersion; 2] =
+    [ProtocolVersion::V_2025_06_18, ProtocolVersion::V_2025_11_25];
 
 /// The mnemra MCP server — single entry point for all MCP tool calls (R-0010-a).
 ///
@@ -504,8 +520,41 @@ impl MnemraMcpServer {
 
 impl ServerHandler for MnemraMcpServer {
     /// Return server metadata for the MCP initialize handshake.
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::default()
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::default();
+        // rmcp's default is its newest (draft) version; name the version this
+        // host answers with so the handshake does not rely on rmcp's fallback.
+        info.protocol_version = ProtocolVersion::V_2025_11_25;
+        info
+    }
+
+    /// The MCP initialize handshake (#4295). Negotiates the version first and
+    /// stores the peer's handshake info with the NEGOTIATED version, not the one
+    /// the client requested. rmcp's default `initialize` stores the raw request,
+    /// and `RequestContext::protocol_version()` falls back to that stored value,
+    /// so a client that asked for the draft 2026-07-28 would switch on draft
+    /// result shaping (`ttlMs`, `cacheScope`, `resultType`) for a session this
+    /// host negotiated down to 2025-11-25.
+    ///
+    /// Defense in depth only in production: rmcp's handshake path already
+    /// re-sets the negotiated version after this runs, and the initialize gate
+    /// (`crate::mcp::gate::InitializeGated`) refuses a re-initialize. This does
+    /// real work only on a re-initialize that reaches an ungated server.
+    async fn initialize(
+        &self,
+        request: InitializeRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<InitializeResult, rmcp::model::ErrorData> {
+        let info = self.negotiate_initialize(&request)?;
+        let mut peer_info = request;
+        peer_info.protocol_version = info.protocol_version.clone();
+        context.peer.set_peer_info(peer_info);
+        Ok(info)
+    }
+
+    /// The released set only (#4294); see [`SUPPORTED_PROTOCOL_VERSIONS`].
+    fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+        Cow::Borrowed(&SUPPORTED_PROTOCOL_VERSIONS)
     }
 
     /// List all advertised MCP tools (R-0010-b/g).
@@ -567,7 +616,7 @@ impl ServerHandler for MnemraMcpServer {
         &self,
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, rmcp::model::ErrorData> {
+    ) -> Result<CallToolResponse, rmcp::model::ErrorData> {
         // Extract token string from _meta.token (R-0010-c open seam #1).
         //
         // rmcp deserialization moves `_meta` out of `params` and into
@@ -593,7 +642,10 @@ impl ServerHandler for MnemraMcpServer {
         // `invoke_content` (no plugin ABI, no WIT surface — R-0063-a). The
         // existing plugin path stays the `else`.
         if session_plane::is_coordination_tool(request.name.as_ref()) {
-            return self.handle_coordination(&token_str_owned, &request).await;
+            return self
+                .handle_coordination(&token_str_owned, &request)
+                .await
+                .map(CallToolResponse::from);
         }
 
         // DF-auth-check + role permission check (R-0010-c, R-0009-d/e).
@@ -785,7 +837,7 @@ impl ServerHandler for MnemraMcpServer {
         // Artifact IDs and content values are never emitted (R-0020-g exclusion).
         // The timeout path early-returns above with outcome="timeout"; exactly one
         // verb_metric fires per dispatch (invariant maintained across all arms).
-        match invoke_result {
+        let result = match invoke_result {
             Ok(ContentResult::Created(id)) => {
                 // R-0004-a: per-verb metric. `id` is NOT emitted (artifact-id, R-0020-g).
                 tracing::info!(
@@ -901,7 +953,8 @@ impl ServerHandler for MnemraMcpServer {
                     data: None,
                 })
             }
-        }
+        };
+        result.map(CallToolResponse::from)
     }
 }
 

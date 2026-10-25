@@ -16,7 +16,7 @@
 //! # Red/green status
 //!
 //! R-0010-e guard: **expected to be GREEN from the moment rmcp is added with the
-//! correct feature set** (`server`, `macros`, `transport-io`, `client` for tests —
+//! correct feature set** (`server`, `transport-io`, `client` for tests —
 //! no `http`/`streamable-http` features). This is a standing guardrail, not one
 //! of the four behavioral reds. Documented per the dispatch note.
 //!
@@ -27,12 +27,11 @@
 /// R-0010-e — assert rmcp's activated features contain no http/streamable-http transport.
 ///
 /// The rmcp dependency is configured as:
-///   workspace: `rmcp = { version = "2.1", features = ["server", "macros", "transport-io"] }`
+///   workspace: `rmcp = { version = "3.7", features = ["server", "transport-io"] }`
 ///   dev-dep extra: `rmcp = { workspace = true, features = ["client"] }`
 ///
-/// Feature breakdown (from rmcp 2.1 Cargo.toml):
-///   - `server` enables: transport-async-rw, schemars, pastey
-///   - `macros` enables: rmcp-macros, pastey
+/// Feature breakdown (from rmcp 3.7 Cargo.toml):
+///   - `server` enables: transport-async-rw, schemars, pastey, uuid
 ///   - `transport-io` enables: transport-async-rw, tokio/io-std
 ///   - `client` enables: tokio-stream
 ///

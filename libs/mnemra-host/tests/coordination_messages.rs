@@ -328,7 +328,7 @@ mod shared_engine;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rmcp::model::{CallToolRequestParams, CallToolResult, Meta};
+use rmcp::model::{CallToolRequestParams, CallToolResult, RequestMetaObject};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::json;
 use tokio::io::duplex;
@@ -390,8 +390,8 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> Ad
 }
 
 /// Build a `Meta` carrying the auth token for the MCP `_meta.token` field.
-fn token_meta(token_str: &str) -> Meta {
-    let mut meta = Meta::new();
+fn token_meta(token_str: &str) -> RequestMetaObject {
+    let mut meta = RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }

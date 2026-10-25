@@ -70,7 +70,7 @@ mod slice1_harness;
 
 use mnemra_host::auth::token::{generate, hash};
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use rmcp::model::{CallToolRequestParams, ContentBlock, Meta};
+use rmcp::model::{CallToolRequestParams, ContentBlock, RequestMetaObject};
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
 use uuid::Uuid;
@@ -82,8 +82,8 @@ use uuid::Uuid;
 /// Build a `Meta` carrying the auth token in the `token` key.
 /// Mirrors `token_meta` from `mcp_server.rs` (same open seam #1 — per-request
 /// `_meta` is the spec-faithful extension point for DF-auth-check per R-0010-c).
-fn token_meta(token_str: &str) -> Meta {
-    let mut meta = Meta::new();
+fn token_meta(token_str: &str) -> RequestMetaObject {
+    let mut meta = RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }

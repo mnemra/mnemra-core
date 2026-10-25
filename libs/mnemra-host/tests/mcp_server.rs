@@ -87,7 +87,7 @@ mod shared_engine;
 use mnemra_host::auth::token::{AdminToken, generate, hash};
 use mnemra_host::schema::init::DEFAULT_WORKSPACE_ID;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use rmcp::model::{CallToolRequestParams, ContentBlock, ErrorCode, Meta};
+use rmcp::model::{CallToolRequestParams, ContentBlock, ErrorCode, RequestMetaObject};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::json;
 use std::path::PathBuf;
@@ -168,8 +168,8 @@ async fn seed_read_observer_token(pool: &sqlx::PgPool, workspace_id: Uuid) -> (A
 /// requires no protocol extension, and is available on every `tools/call` and
 /// `tools/list` request. The MCP handler reads `params.meta.get("token")` to
 /// perform DF-auth-check (R-0010-c). Decision flagged for Puck validation.
-fn token_meta(token_str: &str) -> Meta {
-    let mut meta = Meta::new();
+fn token_meta(token_str: &str) -> RequestMetaObject {
+    let mut meta = RequestMetaObject::new();
     meta.insert("token".to_owned(), json!(token_str));
     meta
 }
@@ -3036,4 +3036,650 @@ async fn db_error_message_is_scrubbed_of_sqlx_detail() {
 
     let _ = client.cancel().await;
     let _ = server_handle.await;
+}
+
+// ---------------------------------------------------------------------------
+// Protocol-version negotiation (#4294): the host answers only the released set.
+// ---------------------------------------------------------------------------
+
+/// Run the in-process `initialize` handshake with the client requesting
+/// `requested`, and return the protocol version the server answered.
+async fn negotiated_protocol_version(requested: &str) -> String {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let server = MnemraMcpServer::new(db.pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        match mnemra_host::mcp::gate::serve(server, server_transport).await {
+            Ok(running) => {
+                let _ = running.waiting().await;
+            }
+            Err(e) => {
+                eprintln!("server init failed: {e:?}");
+            }
+        }
+    });
+
+    // Deserializing keeps an unknown version string representable on the wire.
+    let version: rmcp::model::ProtocolVersion =
+        serde_json::from_value(json!(requested)).expect("version string deserializes");
+    let client_info = rmcp::model::ClientConfig::default().with_protocol_version(version);
+    let client = serve_client(client_info, client_transport)
+        .await
+        .expect("client init failed");
+
+    let answered = client
+        .peer_info()
+        .expect("server info recorded after initialize")
+        .protocol_version
+        .as_str()
+        .to_owned();
+
+    let _ = client.cancel().await;
+    let _ = server_handle.await;
+    answered
+}
+
+#[tokio::test]
+async fn initialize_released_2025_06_18_is_echoed() {
+    assert_eq!(
+        negotiated_protocol_version("2025-06-18").await,
+        "2025-06-18"
+    );
+}
+
+#[tokio::test]
+async fn initialize_released_2025_11_25_is_echoed() {
+    assert_eq!(
+        negotiated_protocol_version("2025-11-25").await,
+        "2025-11-25"
+    );
+}
+
+#[tokio::test]
+async fn initialize_draft_2026_07_28_is_downgraded_to_2025_11_25() {
+    assert_eq!(
+        negotiated_protocol_version("2026-07-28").await,
+        "2025-11-25"
+    );
+}
+
+#[tokio::test]
+async fn initialize_unknown_version_is_downgraded_to_2025_11_25() {
+    assert_eq!(
+        negotiated_protocol_version("2024-01-01").await,
+        "2025-11-25"
+    );
+}
+
+#[tokio::test]
+async fn initialize_older_known_version_is_downgraded_to_2025_11_25() {
+    // 2025-03-26 is a version rmcp 3.x knows but the released set (#4294) excludes.
+    assert_eq!(
+        negotiated_protocol_version("2025-03-26").await,
+        "2025-11-25"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Pre-initialize paths stay closed to the 2026-07-28 draft lifecycle (#4294).
+//
+// rmcp 3.x lets a first message that is not `initialize` select an inline
+// (stateless) lifecycle from its own `_meta`. The host's supported set must
+// refuse a draft version there and leave the connection in its pre-initialize
+// state, so a real `initialize` still negotiates normally afterwards.
+// ---------------------------------------------------------------------------
+
+/// Write each request to a fresh in-process server as raw JSON-RPC and return
+/// the server's one reply per request, in order. Each read is bounded so a
+/// server that stays silent fails the test instead of hanging it.
+async fn raw_exchange(requests: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    raw_exchange_seeded(|_token| requests.to_vec()).await
+}
+
+/// As [`raw_exchange`], with the requests built from a freshly seeded admin
+/// token string (for requests that must pass the `tools/call` auth check).
+async fn raw_exchange_seeded(
+    build_requests: impl FnOnce(&str) -> Vec<serde_json::Value>,
+) -> Vec<serde_json::Value> {
+    raw_exchange_with(true, build_requests).await
+}
+
+/// The exchange behind [`raw_exchange_seeded`]. `gated: false` serves the bare
+/// `MnemraMcpServer` with no initialize gate, to test the handler on its own.
+async fn raw_exchange_with(
+    gated: bool,
+    build_requests: impl FnOnce(&str) -> Vec<serde_json::Value>,
+) -> Vec<serde_json::Value> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let (token, _token_id) = seed_admin_token(&db.pool, DEFAULT_WORKSPACE_ID).await;
+    let requests = build_requests(token.as_str());
+    let server = MnemraMcpServer::new(db.pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let server_handle = tokio::spawn(async move {
+        // Await the running service to its end rather than dropping it, so the
+        // session is not torn down before the last reply is written.
+        if gated {
+            if let Ok(running) = mnemra_host::mcp::gate::serve(server, server_transport).await {
+                let _ = running.waiting().await;
+            }
+        } else if let Ok(running) = serve_server(server, server_transport).await {
+            let _ = running.waiting().await;
+        }
+    });
+
+    let (read_half, mut write_half) = tokio::io::split(client_transport);
+    let mut lines = BufReader::new(read_half).lines();
+    let mut replies = Vec::new();
+    for request in &requests {
+        let mut line = serde_json::to_vec(request).expect("request serializes");
+        line.push(b'\n');
+        write_half.write_all(&line).await.expect("write request");
+        let reply = tokio::time::timeout(std::time::Duration::from_secs(10), lines.next_line())
+            .await
+            .expect("server replied within the timeout")
+            .expect("read reply")
+            .expect("server closed the stream instead of replying");
+        replies.push(serde_json::from_str(&reply).expect("reply is JSON"));
+    }
+    drop(write_half);
+    drop(lines);
+    tokio::time::timeout(std::time::Duration::from_secs(10), server_handle)
+        .await
+        .expect("server task ended within the timeout")
+        .expect("server task did not panic");
+    replies
+}
+
+fn initialize_request(id: u64) -> serde_json::Value {
+    json!({
+        "jsonrpc": "2.0", "id": id, "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "pre-init-probe", "version": "0"}
+        }
+    })
+}
+
+/// The draft's required request `_meta`, naming the draft version.
+fn draft_inline_meta() -> serde_json::Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    })
+}
+
+fn assert_unsupported_version_error(reply: &serde_json::Value) {
+    assert_eq!(
+        reply["error"]["code"],
+        json!(rmcp::model::ErrorCode::UNSUPPORTED_PROTOCOL_VERSION.0),
+        "draft inline negotiation must be refused as unsupported_protocol_version; got {reply}"
+    );
+    assert_eq!(
+        reply["error"]["data"]["requested"],
+        json!("2026-07-28"),
+        "error must name the refused version; got {reply}"
+    );
+    assert_eq!(
+        reply["error"]["data"]["supported"],
+        json!(["2025-06-18", "2025-11-25"]),
+        "error must advertise exactly the released set; got {reply}"
+    );
+}
+
+#[tokio::test]
+async fn pre_init_discover_naming_draft_version_is_refused() {
+    let replies = raw_exchange(&[
+        json!({"jsonrpc": "2.0", "id": 1, "method": "server/discover",
+               "params": {"_meta": draft_inline_meta()}}),
+        initialize_request(2),
+    ])
+    .await;
+
+    // rmcp hands a pre-initialize `server/discover` to the service as a bootstrap
+    // probe, so the initialize gate answers it before rmcp's version check can:
+    // `-32600`, not `-32022`. The draft inline path that reaches rmcp's own
+    // version check is the `tools/list` case below.
+    assert_initialize_required(&replies[0]);
+    // Still pre-initialize: a real `initialize` negotiates the released version.
+    assert_eq!(
+        replies[1]["result"]["protocolVersion"],
+        json!("2025-11-25"),
+        "initialize after a refused discover must still negotiate normally; got {}",
+        replies[1]
+    );
+}
+
+#[tokio::test]
+async fn pre_init_request_with_draft_inline_meta_does_not_start_stateless_lifecycle() {
+    let replies = raw_exchange(&[
+        json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+               "params": {"_meta": draft_inline_meta()}}),
+        initialize_request(2),
+    ])
+    .await;
+
+    assert_unsupported_version_error(&replies[0]);
+    assert_eq!(
+        replies[1]["result"]["protocolVersion"],
+        json!("2025-11-25"),
+        "initialize after a refused inline request must still negotiate normally; got {}",
+        replies[1]
+    );
+}
+
+#[tokio::test]
+async fn pre_init_discover_without_meta_is_invalid_params() {
+    let replies = raw_exchange(&[
+        json!({"jsonrpc": "2.0", "id": 1, "method": "server/discover"}),
+        initialize_request(2),
+    ])
+    .await;
+
+    assert_eq!(
+        replies[0]["error"]["code"],
+        json!(rmcp::model::ErrorCode::INVALID_PARAMS.0),
+        "bare pre-init discover must be -32602; got {}",
+        replies[0]
+    );
+    assert_eq!(replies[1]["result"]["protocolVersion"], json!("2025-11-25"));
+}
+
+/// `_meta` that is complete for rmcp's inline lifecycle and names a SUPPORTED
+/// version (2025-11-25), unlike [`draft_inline_meta`].
+fn released_inline_meta() -> serde_json::Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2025-11-25",
+        "io.modelcontextprotocol/clientCapabilities": {}
+    })
+}
+
+fn assert_initialize_required(reply: &serde_json::Value) {
+    assert_eq!(
+        reply["error"]["code"],
+        json!(rmcp::model::ErrorCode::INVALID_REQUEST.0),
+        "a request before initialize must be refused with -32600; got {reply}"
+    );
+    assert_eq!(
+        reply["error"]["message"],
+        json!("initialize required"),
+        "refusal message; got {reply}"
+    );
+}
+
+// The initialize gate (#4295): rmcp serves a first message that is not
+// `initialize` from its own inline `_meta` with no handshake. The gate refuses
+// every request but `initialize` and `ping` until the handshake has happened.
+// A pre-initialize `server/discover` leaves the connection able to initialize;
+// a refused inline request does not: a late `initialize` is refused too and the
+// connection must be reopened.
+
+#[tokio::test]
+async fn pre_init_request_with_released_inline_meta_is_refused_and_so_is_a_late_initialize() {
+    // A pre-initialize request with complete released inline `_meta` ends rmcp's
+    // pre-init loop and latches rmcp's inline mode for the connection. A late
+    // `initialize` would leave a half-working session, so the gate refuses it
+    // too; the connection stays refused until it is reopened.
+    let replies = raw_exchange(&[
+        json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+               "params": {"_meta": released_inline_meta()}}),
+        initialize_request(2),
+        json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"}),
+        json!({"jsonrpc": "2.0", "id": 4, "method": "ping"}),
+    ])
+    .await;
+
+    assert_initialize_required(&replies[0]);
+    assert_initialize_required(&replies[1]);
+    assert_initialize_required(&replies[2]);
+    // Ping is allowed by the gate, but the latched connection answers it with
+    // rmcp's own missing-inline-`_meta` error: it is dead, not half-working.
+    assert_eq!(
+        replies[3]["error"]["code"],
+        json!(rmcp::model::ErrorCode::INVALID_PARAMS.0),
+        "ping on a latched connection; got {}",
+        replies[3]
+    );
+}
+
+#[tokio::test]
+async fn pre_init_discover_naming_released_version_is_refused() {
+    let replies = raw_exchange(&[
+        json!({"jsonrpc": "2.0", "id": 1, "method": "server/discover",
+               "params": {"_meta": released_inline_meta()}}),
+        initialize_request(2),
+    ])
+    .await;
+
+    assert_initialize_required(&replies[0]);
+    assert_eq!(
+        replies[1]["result"]["protocolVersion"],
+        json!("2025-11-25"),
+        "initialize after a refused discover must still negotiate normally; got {}",
+        replies[1]
+    );
+}
+
+#[tokio::test]
+async fn pre_init_ping_is_answered_and_initialize_follows() {
+    let replies = raw_exchange(&[
+        json!({"jsonrpc": "2.0", "id": 1, "method": "ping"}),
+        initialize_request(2),
+    ])
+    .await;
+
+    assert_eq!(
+        replies[0]["result"],
+        json!({}),
+        "ping is allowed pre-initialize"
+    );
+    assert_eq!(replies[1]["result"]["protocolVersion"], json!("2025-11-25"));
+}
+
+#[tokio::test]
+async fn after_the_handshake_requests_are_served() {
+    let replies = raw_exchange(&[
+        initialize_request(1),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+    ])
+    .await;
+
+    assert!(
+        replies[1]["result"]["tools"].is_array(),
+        "tools/list after initialize must be served; got {}",
+        replies[1]
+    );
+}
+
+/// Results to a session-based (initialize) client must not carry the 2026-07-28
+/// draft's additions: `resultType`, `ttlMs`, `cacheScope`.
+#[tokio::test]
+async fn session_replies_carry_no_draft_result_fields() {
+    let replies = raw_exchange_seeded(|token| {
+        vec![
+            initialize_request(1),
+            json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": {
+                "name": "echo.create",
+                "arguments": {"content_type": "echo_fixture", "payload": {"msg": "x"}},
+                "_meta": {"token": token}
+            }}),
+        ]
+    })
+    .await;
+
+    for (label, reply) in [
+        ("initialize", &replies[0]),
+        ("tools/list", &replies[1]),
+        ("tools/call", &replies[2]),
+    ] {
+        let result = reply["result"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{label} must succeed; got {reply}"));
+        for field in ["resultType", "ttlMs", "cacheScope"] {
+            assert!(
+                !result.contains_key(field),
+                "{label} reply must not carry draft field `{field}`; got {reply}"
+            );
+        }
+    }
+}
+
+/// A client that asks for the draft 2026-07-28 at the handshake is negotiated
+/// down to 2025-11-25 and must then be served as a 2025-11-25 session: no draft
+/// result shaping (`ttlMs`, `cacheScope`, `resultType`), and ping still works.
+#[tokio::test]
+async fn handshake_requesting_the_draft_version_is_served_as_released() {
+    let replies = raw_exchange_seeded(|token| {
+        let mut init = initialize_request(1);
+        init["params"]["protocolVersion"] = json!("2026-07-28");
+        vec![
+            init,
+            json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": {
+                "name": "echo.create",
+                "arguments": {"content_type": "echo_fixture", "payload": {"msg": "x"}},
+                "_meta": {"token": token}
+            }}),
+            json!({"jsonrpc": "2.0", "id": 4, "method": "ping"}),
+        ]
+    })
+    .await;
+
+    assert_eq!(replies[0]["result"]["protocolVersion"], json!("2025-11-25"));
+    assert_no_draft_result_fields("tools/list", &replies[1]);
+    assert_no_draft_result_fields("tools/call", &replies[2]);
+    assert_eq!(replies[3]["result"], json!({}), "ping; got {}", replies[3]);
+}
+
+/// A second `initialize` is refused, and in particular one naming the draft must
+/// not change how the established session is served.
+#[tokio::test]
+async fn re_initialize_is_refused_and_does_not_enable_draft_shaping() {
+    let replies = raw_exchange(&[
+        initialize_request(1),
+        {
+            let mut again = initialize_request(2);
+            again["params"]["protocolVersion"] = json!("2026-07-28");
+            again
+        },
+        json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"}),
+        json!({"jsonrpc": "2.0", "id": 4, "method": "ping"}),
+    ])
+    .await;
+
+    assert_eq!(replies[0]["result"]["protocolVersion"], json!("2025-11-25"));
+    assert_eq!(
+        replies[1]["error"]["code"],
+        json!(rmcp::model::ErrorCode::INVALID_REQUEST.0),
+        "a second initialize must be refused with -32600; got {}",
+        replies[1]
+    );
+    assert_eq!(
+        replies[1]["error"]["message"],
+        json!("already initialized"),
+        "refusal message; got {}",
+        replies[1]
+    );
+    assert_no_draft_result_fields("tools/list", &replies[2]);
+    assert_eq!(replies[3]["result"], json!({}), "ping; got {}", replies[3]);
+}
+
+/// The handler on its own (no gate) must not let a re-initialize that names the
+/// draft switch on draft result shaping: it stores the NEGOTIATED version.
+#[tokio::test]
+async fn handler_without_the_gate_stores_the_negotiated_version() {
+    let replies = raw_exchange_with(false, |_token| {
+        let mut again = initialize_request(2);
+        again["params"]["protocolVersion"] = json!("2026-07-28");
+        vec![
+            initialize_request(1),
+            again,
+            json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"}),
+        ]
+    })
+    .await;
+
+    assert_eq!(replies[1]["result"]["protocolVersion"], json!("2025-11-25"));
+    assert_no_draft_result_fields("tools/list", &replies[2]);
+}
+
+fn assert_no_draft_result_fields(label: &str, reply: &serde_json::Value) {
+    let result = reply["result"]
+        .as_object()
+        .unwrap_or_else(|| panic!("{label} must succeed; got {reply}"));
+    for field in ["resultType", "ttlMs", "cacheScope"] {
+        assert!(
+            !result.contains_key(field),
+            "{label} reply must not carry draft field `{field}`; got {reply}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Incoming-line cap (#4295): an over-cap line must end the session visibly
+// (EOF to the client), never be dropped with the connection left open.
+// ---------------------------------------------------------------------------
+
+/// Cap used by the tests below, small so no test allocates the 16 MiB default.
+/// It goes through the same `capped_transport` constructor the host uses.
+const TEST_LINE_CAP: usize = 1024;
+
+type RawReader =
+    tokio::io::Lines<tokio::io::BufReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>>;
+type RawWriter = tokio::io::WriteHalf<tokio::io::DuplexStream>;
+
+/// Serve a fresh `MnemraMcpServer` over the capped transport and return the
+/// raw client ends plus the server task, which finishes when the session ends.
+async fn start_capped_server(cap: usize) -> (RawWriter, RawReader, tokio::task::JoinHandle<()>) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let server = MnemraMcpServer::new(db.pool.clone(), echo_plugin_pool());
+    let (server_transport, client_transport) = duplex(4096);
+    let (server_read, server_write) = tokio::io::split(server_transport);
+    let handle = tokio::spawn(async move {
+        let transport =
+            mnemra_host::mcp::transport::capped_transport(server_read, server_write, cap);
+        if let Ok(running) = mnemra_host::mcp::gate::serve(server, transport).await {
+            let _ = running.waiting().await;
+        }
+    });
+    let (client_read, client_write) = tokio::io::split(client_transport);
+    (client_write, BufReader::new(client_read).lines(), handle)
+}
+
+/// An `initialize` request line whose length, newline included, is exactly `total`.
+fn initialize_line_of_len(total: usize) -> Vec<u8> {
+    let base = serde_json::to_vec(&json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "", "version": "0"}
+        }
+    }))
+    .expect("request serializes");
+    let pad = total - base.len() - 1;
+    let mut line = serde_json::to_vec(&json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "a".repeat(pad), "version": "0"}
+        }
+    }))
+    .expect("request serializes");
+    line.push(b'\n');
+    assert_eq!(line.len(), total, "fixture line has the intended length");
+    line
+}
+
+/// Assert the stream ends (EOF) within the timeout instead of hanging or
+/// delivering a reply, and that the server task finished with it.
+async fn assert_stream_closed(reader: &mut RawReader, handle: tokio::task::JoinHandle<()>) {
+    let next = tokio::time::timeout(std::time::Duration::from_secs(10), reader.next_line())
+        .await
+        .expect("client saw EOF within the timeout, not a hang");
+    match next {
+        Ok(None) => {}
+        other => panic!("expected EOF after an over-cap line, got {other:?}"),
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(10), handle)
+        .await
+        .expect("server task ended within the timeout")
+        .expect("server task did not panic");
+}
+
+#[tokio::test]
+async fn line_exactly_at_cap_is_served() {
+    use tokio::io::AsyncWriteExt;
+
+    let (mut writer, mut reader, handle) = start_capped_server(TEST_LINE_CAP).await;
+    writer
+        .write_all(&initialize_line_of_len(TEST_LINE_CAP))
+        .await
+        .expect("write request");
+    let reply = tokio::time::timeout(std::time::Duration::from_secs(10), reader.next_line())
+        .await
+        .expect("server replied within the timeout")
+        .expect("read reply")
+        .expect("server closed the stream instead of replying");
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("reply is JSON");
+    assert_eq!(reply["result"]["protocolVersion"], json!("2025-11-25"));
+    // Closing both client halves ends the session; bound the wait so a stuck
+    // server fails the test rather than hanging it.
+    drop(writer);
+    drop(reader);
+    tokio::time::timeout(std::time::Duration::from_secs(10), handle)
+        .await
+        .expect("server task ended within the timeout")
+        .expect("server task did not panic");
+}
+
+#[tokio::test]
+async fn line_one_byte_over_cap_closes_the_stream() {
+    use tokio::io::AsyncWriteExt;
+
+    let (mut writer, mut reader, handle) = start_capped_server(TEST_LINE_CAP).await;
+    writer
+        .write_all(&initialize_line_of_len(TEST_LINE_CAP + 1))
+        .await
+        .expect("write request");
+    assert_stream_closed(&mut reader, handle).await;
+}
+
+#[tokio::test]
+async fn over_cap_line_with_no_newline_closes_the_stream() {
+    use tokio::io::AsyncWriteExt;
+
+    let (mut writer, mut reader, handle) = start_capped_server(TEST_LINE_CAP).await;
+    writer
+        .write_all(&vec![b'x'; TEST_LINE_CAP * 4])
+        .await
+        .expect("write bytes");
+    assert_stream_closed(&mut reader, handle).await;
+}
+
+#[tokio::test]
+async fn over_cap_line_after_initialize_closes_the_stream() {
+    use tokio::io::AsyncWriteExt;
+
+    let (mut writer, mut reader, handle) = start_capped_server(TEST_LINE_CAP).await;
+    writer
+        .write_all(&initialize_line_of_len(TEST_LINE_CAP))
+        .await
+        .expect("write initialize");
+    let reply = tokio::time::timeout(std::time::Duration::from_secs(10), reader.next_line())
+        .await
+        .expect("server replied within the timeout")
+        .expect("read reply")
+        .expect("server closed the stream instead of replying");
+    assert!(reply.contains("2025-11-25"), "initialize answered: {reply}");
+
+    // A valid request that is simply too long: a ping padded past the cap.
+    let mut over = serde_json::to_vec(&json!({
+        "jsonrpc": "2.0", "id": 2, "method": "ping",
+        "params": {"_meta": {"pad": "a".repeat(TEST_LINE_CAP)}}
+    }))
+    .expect("request serializes");
+    over.push(b'\n');
+    writer.write_all(&over).await.expect("write over-cap ping");
+    assert_stream_closed(&mut reader, handle).await;
 }
