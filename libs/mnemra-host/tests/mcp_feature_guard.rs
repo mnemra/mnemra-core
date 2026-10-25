@@ -27,10 +27,10 @@
 /// R-0010-e — assert rmcp's activated features contain no http/streamable-http transport.
 ///
 /// The rmcp dependency is configured as:
-///   workspace: `rmcp = { version = "1.7", features = ["server", "macros", "transport-io"] }`
+///   workspace: `rmcp = { version = "2.1", features = ["server", "macros", "transport-io"] }`
 ///   dev-dep extra: `rmcp = { workspace = true, features = ["client"] }`
 ///
-/// Feature breakdown (from rmcp 1.7 Cargo.toml):
+/// Feature breakdown (from rmcp 2.1 Cargo.toml):
 ///   - `server` enables: transport-async-rw, schemars, pastey
 ///   - `macros` enables: rmcp-macros, pastey
 ///   - `transport-io` enables: transport-async-rw, tokio/io-std

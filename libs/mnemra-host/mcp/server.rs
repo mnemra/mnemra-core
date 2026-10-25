@@ -34,7 +34,7 @@ use std::sync::Arc;
 use rmcp::RoleServer;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
+    CallToolRequestParams, CallToolResult, ContentBlock, ListToolsResult, PaginatedRequestParams,
     ServerInfo, Tool,
 };
 use rmcp::service::RequestContext;
@@ -797,7 +797,7 @@ impl ServerHandler for MnemraMcpServer {
                     "artifact.create dispatch completed (R-0004-a)"
                 );
                 // `echo.create` -> the generated ULID as a text content item.
-                Ok(CallToolResult::success(vec![Content::text(id)]))
+                Ok(CallToolResult::success(vec![ContentBlock::text(id)]))
             }
             Ok(ContentResult::Got(Some(content))) => {
                 // R-0004-a: per-verb metric. `content` is NOT emitted (artifact data, R-0020-g).
@@ -812,7 +812,7 @@ impl ServerHandler for MnemraMcpServer {
                     "artifact.get dispatch completed (R-0004-a)"
                 );
                 // `echo.get` -> the stored content (round-trips the payload).
-                Ok(CallToolResult::success(vec![Content::text(content)]))
+                Ok(CallToolResult::success(vec![ContentBlock::text(content)]))
             }
             Ok(ContentResult::Got(None)) => {
                 // R-0004-a: per-verb metric. Not-found is a valid response (outcome "ok").
