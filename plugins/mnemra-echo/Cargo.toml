@@ -9,5 +9,8 @@ license.workspace = true
 path = "mnemra_echo.rs"
 crate-type = ["cdylib"]
 
+[lints]
+workspace = true
+
 [dependencies]
 wit-bindgen = { workspace = true }

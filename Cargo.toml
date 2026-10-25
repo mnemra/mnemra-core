@@ -16,6 +16,13 @@ edition = "2024"
 authors = ["Peter Manahan"]
 license = "Apache-2.0"
 
+[workspace.lints.rust]
+# #2550 (narrowed by maintainer ruling): unsafe_code only, not the full strict set.
+# `deny`, not `forbid`: forbid cannot be locally overridden, and the few
+# existing sites carry a scoped `#[allow(unsafe_code)]` with a SAFETY note.
+# mnemra-echo has a crate-root allow with a reason comment instead (wit_bindgen glue).
+unsafe_code = "deny"
+
 [workspace.dependencies]
 # Task 23: official MCP server SDK (rmcp). Pinned at 3.7; no http/streamable-http
 # feature (R-0010-e). Server runtime uses server+transport-io; the client

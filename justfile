@@ -169,6 +169,28 @@ verify-lint:
     #!/usr/bin/env bash
     set -euo pipefail
     export CARGO_INCREMENTAL=0   # gate recipes only (#4107): no incremental state in the gate tree
+    # Reconciliation (#2550): every workspace member must opt in to the workspace
+    # lint table, else `unsafe_code = "deny"` silently does not reach it. The member
+    # list is computed (cargo metadata), never enumerated here, and there are no
+    # exclusions. It is a line match on an unindented `[lints]` header followed by
+    # `workspace = true` (not a TOML parse), and fails closed on a cargo or parse
+    # error and on an empty member list.
+    check_lints_optin() {
+        local meta manifests m bad=0
+        meta=$(cargo metadata --no-deps --format-version 1 --locked) \
+            || { echo "lints opt-in: cargo metadata failed"; return 1; }
+        manifests=$(printf '%s' "$meta" | grep -o '"manifest_path":"[^"]*"' \
+            | sed 's/^"manifest_path":"//; s/"$//') \
+            || { echo "lints opt-in: no manifest_path in cargo metadata output"; return 1; }
+        [ -n "$manifests" ] || { echo "lints opt-in: empty member list"; return 1; }
+        while IFS= read -r m; do
+            if ! awk '/^\[/ { sect = ($0 == "[lints]") } sect && /^workspace[ \t]*=[ \t]*true[ \t]*(#.*)?$/ { found = 1 } END { exit !found }' "$m"; then
+                echo "lints opt-in MISSING ([lints] workspace = true): $m"
+                bad=1
+            fi
+        done <<< "$manifests"
+        return "$bad"
+    }
     # Run every lint check; any failure routes to the FAIL branch so the GATE
     # contract (exactly one GATE line + correct exit) holds. A command in the
     # `if` condition is exempt from errexit, so a failing check reaches the else
@@ -176,6 +198,7 @@ verify-lint:
     if cargo clippy --workspace --exclude mnemra-echo --all-targets -- -D warnings 2>&1 \
         && cargo clippy -p mnemra-host --all-targets --all-features -- -D warnings 2>&1 \
         && cargo clippy -p mnemra-echo --target wasm32-wasip2 -- -D warnings 2>&1 \
+        && check_lints_optin 2>&1 \
         && cargo fmt --all --check 2>&1 \
         && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_workspace_clause 2>&1 \
         && cargo test --manifest-path libs/mnemra-host/Cargo.toml --test lint_engine_construction 2>&1; then
@@ -184,7 +207,8 @@ verify-lint:
         # --all-features (#4009: code compiled only under a feature, e.g. the
         # verify-test-hooks binaries, is otherwise never linted, and a mnemra-host
         # feature added later is covered with no edit here); plugin clippy for
-        # wasm32-wasip2; fmt check (no --fix); WHERE-clause lint (R-0018-d) — every
+        # wasm32-wasip2; workspace-lints opt-in reconciliation (check_lints_optin);
+        # fmt check (no --fix); WHERE-clause lint (R-0018-d) — every
         # read-path host-fn must reference ctx.workspace_id; engine-construction
         # guard lint (R-0032) — no EmbeddedEngine::start / start_embedded /
         # postgresql_embedded outside the shared-engine fixture. (F10: this lint

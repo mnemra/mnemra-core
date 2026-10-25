@@ -92,7 +92,12 @@ async fn acquire_engine() -> &'static EmbeddedEngine {
             // pointer with `'static` lifetime and no captured state —
             // `teardown_shared_engine` is exactly that (a bare fn item, no
             // closure environment).
-            unsafe { libc::atexit(teardown_shared_engine) };
+            #[allow(unsafe_code)]
+            let rc = unsafe { libc::atexit(teardown_shared_engine) };
+            assert_eq!(
+                rc, 0,
+                "libc::atexit failed to register the shared-engine teardown"
+            );
             Ok::<_, Box<dyn std::error::Error + Send + Sync>>(engine)
         })
         .await

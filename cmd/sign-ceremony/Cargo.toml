@@ -17,6 +17,9 @@ path = "ceremony.rs"
 name = "sign-ceremony"
 path = "main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 # Path dep on the runtime host so the producer signs with the SAME ed25519-dalek
 # the runtime verifies with, and so the round-trip test can call the real

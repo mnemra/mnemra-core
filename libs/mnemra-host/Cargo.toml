@@ -16,6 +16,9 @@ path = "./mnemra_host.rs"
 [features]
 test-hooks = []
 
+[lints]
+workspace = true
+
 [dependencies]
 async-trait = "0.1.89"
 # Task 23: MCP server SDK — server+transport-io features (no http/streamable-http;

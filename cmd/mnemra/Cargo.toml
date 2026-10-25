@@ -9,6 +9,9 @@ license.workspace = true
 name = "mnemra"
 path = "main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 mnemra-host = { path = "../../libs/mnemra-host" }
 tokio = { version = "1.52.3", features = ["rt", "macros", "rt-multi-thread"] }
