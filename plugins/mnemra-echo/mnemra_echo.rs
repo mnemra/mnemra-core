@@ -28,6 +28,13 @@
 //! only because the import WIT signature (locked by P-0003, not re-opened here)
 //! still declares `ctx: workspace-ctx`.
 
+// Crate-root allow, wider than the `export!` glue strictly needs: wit_bindgen's
+// generated guest ABI export glue (unsafe cabi fn, `export_name`) is unsafe by
+// construction, and an `#[allow]` on the `export!` invocation does not apply
+// through the expansion (measured, #2550). This crate has no hand-written
+// unsafe. A narrower layout is parked; reviewed at each signing ceremony (#4327).
+#![allow(unsafe_code)]
+
 // Generates the guest-side bindings for `world plugin` defined in
 // `wit/echo.wit`. `export!` below registers our struct as the world's typed
 // `content` exporter.
