@@ -88,15 +88,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "eef4daca5480380b3d8f0c7a84e583010274b6e39e51bbb8c74592fd281ec51d",
-      "translated_at": "2026-07-03T18:08:41Z"
+      "source_sha256": "befcc5eee0a60d56d8c4655fdd5e3a8461985b73c483851d535cd8d27b032da0",
+      "translated_at": "2026-10-25T22:20:59Z"
     },
     "adrs/P-0013-plugin-invocation-model.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "c8879ee229f1fb6dc67477d8af25879aee1af89dc3ac49ce196e46c5a6264618",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "dc5d03f2552d241b404ea82ad5e21dfd15e5ba059ca88b83baf6d209b7c2fadb",
+      "translated_at": "2026-10-25T22:20:59Z"
     },
     "adrs/P-0014-retrieval-architecture.md": {
       "primary_audience": "agent",
@@ -109,8 +109,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "872b63c0fe99b9d7ddf2f9d930151d2dea22fa9f75303df769c8b52d426d8ee5",
-      "translated_at": "2026-07-18T13:26:03Z"
+      "source_sha256": "34a9ead844f89e23b842cc377d7fd98e5657ca17f5876acb3773859747a2cf1b",
+      "translated_at": "2026-10-25T22:20:59Z"
     },
     "adrs/P-0016-edge-schema.md": {
       "primary_audience": "agent",
@@ -137,15 +137,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "34ba60eacc20ae58d82f0c704798ff088ff8669ae799439ed2d9350198888649",
-      "translated_at": "2026-07-11T13:00:14Z"
+      "source_sha256": "a6f4786fe7a205903af79873178584016dc275f5990d1bbab33090c7c8775347",
+      "translated_at": "2026-10-25T22:20:59Z"
     },
     "adrs/P-0020-report-execution-context.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "24a0cb8a2aaf5e077c7579db11ab2f5b1aa5a38827f75e0203fdd35cb47425d0",
-      "translated_at": "2026-07-04T20:42:14Z"
+      "source_sha256": "d3eca2231b7564a156050a446eedb2821ce2f99b30e154af2b0b591a16565025",
+      "translated_at": "2026-10-25T22:20:59Z"
     },
     "adrs/P-0021-report-definition-type.md": {
       "primary_audience": "agent",
@@ -228,8 +228,8 @@
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "f7f1217c646f38a7b559720452dc011b0c2011f19fcfef557b69602d9e662821",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "ae688ae175dd8c00d35844f92f8772777d26a559dbd2b7757ae298ec611aca47",
+      "translated_at": "2026-10-25T22:20:59Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",

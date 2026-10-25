@@ -234,3 +234,9 @@ Lifecycle fields from `external`-class sources **do not enter** the `authoritati
 ### Scope of this amendment
 
 This amendment adds **only** the `trust_class` keying input to the **trust axis** (PE-7) and records the PE-7 N10 + PE-11 ingest-half firings. It does **not** add or change any PE-2 policy dimension, DDL default, validator, or enforcement point; it does not change the PE-3 decision port, the PE-4 citation-resolution dispositions, the PE-8 freshness schema, the PE-9 displacement registry, the PE-10 citation form, or the PE-6 write gate (through which an external-declared edge is still the only promotion path). `origin` semantics ([P-0016](P-0016-edge-schema.md) ES-2/ES-3) and ES-6's writer roster are unchanged (conformed to, not amended). It rides the ingestion-pipeline spec-exit gate for maintainer ratification, the same gate shape P-0015 itself locked at.
+
+## Amendment 2026-10-25 — Crate versions are not design values (version citations only)
+
+Applied 2026-10-25 under the maintainer's rulings on #4249: activity 8285 (design records carry no crate or library version), 8303 (confirming 8296: a crate version stays out as a pin or as a floor) and 8380 (versioned provenance stays). The reason given is that a version change must never require reopening a locked record.
+
+**Relabelled as provenance:** "cedar-policy 4.x is Apache-2.0/Green when the engine substitution fires", in the policy-port anchors. The `4.x` is the release line the 2026-05-18 Cedar/NGAC research assessed. It is not a pin or floor, and no cedar-policy version is a design value. The decision (the engine sits behind mnemra's policy port; substitution, not a rewrite) does not depend on a cedar-policy release.

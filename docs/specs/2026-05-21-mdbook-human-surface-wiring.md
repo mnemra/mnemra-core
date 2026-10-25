@@ -83,7 +83,11 @@ Black-box tests in `tests/` (project convention; pytest, `uv run`):
   (wiring literals) and AC #7 (no `primary-audience` in any rendered HTML).
 
 mdBook 0.5.2 + `mdbook-mermaid` + `mdbook-d2` are available locally and pinned in CI; the
-end-to-end test requires them on PATH.
+end-to-end test requires them on PATH. *(Amended 2026-10-25, #4249: "0.5.2" is superseded. The
+test plan needs mdBook, `mdbook-mermaid` and `mdbook-d2` on PATH. In CI, mdBook and
+`mdbook-mermaid` run at the releases the docs workflow (`.github/workflows/docs.yml`) pins;
+`mdbook-d2` is installed unpinned there, so "pinned in CI" above does not hold for it (`docs.yml` as of 2026-10-25). No tool
+or crate version is a design value. Maintainer rulings, #4249 activities 8285 and 8303.)*
 
 ## Out of scope / follow-ups
 

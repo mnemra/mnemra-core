@@ -102,7 +102,7 @@ the load" objection: signing secures the manifest; only the content-hash secures
 | `P-InstrumentBefore → Observability` (specializes, `:43`) | The host's first real run; the `/health` readiness surface | The host goes from never-run to a live server (M2) — its **first real run** in P-InstrumentBefore's sense. The readiness instrument (`/health`, R-0004-g) and the per-verb metric/log surfaces already exist; M2 **brings the existing instrumentation online and binds `/health` first** (D6/D7). No new instrumentation is designed — the requirement is satisfied by instantiation, not addition. |
 | Project ADR `P-0005-v0-signing-chain` (specializes `P-SecurityLayered` + `P-Defer`) | The signing primitive, custody, fail-closed verification, the trip-wire | Most-specific layer. Ed25519 / build-host-on-disk mode-600 / synchronous fail-closed / embedded verification material / multi-deployment trip-wire are all locked here (Option A + the 2026-05-24 core-by-provenance amendment). M1 **instantiates** P-0005; it does not re-decide it. |
 | Project ADR `P-0003-plugin-manifest` (specializes `P-LockContract` via the schema contract) | The content-hash field's governance home | Most-specific layer. P-0003 is the **sole authority** for the V0 manifest schema (`schema_version: 1`). A new signed-body field alters that schema → governed by P-0003 (§5 governance decision). |
-| Project ADR `P-0012-plugin-runtime-and-mcp-sdk` (specializes `P-StackDiscipline`) | The production serve-loop | Most-specific layer. rmcp v1.7.0, stdio, no HTTP feature — the production stdio serve-loop (D8) is in-stack instantiation of the locked SDK choice. |
+| Project ADR `P-0012-plugin-runtime-and-mcp-sdk` (specializes `P-StackDiscipline`) | The production serve-loop | Most-specific layer. rmcp v1.7.0, stdio, no HTTP feature — the production stdio serve-loop (D8) is in-stack instantiation of the locked SDK choice. *(Amended 2026-10-25, #4249: "v1.7.0" is superseded; the locked choice is the `rmcp` SDK, not a release of it, per P-0012 Amendment 2026-10-25.)* |
 
 ### Conflicts-with finding
 
@@ -240,6 +240,11 @@ there is no production stdio serve-loop. `MnemraMcpServer` already impls `rmcp::
 - **Anchor:** P-0012 (rmcp v1.7.0), R-0010-a (single MCP server, stdio transport at V0), R-0010-e
   (Streamable-HTTP SHALL NOT be activated at V0), intake Non-goal (no Streamable-HTTP). Workspace
   anchor: `P-StackDiscipline` (in-stack SDK; no foreign transport).
+- *(Amended 2026-10-25, #4249: "rmcp v1.7.0" in this heading and in the P-0012 anchor above is
+  superseded. D8 depends on the official `rmcp` SDK with a stdio server transport and no
+  HTTP-transport feature, at whatever release the workspace `Cargo.toml` pins; no crate version
+  is a design value. See [P-0012](../src/adrs/P-0012-plugin-runtime-and-mcp-sdk.md) Amendment
+  2026-10-25; maintainer rulings, #4249 activities 8285 and 8303.)*
 
 #### D9 — Storage pool from `start_embedded()`; schema init; NOT the LLM-key/config pathway
 

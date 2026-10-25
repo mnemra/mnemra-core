@@ -16,8 +16,20 @@ intent_version = "eab0553635904e025f6e97ce3242a409d902f0e7"
 
 [audit_chain.spec]
 ref = "docs/specs/2026-07-03-reporting-engine.md"
-version = "932fe23a6c5ceb0fe3ffa298a0284f967291605f"
+# Re-pinned 2026-10-25, task #4249 (version sweep: design records carry no library or runtime
+# versions; maintainer rulings, #4249 activities 8285, 8303 and 8380). The pinned TEXT CHANGED:
+# this record was amended in place, each amendment a dated note inserted beside the original
+# text, which is kept. The change was covered by Charon's canon-conformance review of the #4249
+# phase-1 sweep (activity 8559); the fix pass that review requested changed text after it, and
+# that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
+# was run.
+# Prior pin: version = "932fe23a6c5ceb0fe3ffa298a0284f967291605f"
+version = "a78b0fb8df76c6cf0367c08e1ded83dfaa970b93"
+# internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
+# prior pin above; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 phase 1 does not decide.
 internal_conformance = "pass"
+# locked_at unchanged: no stage-exit gate was re-run for #4249, so the original lock time stands.
 locked_at = 2026-07-04T18:00:40Z
 
 [audit_chain.spec.generated_against]

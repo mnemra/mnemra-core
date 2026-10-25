@@ -161,3 +161,16 @@ The "WIT change = churn/recompile" framing for this decision is **overstated**, 
 
 - **A separate spec amendment** adds the guest `run()` / invocation-envelope requirement (the export-side contract) to the locked spec — the spec currently pins the import-side host-fn ABI (R-0012-a) and the MCP front (R-0010-a/c/d, R-0006-b) but not the export/invocation envelope. That amendment is the next step in the sequence; this ADR only records the decision it will encode.
 - **The Task-23 re-decompose** sizes Bucket B (the typed-export delta) only; Bucket A (the component-host machinery + host-fn import bodies) is the ABI-agnostic bulk, storage-gated (Task 5/21), and must not inflate the typed-ABI line. Confirm with the re-decompose which task owns the host-fn bodies vs the invocation wiring, and budget the trap/replace re-pin.
+
+## Amendment 2026-10-25 — Crate versions are not design values (version citations only)
+
+Applied 2026-10-25 under the maintainer's rulings on #4249: activity 8285 (design records carry no crate or library version), 8303 (confirming 8296: a crate version stays out as a pin or as a floor; a design dependency on a crate names the capability it needs) and 8380 (versioned provenance stays). The reason given is that a version change, for example a bump forced by a security advisory, must never require reopening a locked record. The decision itself (typed per-verb `content` exports, the retired `run(string)` export) is unchanged.
+
+**What the decision depends on.** The `P-StackDiscipline` driver rests on two capabilities, not on releases: Wasmtime's `component-model` feature, already a direct dependency under [P-0012](P-0012-plugin-runtime-and-mcp-sdk.md) Decision A, and `wit-bindgen` / `component::bindgen!` generating the typed marshaling. The releases in use are held in `libs/mnemra-host/Cargo.toml` and the workspace `Cargo.toml`, not in this record.
+
+**Superseded (the text above is kept as the record):** the versions quoted in the `P-StackDiscipline` driver (`wasmtime = "=45.0.2"`; `wit-bindgen` pinned `0.57` → `0.57.1`), which read as current values.
+
+**Kept as provenance (not superseded):**
+
+- "proved against the installed toolchain (`wit-bindgen` 0.57.1, `wasmtime` =45.0.2, guest `wasm32-wasip2`)" in Consequences: the toolchain the Forge cost assessment measured on;
+- the References entry "Toolchain pins": the tree as recorded on 2026-06-20. Its pointers to `libs/mnemra-host/Cargo.toml` and the guest target stand.
