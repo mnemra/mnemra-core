@@ -46,8 +46,8 @@
 //!
 //! # Content extraction
 //!
-//! `CallToolResult.content` is `Vec<Content>` where `Content = Annotated<RawContent>`.
-//! Text is accessed via `content.raw` → `RawContent::Text(RawTextContent { text, .. })`.
+//! `CallToolResult.content` is `Vec<ContentBlock>`.
+//! Text is accessed via `ContentBlock::Text(TextContent { text, .. })`.
 //! This test extracts and asserts on `.text` from the first text content item.
 //!
 //! # Engine acquisition
@@ -70,7 +70,7 @@ mod slice1_harness;
 
 use mnemra_host::auth::token::{generate, hash};
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use rmcp::model::{CallToolRequestParams, Meta, RawContent};
+use rmcp::model::{CallToolRequestParams, ContentBlock, Meta};
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
 use uuid::Uuid;
@@ -105,8 +105,8 @@ fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
     result
         .content
         .iter()
-        .filter_map(|c| match &c.raw {
-            RawContent::Text(t) => Some(t.text.as_str()),
+        .filter_map(|c| match c {
+            ContentBlock::Text(t) => Some(t.text.as_str()),
             _ => None,
         })
         .collect()

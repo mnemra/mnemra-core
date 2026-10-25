@@ -35,19 +35,19 @@
 //! remaining unwired arm in `mcp/dispatch.rs` — it returns `NON_DISPATCHABLE -4003`
 //! until the T12 delete-slice green phase lands.
 //!
-//! # rmcp API grounding (Step 0) — verified against rmcp 1.7.0 source
+//! # rmcp API grounding (Step 0) — re-verified against rmcp 2.1.0 source
 //!
 //! Source: context7 `/websites/rs_rmcp_rmcp`, crate source at
-//! `~/.cargo/registry/src/.../rmcp-1.7.0/src/`.
+//! `~/.cargo/registry/src/.../rmcp-2.1.0/src/`.
 //!
-//! Verified real rmcp 1.7.0 symbols used:
+//! Verified real rmcp 2.1.0 symbols used:
 //! - `rmcp::service::{serve_server, serve_client}` — init server/client from transport
 //!   (`serve_server` requires `server` feature; `serve_client` requires `client` feature)
 //! - `rmcp::service::RunningService<R, S>` — implements `Deref<Target = Peer<R>>`;
 //!   `cancel().await` shuts down; `waiting().await` waits for the task
 //! - `Peer<RoleClient>` — exposes `call_tool(CallToolRequestParams)`,
 //!   `list_tools(Option<PaginatedRequestParams>)`, `list_all_tools()` (no pagination needed)
-//! - `rmcp::model::CallToolRequestParams` — fields: `name`, `meta: Option<Meta>`, `arguments`
+//! - `rmcp::model::CallToolRequestParams` — fields: `name`, `meta: Option<Meta>`, `arguments`, `task`
 //!   (`CallToolRequestParam` is a deprecated alias; the canonical type is `CallToolRequestParams`)
 //! - `rmcp::model::Meta` — newtype over `JsonObject`; supports `.insert(key, val)` via
 //!   `DerefMut`; used for per-request `_meta.token` auth presentation (open seam #1)
@@ -87,7 +87,7 @@ mod shared_engine;
 use mnemra_host::auth::token::{AdminToken, generate, hash};
 use mnemra_host::schema::init::DEFAULT_WORKSPACE_ID;
 use mnemra_host::storage::postgres::engine::EmbeddedEngine;
-use rmcp::model::{CallToolRequestParams, ErrorCode, Meta, RawContent};
+use rmcp::model::{CallToolRequestParams, ContentBlock, ErrorCode, Meta};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::json;
 use std::path::PathBuf;
@@ -214,15 +214,15 @@ fn echo_component_path() -> PathBuf {
 
 /// Extract all text content strings from a `CallToolResult`.
 ///
-/// `CallToolResult.content` is `Vec<Content>` where `Content = Annotated<RawContent>`;
-/// text lives at `content.raw` → `RawContent::Text(RawTextContent { text, .. })`.
+/// `CallToolResult.content` is `Vec<ContentBlock>`;
+/// text lives at `ContentBlock::Text(TextContent { text, .. })`.
 /// Used only for create-side id DISCOVERY (the returned ULID is a text item).
 fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
     result
         .content
         .iter()
-        .filter_map(|c| match &c.raw {
-            RawContent::Text(t) => Some(t.text.as_str()),
+        .filter_map(|c| match c {
+            ContentBlock::Text(t) => Some(t.text.as_str()),
             _ => None,
         })
         .collect()

@@ -91,7 +91,7 @@ use mnemra_host::storage::postgres::engine::EmbeddedEngine;
 // as an unresolved symbol in the RED compile output alongside populate_verified_pool.
 use mnemra_host::startup::StartupError;
 use rand::TryRng;
-use rmcp::model::{CallToolRequestParams, RawContent};
+use rmcp::model::{CallToolRequestParams, ContentBlock};
 use rmcp::service::{RoleClient, RunningService, serve_client, serve_server};
 use serde_json::json;
 use tokio::io::duplex;
@@ -229,8 +229,8 @@ fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
     result
         .content
         .iter()
-        .filter_map(|c| match &c.raw {
-            RawContent::Text(t) => Some(t.text.as_str()),
+        .filter_map(|c| match c {
+            ContentBlock::Text(t) => Some(t.text.as_str()),
             _ => None,
         })
         .collect()

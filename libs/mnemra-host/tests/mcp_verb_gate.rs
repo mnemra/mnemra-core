@@ -64,7 +64,7 @@ mod shared_engine;
 #[path = "common/slice1_harness.rs"]
 mod slice1_harness;
 
-use rmcp::model::{CallToolRequestParams, ErrorCode, Meta, RawContent};
+use rmcp::model::{CallToolRequestParams, ContentBlock, ErrorCode, Meta};
 use serde_json::json;
 use slice1_harness::slice1_echo_harness;
 
@@ -117,8 +117,8 @@ fn extract_text_content(result: &rmcp::model::CallToolResult) -> Vec<&str> {
     result
         .content
         .iter()
-        .filter_map(|c| match &c.raw {
-            RawContent::Text(t) => Some(t.text.as_str()),
+        .filter_map(|c| match c {
+            ContentBlock::Text(t) => Some(t.text.as_str()),
             _ => None,
         })
         .collect()
