@@ -1,6 +1,6 @@
 ---
 title: "P-0012: Plugin Runtime (raw Wasmtime) + MCP SDK (`rmcp`)"
-summary: "Two implementation decisions for the V0 plugin substrate that an unratified research proposal (ADR-001) had bundled into a single Extism + rmcp + hyper-mcp stack — and that the build reversed on both halves without recording either. Decision A (retroactive, shipped in Tasks 20–22): host plugins on raw Wasmtime, not Extism, because P-0007's per-instance resource-limit mechanism (fuel + epoch + ResourceLimiter) needs direct Wasmtime control that Extism's abstraction fights. Decision B (forward, implemented by Task 23): adopt the official MCP Rust SDK `rmcp` v1.7.0 (Apache-2.0, Green-tier) (Amendment 2026-10-25, #4249: no crate version is a design value; Decision B is the official SDK with a stdio server transport and no HTTP transport, and Decision A is raw Wasmtime with the surface P-0007 drives, at whatever releases `Cargo.toml` pins) for the single stdio MCP server rather than hand-rolling the JSON-RPC/MCP wire layer — the MCP server is the auth+dispatch trust boundary and R-0010-a mandates conformance to MCP 2025-06-18, the worst place to hand-roll a mandated external wire contract. mnemra's R-0010 handler logic (auth-check, single WorkspaceCtx construction, per-verb capability check, distinguishable JSON-RPC error codes) rides on top as the rmcp ServerHandler, unchanged by the SDK choice."
+summary: "Two implementation decisions for the V0 plugin substrate that an unratified research proposal (ADR-001) had bundled into a single Extism + rmcp + hyper-mcp stack — and that the build reversed on both halves without recording either. Decision A (retroactive, shipped in Tasks 20–22): host plugins on raw Wasmtime, not Extism, because P-0007's per-instance resource-limit mechanism (fuel + epoch + ResourceLimiter) needs direct Wasmtime control that Extism's abstraction fights. Decision B (forward, implemented by Task 23): adopt the official MCP Rust SDK `rmcp` v1.7.0 (Apache-2.0, Green-tier) (Amendment 2026-10-25, #4249: no crate version is a design value; Decision B is the official SDK with a stdio server transport and no HTTP transport, and Decision A is raw Wasmtime with the surface P-0007 drives, at whatever releases `Cargo.toml` pins) for the single stdio MCP server rather than hand-rolling the JSON-RPC/MCP wire layer — the MCP server is the auth+dispatch trust boundary and R-0010-a mandates conformance to MCP 2025-06-18 (Amendment 2026-10-25, MCP protocol revision, DRAFT pending approval: the target is MCP 2025-11-25; the host serves exactly the released 2025-06-18 and 2025-11-25 and answers any other revision requested at `initialize` with 2025-11-25. The host enforces that set itself; tests pin it at `initialize` and before the handshake, and the pin after the handshake is #4326 (open)), the worst place to hand-roll a mandated external wire contract. mnemra's R-0010 handler logic (auth-check, single WorkspaceCtx construction, per-verb capability check, distinguishable JSON-RPC error codes) rides on top as the rmcp ServerHandler, unchanged by the SDK choice (Amendment 2026-10-25, MCP protocol revision, DRAFT pending approval: the host also carries an initialize gate, a line-capped reader and an `initialize` override at that boundary, beside its ServerHandler)."
 primary-audience: agent
 ---
 
@@ -206,3 +206,137 @@ The Decision B revisit tripwire is unchanged. It was already keyed on a capabili
 - the other "`rmcp` facts" (latest version, license, download count) and the References entry "`rmcp` on crates.io: v1.7.0": a reading of crates.io taken when this record was written, 2026-06-19;
 - "rmcp 1.5" in the title and description of the unratified ADR-001 proposal (Status, Context, More Information): a historical quotation;
 - "post-1.0" in the SDK-maturity argument: the maturity the decision was weighed on in June 2026.
+
+## Amendment 2026-10-25 (MCP protocol revision)
+
+**Status: DRAFT, pending the maintainer's approval.** The maintainer ruled on #4249 (activity 8421) that this amendment is drafted only if a measured run showed the host negotiates MCP 2025-11-25 and still serves 2025-06-18 clients, and that it then waits for his approval. The measurement (activity 8589) showed both, on the host as landed at `de62732` (#4295, #4294).
+
+**Scope.** This amendment changes the MCP protocol revision this record cites, and corrects this record's claims about how little bespoke code sits at the MCP boundary (Superseded, below). It does not touch the crate-version citations, which the amendment above handles, and it does not change Decision A or Decision B: the SDK choice stands. Protocol revisions stay in design records: rulings 8421 and 8435 on #4249 both direct this record to name one. What the #4249 sweep takes out of design records is crate versions and runtime pins.
+
+**Rulings applied.**
+
+- Activity 8421: the condition above.
+- Activity 8435 (the maintainer, about 17:35): the record names a pinned set of released revisions, and the host enforces it, so that an SDK upgrade cannot silently widen it. Its wording also says the set "refuses drafts".
+- The `initialize` shape. INHERITED from #4249 activity 8454, which relays the implementation lane's session and says it was not re-verified, and from #4294's task description: at about 17:37, two minutes after 8435, the maintainer chose "Answer 2025-11-25", the spec-conformant downgrade, not an `initialize` error. This reads as a later refinement of 8435 that applies to `initialize`. On that reading, 8435's "refuses drafts" holds for a request other than `initialize` or `ping` that names a draft in complete `_meta` of its own: that request gets no result (below). ⚠ The approval should confirm that reading. This record follows the code.
+
+**Decision: the conformance target is MCP 2025-11-25, and the host serves exactly the released revisions {2025-06-18, 2025-11-25}.** R-0010-a's target moves from 2025-06-18 to 2025-11-25: it is the newest released revision and the one the host answers by default, and 2025-06-18 stays served so that a client pinned to it keeps working. *(Anchors: the maintainer's rulings 8421 and 8435; `P-GuaranteeByMechanism`, "enforce a guarantee with a mechanism that fails loudly when violated": the set is a host constant, pinned by tests on the paths named below, not the SDK's default.)*
+
+- An `initialize` requesting 2025-06-18 is answered with 2025-06-18.
+- An `initialize` requesting 2025-11-25 is answered with 2025-11-25.
+- An `initialize` requesting any other revision is answered with 2025-11-25. This covers a draft such as 2026-07-28, an older released revision such as 2025-03-26, and an unknown string such as 2024-01-01. The answer is a downgrade, not an `initialize` error.
+- The server's default revision is 2025-11-25.
+- A request other than `initialize` whose own `_meta` names a revision outside the set gets `-32022` (unsupported protocol version), and the error data lists the set, with three exceptions before the handshake: a `ping` is answered whatever its `_meta`, a request with incomplete `_meta` gets `-32602`, and a `server/discover` gets `-32600` from the initialize gate (lifecycle below). After the handshake every such request gets `-32022`, `ping` included, from the SDK's per-request check, and that path is not pinned by a test (below). An `initialize`'s own `_meta` is not consulted: its revision is the one it requests, as above.
+- A session negotiated at 2025-11-25 carries none of the 2026-07-28 draft's result fields (`resultType`, `ttlMs`, `cacheScope`). That holds when the client asked for the draft too.
+
+**Enforcement: the host owns the set.** MEASURED at `de62732` by reading the code; the host line numbers are that commit's. The `rmcp` line numbers are a source read of rmcp 3.7.0, the release `Cargo.lock` pins at `de62732`.
+
+- `SUPPORTED_PROTOCOL_VERSIONS` in `libs/mnemra-host/mcp/server.rs` (`:77-91`) holds the two revisions.
+- `MnemraMcpServer`'s `ServerHandler::supported_protocol_versions` returns that constant (`:555-558`).
+- `get_info` names 2025-11-25 explicitly (`:522-529`) rather than inheriting the SDK's default, which is the SDK's newest known revision, draft included.
+- `MnemraMcpServer`'s `ServerHandler::initialize` (`:543-553`) stores the negotiated revision as the session's, not the one the client requested.
+
+**What the tests pin.** On two paths, an SDK release that learns more revisions does not change what is served, and tests in `libs/mnemra-host/tests/mcp_server.rs` turn red if it does.
+
+- At `initialize`:
+  - `initialize_released_2025_06_18_is_echoed` (`:3087`);
+  - `initialize_released_2025_11_25_is_echoed` (`:3095`);
+  - `initialize_draft_2026_07_28_is_downgraded_to_2025_11_25` (`:3103`);
+  - `initialize_unknown_version_is_downgraded_to_2025_11_25` (`:3111`);
+  - `initialize_older_known_version_is_downgraded_to_2025_11_25` (`:3119`);
+  - `session_replies_carry_no_draft_result_fields` (`:3407`);
+  - `handshake_requesting_the_draft_version_is_served_as_released` (`:3443`). It pins an outcome: a session whose handshake asked for the draft is served as 2025-11-25. Two things produce that outcome, and they are co-equal. The host's `initialize` override stores the negotiated revision, and the SDK's handshake sets it again after the handler returns (rmcp 3.7.0 `src/service/server.rs:692-703`). Either one alone keeps the test green, so on the handshake path neither is pinned on its own. The host override alone is pinned on a re-initialize that reaches an ungated server (`handler_without_the_gate_stores_the_negotiated_version`, `:3503`).
+- Before the handshake, on a request's own `_meta`: `pre_init_request_with_draft_inline_meta_does_not_start_stateless_lifecycle` (`:3264`), and the gate tests in the lifecycle below.
+
+**Not pinned: a request's own `_meta` after the handshake.** Once the handshake is done, the initialize gate passes every request through (`libs/mnemra-host/mcp/gate.rs:85`), and the SDK takes a request's protocol revision from that request's own `_meta` before the session's (rmcp 3.7.0 `src/service.rs:1220-1226`). On an established session, a request whose `_meta` names the draft is therefore stopped only by the SDK's per-request check against `supported_protocol_versions` (rmcp 3.7.0 `src/handler/server.rs:64-72`), which answers `-32022`. No test at `de62732` sends a request's own `_meta` after the handshake, so an SDK release that narrowed that check would leave every test green while the served set widened. The test that pins this path is filed as #4326 (implementation lane, open). **This record's claim that an SDK upgrade cannot widen the set covers the two pinned paths above only.** It widens to this path when #4326's test lands. Until then #4326 is parked: nothing fires it, and no cadence is named here. The approval should either land #4326 first or name the cadence that resurfaces it.
+
+**Lifecycle before the handshake.** This is how the host behaves at `de62732`. The invariant is that **before the `initialize` handshake completes, no request other than `initialize` or `ping` receives a result.** Two layers produce it. The SDK's pre-initialize loop (rmcp 3.7.0 `src/service/server.rs:563-672`) answers some requests itself. The initialize gate `InitializeGated` (`libs/mnemra-host/mcp/gate.rs:63-88`) sees every request the SDK hands to the service. The gate is an allowlist and fails closed, so a request kind a later SDK release adds, and hands to the service, is refused rather than served. Production starts every session through `libs/mnemra-host/mcp/gate.rs`'s `serve` (`:41-61`; called at `libs/mnemra-host/mnemra_host.rs:405`).
+
+Each outcome, with the code that produces it:
+
+- `ping` is answered with an empty result by the SDK's loop, whatever its `_meta` (`src/service/server.rs:566-581`), and an `initialize` then negotiates normally (`pre_init_ping_is_answered_and_initialize_follows`, `mcp_server.rs:3374`).
+- A request other than `initialize` or `ping` whose `_meta` is missing or incomplete gets `-32602` from the SDK's loop (`src/service/server.rs:588-607`), and the connection stays before the handshake. This is pinned for `server/discover` (`pre_init_discover_without_meta_is_invalid_params`, `:3282`). For other request kinds it is a source read, untested; #4326 carries that case as optional.
+- A `server/discover` with complete `_meta` gets `-32600`, message `initialize required`, from the gate (`gate.rs:82-84`), whichever revision it names. The SDK hands a discover to the service as a bootstrap probe before its own version check (`src/service/server.rs:610-632`). The connection stays before the handshake, and an `initialize` then negotiates normally (`pre_init_discover_naming_draft_version_is_refused`, `:3241`; `pre_init_discover_naming_released_version_is_refused`, `:3356`).
+- A request other than `server/discover` that has complete `_meta` naming a revision outside the set, and that reaches the SDK's version check, gets `-32022` (unsupported protocol version) from the SDK (`src/service/server.rs:634-651`). The error data lists the supported set, and the connection stays before the handshake (`pre_init_request_with_draft_inline_meta_does_not_start_stateless_lifecycle`, `:3264`; assertion `:3222-3238`).
+- A request other than `server/discover` that has complete `_meta` naming a revision in the set latches the SDK's inline mode for the connection (`src/service/server.rs:653-664`). The gate refuses it with `-32600` `initialize required` (`gate.rs:82-84`). From then on, on that connection:
+  - a later `initialize` gets `-32600` `initialize required` (`gate.rs:73-75`);
+  - any other request except `ping` gets the same (`gate.rs:82-84`);
+  - a `ping`, which the gate allows, gets `-32602` from the SDK's per-request metadata check (`src/handler/server.rs:78-99`).
+
+  The connection stays refused until it is reopened (`pre_init_request_with_released_inline_meta_is_refused_and_so_is_a_late_initialize`, `:3328`; against the real binary, `production_binary_refuses_a_request_before_initialize`, `libs/mnemra-host/tests/smoke_e2e.rs:402`).
+- A second `initialize` on an established session is refused with `-32600`, message `already initialized`, and does not change how the session is served (`gate.rs:76-80`; `re_initialize_is_refused_and_does_not_enable_draft_shaping`, `:3470`).
+- An incoming line longer than `MAX_INCOMING_LINE_BYTES` (`libs/mnemra-host/mcp/transport.rs:27`, 16 MiB at `de62732`, newline included) ends the session. The client sees end of stream; the line is not dropped with the client left waiting (`transport.rs:1-11`). The tests are `line_one_byte_over_cap_closes_the_stream` (`mcp_server.rs:3637`), `over_cap_line_with_no_newline_closes_the_stream` (`:3649`), `over_cap_line_after_initialize_closes_the_stream` (`:3661`) and `production_binary_ends_the_session_on_an_over_cap_incoming_line` (`smoke_e2e.rs:315`). A line exactly at the cap is served (`line_exactly_at_cap_is_served`, `:3611`).
+
+**Decision: the lifecycle refusals stand as implemented, and they do not conflict with R-0010-f.** R-0010-f's closed list of classes that must stay distinguishable is invalid token, verb not found and parameter invalid. The refusals above use three codes.
+
+- `-32600`, the gate's lifecycle refusals. The invalid-token code is pinned to differ from `-32600` (`bogus_token_returns_distinguishable_auth_failure`, `mcp_server.rs:457-461`), so a lifecycle refusal cannot be read as an authentication failure. The `-32600` code was set by the implementation lane as a default that can be revisited, and it was routed here for this check.
+- `-32602`, from the SDK before the handshake and on a latched connection. Each refuses a request that is missing the `_meta` the SDK requires, which is a parameter fault. It falls inside the parameter-invalid class rather than blurring two classes.
+- `-32022`, from the SDK for a revision outside the set. It is a code of its own. It differs from the invalid-token code (`-4001`, `libs/mnemra-host/mcp/errors.rs:29`), from the code for a verb outside the manifest (`-4005`, `errors.rs:70`) and from `-32602`. Two codes for neighbouring faults is not conflation; one code for two classes would be.
+
+*(Anchor: R-0010-f's clause text in [`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`](../../specs/2026-05-24-mnemra-core-v0-substrate.md), "error code classes SHALL NOT be conflated", over its three named classes.)*
+
+**Not claimed: a parse-error reply.** This record does not claim that the host answers a line that is not valid JSON with `-32700` (parse error), and a reader must not rely on one. On the SDK release landed at `de62732` (rmcp 3.7.0), by source read and untested:
+
+- A line that is not valid JSON gets no reply. The SDK drops it, logs it at `debug`, and the stream continues (`src/transport/async_rw.rs:290-299`).
+- A line of valid JSON that is not a well-formed message gets `-32600`, message `Invalid request`, with `id: null`, and the stream continues (`async_rw.rs:300-314`).
+- Only a line over the cap ends the session (above).
+
+The host's default log filter is `info` (`cmd/mnemra/logging.rs:32`, MEASURED at `de62732`), so a dropped line leaves no trace in the host's log. INHERITED from the #4156 review (activity 8423): the release the host used before the 2.x line (1.7.0) replied `-32700` with a null id. No test at `de62732` pins any of this: a search of `libs/mnemra-host/tests` for `32700`, `PARSE_ERROR`, `parse_error` and `Ignoring unparsable` found nothing, where the same search for `INVALID_PARAMS` did. The mechanism that closes that gap is the characterization test #4323 adds. It pins today's no-reply and `-32600` behaviour, so an SDK release that changes either turns a test red. #4323 is filed and open (implementation lane), and parked like #4326: nothing fires it, and no cadence is named here.
+
+The threat-model row `P-mcp-handler` (tampering) in `docs/src/architecture/overview.md` (`:628`) lists "framing-error fail-shut" and a structured `parse_error` reply as mitigations. Neither holds at `de62732`. Only an over-cap line fails shut. A line that is not valid JSON is dropped, a wrong-shape message gets `-32600`, and the stream continues after both. #4322 corrects that row (Follow-ups).
+
+**Decision: Decision B's revisit tripwire does not fire on the host's overrides of SDK behaviour, and does not fire on the parse-error change unless the open question below resolves that conformance requires a `-32700` reply.** The tripwire fires on "a concrete `rmcp` limitation that blocks a spec requirement".
+
+1. No requirement in the V0 spec names a parse-error reply. A parse error is not one of R-0010-f's three classes, and R-0010-c and R-0010-d are untouched. The one route by which a requirement could call for the reply is R-0010-a's conformance target, if MCP 2025-11-25 or JSON-RPC 2.0 requires it. That is the open question below.
+2. INFERRED, not tested: even if the reply is required, the host could send it from its own wrapper around the SDK `Transport`, so the requirement would not be blocked by the SDK. That is not the seam the host already holds. `LineCappedReader` (`transport.rs:34-97`) wraps the read side, below the SDK's parser, and cannot see a parse result or write a reply. A `-32700` reply needs a host wrapper that sees each parse failure and can write to the stream. Whether such a wrapper works has not been measured.
+3. The host already overrides three SDK behaviours at the MCP boundary: the initialize gate `InitializeGated` (`gate.rs:35-105`), the reader `LineCappedReader` (`transport.rs:34-97`) and the `initialize` override (`server.rs:543-553`). Each replaced, in host code, an SDK default the host does not accept, so none blocked a requirement, and the tripwire's text fired on none of them. They do falsify this record's claim about the bespoke surface at the boundary (Superseded, below). The tripwire counts limitations that block a requirement, not overrides. Whether a count of overrides should become a revisit condition is the maintainer's call, and it is not decided here.
+
+If the open question resolves that the reply is required and the wrapper in point 2 proves infeasible, the tripwire fires. *(Anchor: Decision B's tripwire as written above, "Absent such a concrete, requirement-blocking issue, `rmcp` stands".)*
+
+**Open question, not decided here: must a line that is not valid JSON get a `-32700` reply?** MCP 2025-11-25 carries its messages as JSON-RPC 2.0. Whether either specification requires the reply is not established in this record, because neither text was read for this amendment and the design lane holds no web access. The in-repo attempts did not settle it. The SDK's error-code definitions cite JSON-RPC 2.0 for the code values (rmcp 3.7.0 `src/model.rs:624-643`) but say nothing about when a reply is due. A search of the project's research notes found no reading of either specification. INHERITED from Warden's recollection on the review of this amendment, not read: JSON-RPC 2.0 answers invalid JSON with `-32700` and `id: null`, and a server must reply to every call except a notification.
+
+The options:
+
+- (a) Send no reply, which is the SDK's behaviour. The SDK states that this matches the other official MCP SDKs, which ignore unparsable input (`async_rw.rs:293-296`; INHERITED, not checked against those SDKs). The #4156 review recommended it, to avoid reply storms. It costs conformance if JSON-RPC requires the reply, and the drop is silent today.
+- (b) Reply `-32700` with `id: null` from a host wrapper around the SDK `Transport` (point 2 above). The reply carries a constant message and never echoes the line or the parser's detail. It buys conformance if the reply is required, and keeps the session open.
+- (c) End the session, as for an over-cap line. Of the three, only this one frees a client waiting on a lost request, because the client sees end of stream. It costs the session for one bad line, and conformance too if a reply is required.
+
+Security findings, INHERITED from Warden's review of this amendment (2026-10-25), with one part MEASURED here:
+
+- There is no amplification on stdio. The reply-storm risk behind (a) assumes a peer that echoes invalid data back.
+- Under (a) or (b), the client that sent the line hangs either way. Invalid JSON carries no id, so no reply can be matched to its pending request.
+- (b) gives no oracle, provided the reply has a constant message and never echoes the line or the parser's detail.
+- Under (a) as shipped, a dropped line is a silent failure. It is logged only at `debug`, and the host's default filter is `info`; both are MEASURED above.
+
+The values in conflict. V-Consistency points three ways. The internal precedent is #4249 activity 8460: an over-cap line must fail visibly, because a silent drop hangs the sender. That favours a visible outcome, though its hang reason transfers only to (c). External convention, as the SDK reports it, favours (a). JSON-RPC 2.0, as recalled, favours (b). V-Observability counts against (a) as shipped, but that part is separable from the wire choice: the host can make a dropped line visible in its own log under any option. V-Simplicity favours (a), which adds no mechanism. Core values trade off here, so this record does not lock it.
+
+**Recommendation (DaVinci's, the author's; not a ruling):**
+
+1. Read JSON-RPC 2.0 and MCP 2025-11-25 on this point before ruling. That is a research input the design lane cannot fetch.
+2. If JSON-RPC's reply rule holds as recalled, take (b). R-0010-a makes conformance the requirement, Warden's findings remove the security reason for (a) on stdio, and (b) keeps the session.
+3. If the rule does not hold, take (a).
+4. Under either, make a dropped line visible in the host's log at the default filter. A failure that leaves no signal is a defect on first sighting (`P-GuaranteeByMechanism`, the silent-failure clause; V-Observability, "stops reporting silently").
+5. If (b) is chosen, #4323's test pins `-32700` in place of no reply.
+
+**Superseded (the text above is kept as the record):**
+
+- the frontmatter summary's "R-0010-a mandates conformance to MCP 2025-06-18";
+- the Decision Drivers bullet "R-0010-a mandates conformance to an external wire contract", which quotes R-0010-a with 2025-06-18;
+- item 1 of "Why the SDK is right on its merits", for the same quotation;
+- the Decision B tripwire's example "R-0010-a's MCP-2025-06-18 conformance", which now reads 2025-11-25; the tripwire is otherwise unchanged;
+- in Scope, "R-0010-a is implementation-agnostic and stays UNCHANGED" and its quotation. R-0010-a's target changes. This record does not edit the spec, and the V0 spec's text still reads 2025-06-18 until that spec's own amendment is made (Follow-ups). Until then, this section is where the move is recorded;
+- the Consequences line "MCP-2025-06-18 wire conformance comes from the official, conformance-tested SDK";
+- the official-SDK Pro "Conformant to MCP 2025-06-18 (R-0010-a)";
+- the Consequences line's second sentence, "The auth/dispatch trust boundary carries the minimum bespoke surface — only mnemra's `ServerHandler` policy logic, not the JSON-RPC framing." At `de62732` the host also carries, at that boundary, the initialize gate, a reader on the framing path and an `initialize` override (point 3 above). Each is small and pinned by tests, but "only … policy logic" no longer holds;
+- item 4's closing sentence in "Why the SDK is right on its merits", "Only the wire transport/framing changes hands …", for the same reason.
+
+**Kept (not superseded):**
+
+- Decision B Option 2 ("Implement the MCP 2025-06-18 wire contract …") and the hand-roll Con that cites MCP 2025-06-18. They describe the rejected option as it was weighed on 2026-06-19.
+- the first 2026-10-25 amendment's Scope line naming 2025-06-18. It states what that amendment left alone.
+- the frontmatter summary's "mnemra's R-0010 handler logic … rides on top as the rmcp ServerHandler, unchanged by the SDK choice". It is still true: the R-0010 logic it lists is unchanged and is still the host's `ServerHandler`. It carries a note because it can be read as the whole of the host's code at the boundary, and the three overrides above sit beside it. The ADR index row's matching phrase carries the same note.
+
+**Follow-ups: PARKED, not deferred.** These records cite 2025-06-18 as the target, or make a claim this amendment corrects. They are amended by #4322, the second phase of #4249, which is blocked on #4119 (PR #10) because that open change holds the first two files. Nothing detects PR #10's merge: the design lane checks PR #10's state at each session start, and #4249 stays open until #4322 is done.
+
+- `docs/specs/2026-05-24-mnemra-core-v0-substrate.md`: R-0010-a; the Protocol line of the "MCP transport" contract; the Constraints line "Must use MCP specification 2025-06-18".
+- `docs/src/architecture/overview.md` (line numbers as they stand before #4119 lands): the hard-constraints table row that names MCP specification 2025-06-18 (`:62`), and the `P-mcp-handler` tampering row (`:628`): its structured `parse_error` reply, its "framing-error fail-shut", and its "explicit MCP 2025-06-18 input validation".
+- `docs/src/adrs/P-0013-plugin-invocation-model.md` (`:100`): its present-tense gloss of R-0010-a, "single MCP server, 2025-06-18, stdio". #4119 does not hold that file, but the sentence describes what the spec currently pins. It stays true until R-0010-a is amended and goes stale at that moment, so it is amended with R-0010-a.

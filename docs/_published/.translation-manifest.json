@@ -88,8 +88,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "befcc5eee0a60d56d8c4655fdd5e3a8461985b73c483851d535cd8d27b032da0",
-      "translated_at": "2026-10-25T22:20:59Z"
+      "source_sha256": "4881d5adcde9387af7a2cc8a513b37bcc1bc59736c82bd1421f1bcdeffb08668",
+      "translated_at": "2026-10-26T00:00:11Z"
     },
     "adrs/P-0013-plugin-invocation-model.md": {
       "primary_audience": "agent",
@@ -228,8 +228,8 @@
       "primary_audience": "human",
       "prompt_path": "strip-pass.md",
       "prompt_sha256": "9a5cec0247acd96ea933ae89a5355c91d85a2f49cd89c9a7c5f2f582577a7a23",
-      "source_sha256": "ae688ae175dd8c00d35844f92f8772777d26a559dbd2b7757ae298ec611aca47",
-      "translated_at": "2026-10-25T22:20:59Z"
+      "source_sha256": "42cebe8b1bbb6d72a8f22af43eb5dbd4585496b662fe46b907b86a479197e454",
+      "translated_at": "2026-10-26T00:00:11Z"
     },
     "adrs/placeholder-resolution.md": {
       "primary_audience": "agent",
@@ -256,15 +256,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "8bb5f58e4ddf8532f8f37edfae54e2d122be5b5c9a65f847d07b6f1d3f11646f",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "4f670527484e5b979f07e872996876b8f96370a0f4f742e6aac5d04219705764",
+      "translated_at": "2026-10-26T00:00:11Z"
     },
     "intent/mnemra-core.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "a8e5bd428d2ef190925eadf6c9c177064914308574c4cb532dcf152a28f804bb",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "0aef5090f0d55cbb80973bacd02801e3308559b90b0151c381505da9a7e7f4f4",
+      "translated_at": "2026-10-26T00:00:11Z"
     },
     "intro.md": {
       "primary_audience": "human",

@@ -154,7 +154,10 @@ Mnemra-core is the **single-process server binary** that ships the substrate, th
 the plugin runtime, and the builtin components. Per the brief's Hard constraints:
 
 - The agent-facing surface is **MCP-native** (MCP specification 2025-06-18). Transport is
-  **stdio at V0**; streamable-HTTP is a later-version activation.
+  **stdio at V0**; streamable-HTTP is a later-version activation. *(Amended 2026-10-25,
+  #4249, pending the maintainer's approval: the target revision is MCP specification
+  2025-11-25, and the host serves exactly the released 2025-06-18 and 2025-11-25. See
+  "MCP transport" below.)*
 - The substrate is a **single-process Postgres** instance with `pgvector` (bundled with
   the embedded engine); TimescaleDB is demoted off the V0 stack (P-0010 D8).
 - Plugins are **WebAssembly Component Model modules** hosted in-process via Wasmtime.
@@ -216,7 +219,7 @@ steady-state set above. When the two tables disagree, the overview wins.
 
 The six responsibility buckets are (1) memory substrate, (2) inbound protocol surfaces,
 (3) plugin runtime, (4) plugin-facing host functions, (5) outbound integrations, and
-(6) cross-cutting. They map onto the brief's `0.1.0` substrate description. Each
+(6) cross-cutting. They map naturally onto the brief's `0.1.0` substrate description. Each
 bucket is a module surface inside the host process, not a microservice.
 
 ### 1. Memory substrate
@@ -502,7 +505,12 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 
 - **Stdio at V0.** Streamable-HTTP is a V0.1+ activation, conditional on the
   microVM-appliance trip-wire (a named-capability condition, not release-gated).
-- **MCP specification version 2025-06-18** (brief Hard constraints).
+- **MCP specification version 2025-06-18** (brief Hard constraints). *(Amended 2026-10-25,
+  #4249, pending the maintainer's approval: the target is **MCP specification 2025-11-25**.
+  The host serves exactly the released revisions 2025-06-18 and 2025-11-25, and it answers
+  any other revision requested at `initialize` with 2025-11-25. The host enforces that set
+  itself. Tests pin it at `initialize` and before the handshake; the pin after the handshake
+  is #4326 (open). P-0012 §Amendment 2026-10-25 (MCP protocol revision).)*
 
 ### Observability
 
@@ -586,14 +594,14 @@ placeholders beyond the Spec authoring window.
 | Candidate ID | Decision |
 |---|---|
 | `{{P-PostgresExtDeploy}}` | Postgres + extensions deployment shape (which extensions ship in the appliance, how they upgrade) *(Amended 2026-10-19, #4018: the "which extensions, at what version" half is answered by P-0010 §Amendment 2026-10-19 and spec R-0117-a/-b. The answer is `pgvector`, installed by the operator and floor-verified by the host; nothing "ships in the appliance". The "how Postgres, pgvector and the host reach the operator" half is #4019's design item, which may resolve this slot or retire it.)* |
-| `{{P-MCPWriteSemantics}}` | MCP write semantics, including concurrent-write conflict resolution, deletion semantics, idempotency keys |
+| `{{P-MCPWriteSemantics}}` | MCP write semantics, covering concurrent-write conflict resolution, deletion semantics and idempotency keys |
 | `{{P-SigningKeyCustodyHardening}}` | Production-grade signing key custody (HSM-backed / runtime-fetch / never-on-deployment-node). Activated by the multi-deployment trip-wire on `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`. |
 
 ### Cross-tier
 
 | Candidate ID | Decision | Notes |
 |---|---|---|
-| `{{P-ProjectionRebuild}}` | Projection rebuild semantics, including per-substrate source-of-truth declarations, cross-substrate rebuild ordering, refresh-queue dependency tracking | Surfaces under any non-trivial storage layout. The 2026-05-03 strawman called this out as a likely standalone ADR. |
+| `{{P-ProjectionRebuild}}` | Projection rebuild semantics, covering per-substrate source-of-truth declarations, cross-substrate rebuild ordering and refresh-queue dependency tracking | Surfaces under any non-trivial storage layout. The 2026-05-03 strawman called this out as a likely standalone ADR. |
 
 ### Forward-context (V0.1+; not Frame-time)
 
@@ -619,7 +627,7 @@ consistent) are:
 | `core: true` plugins ship signed at V0 under a Tier-A V0 custody decision | Brief Hard constraints commit to signed `core: true` plugins; this Frame names `[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)` (Tier A) as the V0 custody decision (build-host-on-disk for dogfood) with the multi-deployment trip-wire to `{{P-SigningKeyCustodyHardening}}` (Tier C). Per [P-Defer](../glossary.md#p-defer), the Open/Deferred mechanism names the V0 mechanism AND its trip-wire. |
 | Wasmtime fuel + epoch-interruption ON at V0 | Brief and predecessor specs commit to the plugin-sandbox security outcomes ("an infinite-loop plugin is killed and replaced from the pool"); this Frame names the *mechanism* (fuel, epoch-interruption, memory ceiling, table/instance limits) and slots ceiling values at `[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)` (Tier A, renamed/promoted from the prior Tier-C `{{P-PluginPoolMemory}}`). Per `P-StackDiscipline`, Wasmtime's resource knobs are stack-aligned. |
 | Static admin token shape is a Frame-altitude decision | Brief Hard constraints commit to the static admin token with a structural workspace claim; the *token structure* (opaque-with-server-side-lookup versus claim-carrying signed) and the workspace-claim *binding mechanism* gate downstream security architecture, so the choice lives at Frame altitude as `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)` (Tier A). The role-and-permission shape downstream sits at `[P-0009-rls-admin-token](../adrs/P-0009-rls-admin-token.md)` (Tier A). |
-| `core: true` plugins partition of `0.2.0`–`0.14.0` is named | Brief enumerates the capability-family increments but does not partition them between additional builtins and `core: true` plugins. `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` (Tier A) determines the partition; the signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
+| `core: true` plugins partition of `0.2.0` through `0.14.0` is named | Brief enumerates the capability-family increments but does not partition them between additional builtins and `core: true` plugins. `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` (Tier A) determines the partition; the signed-and-non-uninstallable invariant binds whichever increments are partitioned as plugins. |
 
 ## Out of Frame scope
 
@@ -652,11 +660,11 @@ boundary is unambiguous:
 
 ## Changelog
 
-- **2026-10-16** — Disclosure-wording erratum (#3377): the increment-sequence table rows for
+- **2026-10-16**: Disclosure-wording erratum (#3377). The increment-sequence table rows for
   `0.12.0` and `0.13.0` and the Tier-A P-0002 slot note are rewritten to generic
   capability-family wording under the standing public-surface disclosure ruling. No
   direction, slot or reconciliation changed. It's a wording erratum, not a design change.
-- **2026-06-09** — Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
+- **2026-06-09**: Observability re-derivation (E1 dispositioned = re-derive now), **re-altituded
   out of the project-ADR layer**. The maintainer dispositioned escalation E1 by separating
   observability **generation** from **storage**: the server EMITS telemetry (stdout structured
   logs + OTel metrics/events + health-endpoint-first) storage-independently from the bare shell;
@@ -668,7 +676,7 @@ boundary is unambiguous:
   in the companion overview (a theory-trait baseline, not an ADR), and the original observability
   ADR `[P-0004-observability-shape](../adrs/P-0004-observability-shape.md)` is `deprecated`
   (its storage core falsified by P-0010 D8; **no successor ADR**). The intermediate
-  observability ADR (P-0011) drafted earlier this day is **dissolved**; it
+  observability ADR (P-0011) drafted earlier this day is **dissolved**, because it
   over-built the altitude (re-asserting at project-ADR altitude a thing that is a theory baseline
   plus chassis wiring). Reframed the Frame's two Observability sections, the storage-shape model
   (the former timeseries/log shapes are emission surfaces, not in-app storage), and the Tier-A
@@ -678,7 +686,7 @@ boundary is unambiguous:
   non-loopback). The host capability-manifest is a settled invariant (generated from WIT, never
   hand-maintained; generation mechanism routes to the chassis). Non-observability Frame content
   unchanged.
-- **2026-06-08** — Storage-substrate fold. A storage-engine evaluation (ratified
+- **2026-06-08**: Storage-substrate fold. A storage-engine evaluation (ratified
   2026-06-07, *after* the 2026-05-24 substrate spec lock) re-opened the storage substrate
   on merits and was folded into the WS-E-2 designed tier before merge. The Frame's
   storage treatment is reframed from "hard-locked brief constraint, no substrate slot" to
@@ -692,7 +700,7 @@ boundary is unambiguous:
   hypertables, a maintainer scope/sequencing call, pending at fold time), **dispositioned
   2026-06-09 (re-derive now); see the 2026-06-09 entry above.** Non-storage Frame content is
   unchanged.
-- **2026-05-23** — Frame revision per Frame-exit gate Revise verdict. Frame-exit gate
+- **2026-05-23**: Frame revision per Frame-exit gate Revise verdict. Frame-exit gate
   ran retroactively on the 2026-05-22 synthesized Frame after the 2026-05-23 G-0028
   cold-start amendment landed (Stage 2 split into 2a elicitation + 2b synthesis +
   Frame-exit gate). Warden's Stage 2 code-and-security review (target_commit
@@ -707,29 +715,29 @@ boundary is unambiguous:
   Mediums absorbed mechanically: (M1) `TB-external-llm` row added to Frame TB table,
   overview designated canonical TB enumeration; (M2) overview DFD extended with
   `P-builtin-users`, `P-builtin-sessions`, `P-builtin-permissions`; (M5) inline forward-
-  reference to `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` for the `0.2.0`–`0.14.0` partition. L1, L2,
+  reference to `[P-0002-core-plugin-partition](../adrs/P-0002-core-plugin-partition.md)` for the `0.2.0` through `0.14.0` partition. L1, L2,
   N1 deferred (housekeeping). Net ADR-slot change: +3 Tier A slots
   (`[P-0005-v0-signing-chain](../adrs/P-0005-v0-signing-chain.md)`, `[P-0006-v0-tenant-enforcement](../adrs/P-0006-v0-tenant-enforcement.md)`, `[P-0008-admin-token-shape](../adrs/P-0008-admin-token-shape.md)`),
   +1 promoted Tier A slot (`[P-0007-plugin-resource-limits](../adrs/P-0007-plugin-resource-limits.md)`, renamed from
   `{{P-PluginPoolMemory}}`), Tier C gains `{{P-SigningKeyCustodyHardening}}`, Tier C
   loses `{{P-PluginPoolMemory}}` and `{{P-SigningKeyCustody}}`. Final tally: Tier A 9
   (was 5), Tier B 4 (unchanged), Tier C 3 (was 4), Cross-tier 1 (unchanged).
-- **2026-05-23** (Stage 3 entry housekeeping) — Resolved three deferred housekeeping
-  items from the Stage 2 code-and-security review (d652/d655): (L1) ELT subsystem forward
-  reference resolved, removed undefined "ELT subsystem" term; replaced with an inline
+- **2026-05-23** (Stage 3 entry housekeeping): Resolved three deferred housekeeping
+  items from the Stage 2 code-and-security review (d652/d655). (L1) ELT subsystem forward
+  reference resolved: removed the undefined "ELT subsystem" term and replaced it with an inline
   description of the embedding-batch pathway (Extract-Load-Transform pipeline routing
   artifact content through host functions to external provider; Spec-stage detail deferred
-  with explicit callout to `DF-embed-call`/`TB-external-llm`); (L2) workspace-internal
-  citation resolved, "Round-6 of the alignment record" citations removed from component
+  with explicit callout to `DF-embed-call`/`TB-external-llm`). (L2) Workspace-internal
+  citation resolved: "Round-6 of the alignment record" citations removed from component
   map intro and host-fn surface intro; six bucket names inlined directly; host-fn surface
-  enumeration already present inline so only the citation header changed; (N1) placeholder
-  resolution mechanism added, an explicit paragraph inserted at the open-ADR-slots section
+  enumeration already present inline so only the citation header changed. (N1) Placeholder
+  resolution mechanism added: an explicit paragraph inserted at the open-ADR-slots section
   (before Tier A table) specifying that the implementing developer at Spec stage authors
   `P-NNNN-<slug>.md` ADR files in MADR format; each placeholder resolves to a numbered
   filename; resolution recorded in a placeholder-resolution table at Spec stage. No
   architectural content changes; Frame remains locked at acc511f baseline. Companion
   overview updated in the same commit for slot citation routing and R-0004 rewrite.
-- **2026-05-22** — Frame doc initial draft. Stage 2 of `/brief` for mnemra-core; first
+- **2026-05-22**: Frame doc initial draft. Stage 2 of `/brief` for mnemra-core; first
   real Stage-2 → Stage-3 dogfood of the new agent-first workflow shape. Reconciles to
   the locked brief (intake-exit 2026-05-20). Applies three framing corrections from
   predecessor artifacts: (1) `projects` and `agents` are builtin not plugins; (2) plugin
