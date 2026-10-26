@@ -486,6 +486,48 @@ pub(crate) const V0_MIGRATIONS: &[Migration] = &[
             )
         ",
     },
+    // v26: `coordination_audit` is append-only (#4252). A statement-level
+    // BEFORE UPDATE OR DELETE trigger rejects the mutation with SQLSTATE 23001
+    // (restrict_violation). Statement-level on purpose: a row-level trigger never
+    // fires for a zero-row UPDATE or DELETE, so cleanup code would pass against an
+    // empty table and be refused only where audit rows exist.
+    // Additive only, so it clears the A-18 destructive guard, which matches the
+    // upper-cased SQL by substring: this SQL and its error text must not contain
+    // any guarded phrase (the destructive-statement list in `schema/migrations.rs`).
+    // Each version runs once (the `schema_migrations` ledger), so a plain
+    // CREATE TRIGGER is safe; the function uses CREATE OR REPLACE regardless.
+    // The runner sends one prepared statement, which cannot hold several commands,
+    // so both are wrapped in a single DO block.
+    // Bypassable by the runtime role itself: `mnemra_app` both runs the migrations
+    // and serves the host, so it owns the table and the trigger function and can
+    // drop or disable the trigger, truncate the table, or replace the function
+    // body. This guards against accidental mutation, not a compromised host. A
+    // superuser can also bypass it (`session_replication_role` is superuser-only).
+    // Whole-table truncation is not covered (#4330). No REVOKE: the owner/runtime
+    // role split belongs to #4161.
+    Migration {
+        version: 26,
+        name: "coordination_audit_append_only",
+        sql: "
+            DO $mig$
+            BEGIN
+                CREATE OR REPLACE FUNCTION coordination_audit_reject_mutation()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $fn$
+                BEGIN
+                    RAISE EXCEPTION 'coordination_audit is append-only: % is not permitted', TG_OP
+                        USING ERRCODE = 'restrict_violation';
+                    RETURN NULL;
+                END;
+                $fn$;
+                CREATE TRIGGER coordination_audit_append_only
+                    BEFORE UPDATE OR DELETE ON coordination_audit
+                    FOR EACH STATEMENT EXECUTE FUNCTION coordination_audit_reject_mutation();
+            END
+            $mig$
+        ",
+    },
 ];
 
 // ---------------------------------------------------------------------------
