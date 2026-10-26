@@ -139,7 +139,14 @@ Locked technical and integration boundaries (RFC 2119 keywords like SHALL, MUST,
 used where the requirement is observable):
 
 - The agent-facing surface SHALL be **MCP-native** (MCP specification 2025-06-18).
-  Transport is stdio at V0; streamable-HTTP is a later-version activation.
+  Transport is stdio at V0; streamable-HTTP is a later-version activation. *(Amended
+  2026-10-25, #4249, pending the maintainer's approval: the target revision is MCP
+  specification 2025-11-25. The host serves exactly the released revisions 2025-06-18 and
+  2025-11-25, and it answers any other revision requested at `initialize` (the request that
+  opens the MCP handshake) with 2025-11-25. The host enforces that set itself. Tests pin it at
+  `initialize` and before the handshake; the pin after the handshake is #4326 (open). P-0012
+  §Amendment 2026-10-25 (MCP protocol revision), where P-0012 is the project ADR for the plugin
+  runtime and MCP SDK.)*
 - **An MCP server is a V0 deliverable.** To be clear about intent: the MCP-native constraint is
   satisfied by a running MCP server inside V0 scope, not by a future protocol posture alone.
 - The substrate SHALL be a **single-process Postgres** instance with the `pgvector`

@@ -29,7 +29,17 @@ ref = "docs/src/intent/mnemra-core.md"
 # persisted in-app, timeseries+log emit-not-store) to close the Charon /verify finding (dispatch 962,
 # High/88 — the intent lagged the fold's locked D8). Prior version 20be537 carried the stale
 # TimescaleDB Hard constraint (L116-117) + the four-shape 0.1.0 description (L281-282).
-version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
+#
+# Re-pinned 2026-10-29, task #4249 (the P-0012 MCP protocol amendment, approved by the maintainer
+# on #4249, activity 9183). The pinned TEXT CHANGED: the MCP hard constraint gained a dated in-place
+# amendment note naming the target revision MCP 2025-11-25; the original text is kept. The note's
+# first wording was reviewed with the amendment by Warden and Charon (#4249 activity 8637). The fix
+# pass after that review, and the 2026-10-29 change of the note from pending to approved, were not
+# re-reviewed; the scoped re-check ordered at 9183 had not run when this pin moved. No fresh
+# internal conformance pass of the whole record was run.
+# Prior pin: version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
+version = "649222043666b73563112afca324b9529661cf0f"
+# locked_at unchanged: no stage-exit gate was re-run for #4249, so the 2026-10-25 lock time stands.
 locked_at = 2026-10-25
 
 [audit_chain.frame]
@@ -37,7 +47,16 @@ ref = "docs/src/intent/mnemra-core-frame.md"
 # RE-LOCKED 2026-10-25 (#4119): the pin moves to the core Frame's current blob; the landings that
 # changed it are listed under the spec block below. Prior version:
 # d80ccf0b1b738cbb83d915e0aa3df7207671dbfe.
-version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
+#
+# Re-pinned 2026-10-29, task #4249 (the P-0012 MCP protocol amendment, approved by the maintainer
+# on #4249, activity 9183). The pinned TEXT CHANGED: the two MCP revision lines gained dated
+# in-place amendment notes naming the target revision MCP 2025-11-25; the original text is kept.
+# The notes' first wording was reviewed with the amendment by Warden and Charon (#4249 activity
+# 8637). The fix pass after that review, and the 2026-10-29 change of the notes from pending to
+# approved, were not re-reviewed; the scoped re-check ordered at 9183 had not run when this pin
+# moved. No fresh internal conformance pass of the whole record was run.
+# Prior pin: version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
+version = "3cfdbcc274140c80467d71a427659af14b69251a"
 # PROVENANCE (thin — read before trusting): the fold reviews 958/959/961 reviewed
 # the Frame's FOLD EDITS (P-0011 dissolution record, observability re-home,
 # frame:232/550 emission reconciliation) for coherence/correctness. A discrete
@@ -46,9 +65,15 @@ version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
 # approved, (b) Charon re-checks the Frame dimension against intent at /verify,
 # (c) this representation is blessed by Peter at the /verify spot-check. If the
 # spot-check rejects it, this becomes a finding -> requires_upstream_change_at: frame.
+# internal_conformance: this "pass" predates the 2026-10-29 #4249 re-pin above and was recorded
+# against the prior pin; it does not cover the new blob. Whether to change the value is a schema
+# question #4249 does not decide.
 internal_conformance = "pass"
 
 [audit_chain.frame.generated_against]
+# intent_version unchanged: it records the brief blob the Frame was produced against. Both were
+# amended in place under #4249 without regenerating either, so the mismatch with the brief's
+# re-pinned version above is expected.
 intent_version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
 
 [audit_chain.spec]
@@ -91,6 +116,9 @@ version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
 internal_conformance = "pass"
 
 [audit_chain.spec.generated_against]
+# intent_version and frame_version unchanged: they record the brief and Frame blobs this spec was
+# produced against. Both were amended in place under #4249 (2026-10-29 re-pins above) without
+# regenerating this spec, so the mismatch with their re-pinned versions is expected.
 intent_version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
 frame_version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
 
