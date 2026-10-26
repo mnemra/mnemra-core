@@ -949,3 +949,162 @@ async fn coordination_migrations_idempotent_and_tables_present_after_reinit() {
         );
     }
 }
+
+// ===========================================================================
+// `coordination_audit` is append-only (#4252)
+// ===========================================================================
+
+/// Insert one audit row and return its id. Raw SQL, like the other helpers in
+/// this file, so the test drives the schema rather than the typed API.
+async fn insert_audit_row(pool: &PgPool, ws: Uuid) -> Result<Uuid, sqlx::Error> {
+    let row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO coordination_audit (workspace_id, event_type, event_version, payload) \
+         VALUES ($1, 'registration', 1, '{}'::jsonb) RETURNING id",
+    )
+    .bind(ws)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
+/// The SQLSTATE (`restrict_violation`) and message text the append-only
+/// trigger raises. Asserted exactly so an unrelated failure (a missing table,
+/// a permission error) cannot satisfy the UPDATE/DELETE tests.
+const AUDIT_APPEND_ONLY_SQLSTATE: &str = "23001";
+const AUDIT_APPEND_ONLY_MESSAGE: &str = "coordination_audit is append-only";
+
+/// Assert `err` is the append-only trigger's rejection.
+fn assert_append_only_rejection(err: &sqlx::Error, what: &str) {
+    assert_eq!(
+        db_error_code(err).as_deref(),
+        Some(AUDIT_APPEND_ONLY_SQLSTATE),
+        "{what} on coordination_audit must be rejected with SQLSTATE 23001 by the \
+         append-only trigger; got: {err}"
+    );
+    let msg = err
+        .as_database_error()
+        .map(|e| e.message().to_owned())
+        .unwrap_or_default();
+    assert!(
+        msg.contains(AUDIT_APPEND_ONLY_MESSAGE),
+        "{what} rejection must carry the trigger's message; got: {msg}"
+    );
+}
+
+/// #4252: INSERT stays allowed (the audit flush in the same transaction as a
+/// coordination write depends on it) and the row reads back unchanged.
+#[tokio::test]
+async fn coordination_audit_insert_is_allowed() {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool: &PgPool = &db.pool;
+
+    let id = insert_audit_row(pool, Uuid::new_v4())
+        .await
+        .expect("an INSERT into coordination_audit must still succeed");
+
+    let (event_type,): (String,) =
+        sqlx::query_as("SELECT event_type FROM coordination_audit WHERE id = $1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .expect("the inserted audit row must read back");
+    assert_eq!(event_type, "registration");
+}
+
+/// #4252: an UPDATE of an audit row is rejected by the trigger and the row is
+/// unchanged afterwards. The INSERT is the positive control: it proves the
+/// rejection is the trigger, not a setup fault.
+#[tokio::test]
+async fn coordination_audit_update_is_rejected() {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool: &PgPool = &db.pool;
+
+    let id = insert_audit_row(pool, Uuid::new_v4())
+        .await
+        .expect("positive control: the audit INSERT must succeed");
+
+    let err = sqlx::query("UPDATE coordination_audit SET event_type = 'tampered' WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .expect_err("an UPDATE of coordination_audit must be rejected");
+    assert_append_only_rejection(&err, "UPDATE");
+
+    let (event_type,): (String,) =
+        sqlx::query_as("SELECT event_type FROM coordination_audit WHERE id = $1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .expect("the audit row must still exist");
+    assert_eq!(
+        event_type, "registration",
+        "the rejected UPDATE changed the row"
+    );
+}
+
+/// #4252: a row-level removal from `coordination_audit` is rejected and the
+/// row survives. (Whole-table truncation is not covered here: #4330.)
+#[tokio::test]
+async fn coordination_audit_row_removal_is_rejected() {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool: &PgPool = &db.pool;
+
+    let id = insert_audit_row(pool, Uuid::new_v4())
+        .await
+        .expect("positive control: the audit INSERT must succeed");
+
+    let err = sqlx::query("DELETE FROM coordination_audit WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await
+        .expect_err("a DELETE from coordination_audit must be rejected");
+    assert_append_only_rejection(&err, "DELETE");
+
+    let (n,): (i64,) = sqlx::query_as("SELECT count(*) FROM coordination_audit WHERE id = $1")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .expect("count query must execute");
+    assert_eq!(n, 1, "the rejected DELETE removed the row");
+}
+
+/// #4252: a DELETE (and an UPDATE) that matches zero rows is refused too. A
+/// row-level trigger never fires for zero rows, so cleanup code would pass on an
+/// empty table and fail only where audit rows exist; the trigger is
+/// statement-level so the rejection does not depend on the data.
+#[tokio::test]
+async fn coordination_audit_zero_row_mutation_is_rejected() {
+    let engine: &'static EmbeddedEngine = shared_engine::shared_engine().await;
+    let db = engine
+        .provision_test_database()
+        .await
+        .expect("provision_test_database should succeed");
+    let pool: &PgPool = &db.pool;
+
+    // Fresh database: the table is empty, and the id below matches nothing.
+    let err = sqlx::query("DELETE FROM coordination_audit WHERE id = $1")
+        .bind(Uuid::new_v4())
+        .execute(pool)
+        .await
+        .expect_err("a zero-row DELETE on coordination_audit must be rejected");
+    assert_append_only_rejection(&err, "zero-row DELETE");
+
+    let err = sqlx::query("UPDATE coordination_audit SET event_type = 'x' WHERE id = $1")
+        .bind(Uuid::new_v4())
+        .execute(pool)
+        .await
+        .expect_err("a zero-row UPDATE on coordination_audit must be rejected");
+    assert_append_only_rejection(&err, "zero-row UPDATE");
+}
