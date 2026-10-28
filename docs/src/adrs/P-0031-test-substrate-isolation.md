@@ -90,6 +90,18 @@ Chosen option: **1.** The fixture reads `MNEMRA_TEST_DATABASE_URL` (harness role
 
 *Rejected, kept with reasons:* the superuser password in an environment variable — the gated scenario's spawned host needs a password file under R-0119-d anyway, and R-0119-a rejects an environment-held password; a leak check that fires on every holder (the round-2 draft) — the gated binary is a fixture consumer, so it fired on the permitted case; a `services:` container — no step can generate a certificate it will present; the marker scan with a per-run cache — a non-dedicated server passed it, `postgres` was exempt, and the cache was a forgeable file; a harness check keyed on `current_user` with the `SET` privilege and a three-role denylist (round 3) — a startup `role` setting, a `SET FALSE` grant, an `ADMIN`-only grant and every unlisted predefined role passed it.
 
+## Amendment 2026-10-28 — one server per lane (#4363)
+
+**Status: DRAFT, pending the maintainer's exit approval of the #4363 amendment to spec R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`).** The direction is the maintainer's. On 2026-10-28 he selected only "Separate server per lane (Recommended)", whose option text read "each lane gets its own Postgres server and port, so lanes cannot interfere". He did not select "one harness role per lane (D2), keep sharing and patch in round 3, cut scope and park" (#4363 activity 9016). For the lane's identity he chose "Declared lane name" (#4363 activity 9037). Both records are Puck's, and the option wording was Puck's. The text below is the draft's.
+
+**Superseded in this record, with what replaces it:**
+
+1. **Context, "Two lanes share one machine and may share one server".** Lanes share one machine, and each has its own server. This is enforced by a lane claim that the server's superuser writes on `mnemra_test_template`, and that every acquisition, the teardown executor and the gated cell read and fail closed on (spec R-0120-i(a)). The lane's identity is a declared lane name, bound to the worktree it was written for. Concurrent runs of one lane, such as two runs in one worktree or a task worktree beside its lane's main one, still share that lane's server, and R-0120-i keeps the guarantee for them.
+2. **Decision Outcome, "Good: … or sweep another lane's live run".** This now reads "or sweep a concurrent run's live objects". Another lane's runs are not on the server at all.
+3. **Accepted risk `AR-0016`** (`docs/src/architecture/overview.md`) is amended in the same change. Its acceptance of lanes sharing one server and one harness role is retired, and its acceptance for concurrent runs within one lane is kept.
+
+The chosen option, its drivers and the other options are unchanged. *Rejected, kept with reasons:* the three directions the maintainer did not select, as recorded in activity 9016: one harness role per lane, keeping one shared server and patching it, and cutting scope and parking. None of them had a reason given against it on that record beyond the selected option's own, "so lanes cannot interfere". The shared-server class had drawn new review findings in two rounds running (#4363 activity 8988). *(Anchors: P-PreserveDecisionSpace — the superseded premise stays above, with what replaces it; P-GuaranteeByMechanism — the one-server rule is a check, not a convention.)*
+
 ## More Information
 
 - [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE6, DE9 — what exits in CI and tests); [P-0026](P-0026-db-connection-authentication-transport.md) for the expected-failure entries' subject; the tier-2 spec amendment #4119; the ingestion re-read #4121 is unrelated to this ADR.
