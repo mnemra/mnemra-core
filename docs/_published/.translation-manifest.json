@@ -249,8 +249,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "7b773731e955b59167d47024d719ca3792981a662f03bf80bcf4ea0445053fea",
-      "translated_at": "2026-10-28T12:49:49Z"
+      "source_sha256": "bde31e41da5b6ad44eee9da0c6e5eed8a67a1f49d093b008b3c201e2e1436aff",
+      "translated_at": "2026-10-28T13:16:12Z"
     },
     "intent/mnemra-core-frame.md": {
       "primary_audience": "agent",
