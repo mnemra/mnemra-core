@@ -314,6 +314,206 @@ fn reap_own_postmasters_kills_own_spawned_leaves_others_alive() {
     let _ = system_child.kill();
 }
 
+/// Run `source scripts/ci-reap.sh && ci_reap_isolate_tmpdir && <script_tail>`
+/// from `cwd` with the ambient `TMPDIR` set to `base_tmp`, exactly the way the
+/// `ci` recipe orders it (#4361). Returns trimmed stdout.
+fn run_isolated(
+    script_tail: &str,
+    marker: &str,
+    baseline_file: &std::path::Path,
+    base_tmp: &std::path::Path,
+    cwd: &std::path::Path,
+    repo_root: &std::path::Path,
+) -> String {
+    let script = repo_root.join("scripts/ci-reap.sh");
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(format!(
+            "source '{}' && ci_reap_isolate_tmpdir && {script_tail}",
+            script.display()
+        ))
+        .current_dir(cwd)
+        .env("TMPDIR", base_tmp)
+        .env("CI_REAP_PG_PATTERN", escape_ere_literal(marker))
+        .env("CI_REAP_BASELINE_FILE", baseline_file)
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run ci-reap.sh `{script_tail}`: {e}"));
+    assert!(
+        output.status.success(),
+        "ci-reap.sh `{script_tail}` exited non-zero: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// #4361: a failing run's reap must not kill a postmaster whose `-D` is under
+/// ANOTHER worktree's temp root, and must still reap one under its own root
+/// (positive control). The recipe keeps one exported TMPDIR across capture and
+/// reap; here each bash call re-derives it, which is a pure function of the
+/// cwd and the base TMPDIR, so both calls see the same root.
+#[test]
+fn reap_spares_other_worktrees_temp_root_and_reaps_own() {
+    let root = repo_root();
+    let (_marker_dir, marker) = unique_marker();
+    let base = tempfile::tempdir().expect("create base temp dir");
+    let baseline_file = tempfile::NamedTempFile::new().expect("create baseline file");
+
+    let own_root = run_isolated(
+        "printf %s \"$TMPDIR\"",
+        &marker,
+        baseline_file.path(),
+        base.path(),
+        &root,
+        &root,
+    );
+    // Another worktree's root, spelled literally (not derived by the code
+    // under test) so the survival assertion below cannot be satisfied by the
+    // derivation agreeing with itself.
+    let other_root = format!("{}/mnemra-ci-other-worktree", base.path().display());
+
+    run_isolated(
+        "ci_reap_capture_baseline",
+        &marker,
+        baseline_file.path(),
+        base.path(),
+        &root,
+        &root,
+    );
+
+    // Both started AFTER the baseline: only the temp root tells them apart.
+    let mut own_child = spawn_marker_process(&marker, Some(&format!("{own_root}/.tmpOWN")));
+    let mut other_child = spawn_marker_process(&marker, Some(&format!("{other_root}/.tmpOTHER")));
+    assert!(is_alive(&mut own_child), "own marker failed to start");
+    assert!(
+        is_alive(&mut other_child),
+        "other-worktree marker failed to start"
+    );
+
+    run_isolated(
+        "ci_reap_own_postmasters",
+        &marker,
+        baseline_file.path(),
+        base.path(),
+        &root,
+        &root,
+    );
+
+    wait_until_dead(&mut own_child, Duration::from_secs(5));
+    // Positive control: without it, a reap that never fires would pass the
+    // survival assertion below.
+    assert!(
+        !is_alive(&mut own_child),
+        "marker under THIS run's temp root was not reaped (positive control)"
+    );
+    assert!(
+        is_alive(&mut other_child),
+        "marker under ANOTHER worktree's temp root was reaped — the per-worktree \
+         TMPDIR isolation is broken; in production a failing run would kill the \
+         other lane's live embedded Postgres (#4361)"
+    );
+
+    // Distinct worktree paths must derive distinct roots, and each root sits
+    // under the ambient TMPDIR.
+    let other_cwd = tempfile::tempdir().expect("create stand-in for another worktree");
+    let derived_other = run_isolated(
+        "printf %s \"$TMPDIR\"",
+        &marker,
+        baseline_file.path(),
+        base.path(),
+        other_cwd.path(),
+        &root,
+    );
+    assert_ne!(
+        own_root, derived_other,
+        "two worktrees derived the same temp root; isolation is a no-op"
+    );
+    let base_str = base.path().to_string_lossy().to_string();
+    assert!(
+        own_root.starts_with(&base_str),
+        "own temp root {own_root:?} is not under the base TMPDIR {base_str:?}"
+    );
+}
+
+/// macOS `$TMPDIR` ends in `/` and pg_ctl prints `-D` canonicalised
+/// (`/x//y/` -> `/x/y`). With a trailing-slash (and doubled-slash) ambient
+/// TMPDIR, a marker whose `-D` is in the canonical form must still be reaped:
+/// if the isolated root is not canonical, the reap's prefix match silently
+/// stops matching the run's own leaks (no error, no signal).
+#[test]
+fn reap_matches_canonical_data_dir_under_trailing_slash_tmpdir() {
+    let root = repo_root();
+    let (_marker_dir, marker) = unique_marker();
+    let base = tempfile::tempdir().expect("create base temp dir");
+    let sloppy_base = std::path::PathBuf::from(format!("{}//", base.path().display()));
+    let baseline_file = tempfile::NamedTempFile::new().expect("create baseline file");
+
+    let own_root = run_isolated(
+        "printf %s \"$TMPDIR\"",
+        &marker,
+        baseline_file.path(),
+        &sloppy_base,
+        &root,
+        &root,
+    );
+    assert!(
+        !own_root.ends_with('/') && !own_root.contains("//"),
+        "isolated temp root {own_root:?} is not canonical (trailing or doubled slash)"
+    );
+
+    run_isolated(
+        "ci_reap_capture_baseline",
+        &marker,
+        baseline_file.path(),
+        &sloppy_base,
+        &root,
+        &root,
+    );
+    // The `-D` pg_ctl would print for a data dir created under this root.
+    let mut own_child = spawn_marker_process(&marker, Some(&format!("{own_root}/.tmpCANON")));
+    assert!(is_alive(&mut own_child), "own marker failed to start");
+
+    run_isolated(
+        "ci_reap_own_postmasters",
+        &marker,
+        baseline_file.path(),
+        &sloppy_base,
+        &root,
+        &root,
+    );
+    wait_until_dead(&mut own_child, Duration::from_secs(5));
+    assert!(
+        !is_alive(&mut own_child),
+        "own marker with a canonical -D was NOT reaped under a trailing-slash TMPDIR — \
+         the run's own leaked postmasters would silently survive"
+    );
+}
+
+/// The isolation only holds if the `ci` recipe calls it before the baseline
+/// capture. A prose check on the recipe body: removing or reordering the call
+/// fails here rather than silently restoring the shared temp root.
+#[test]
+fn ci_recipe_isolates_tmpdir_before_capturing_baseline() {
+    let justfile = fs::read_to_string(repo_root().join("justfile")).expect("read justfile");
+    let recipe = justfile
+        .split("\nci chain='_ci-verify-chain':")
+        .nth(1)
+        .expect("`ci` recipe header present in justfile")
+        .split("\nci-full:")
+        .next()
+        .expect("`ci` recipe ends at ci-full");
+    let isolate = recipe
+        .find("\n    ci_reap_isolate_tmpdir\n")
+        .expect("`ci` recipe calls ci_reap_isolate_tmpdir");
+    let capture = recipe
+        .find("\n    ci_reap_capture_baseline\n")
+        .expect("`ci` recipe calls ci_reap_capture_baseline");
+    assert!(
+        isolate < capture,
+        "ci_reap_isolate_tmpdir must run before ci_reap_capture_baseline"
+    );
+}
+
 #[test]
 fn reap_refuses_to_run_when_baseline_never_captured() {
     let root = repo_root();

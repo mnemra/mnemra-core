@@ -61,9 +61,13 @@ to be mnemra-impl … There is a separate worktree running a puck for design."*
 
   That default is a recommendation from both lanes, not a ruling. What *is* written down is in
   "Design records" below.
-- ⚠ **The two lanes share `$TMPDIR`, and that is where embedded Postgres keeps its data.** See the
-  reap trap under "Embedded Postgres". A red that looks like Postgres dying mid-test may be the
-  other lane's failing `just ci`.
+- **Under `just ci` the two lanes no longer share a temp root, but only once BOTH checkouts include
+  `#4361`** (interim until `#4161`; MEASURED 2026-10-28): the recipe gives each worktree its own
+  `$TMPDIR`, so the other lane's failing run cannot reap your embedded Postgres. A run from a
+  checkout without it still reaps every lane's engines under `<base>/mnemra-ci-*/` (Warden,
+  MEASURED against the parent-commit script), so the convention that only one mnemra-core gate runs at a time across checkouts stays until the
+  design worktree has rebased past that commit. See the reap bullet under "Embedded Postgres".
+  Bare `cargo test` still uses the shared `$TMPDIR`.
 
 ## ⛔ Known defect: host data does not survive a restart
 
@@ -283,12 +287,17 @@ is the whole tenant boundary.
     download path survives `#4161`, that landing must carry the decision on this exception.
 - **Postgres test binaries run with `--test-threads 1`** because of a teardown race (`#1852`). ⛔ Do
   not parallelise them to save time.
-- ⛔ **`just ci` reaps leaked postmasters on failure or interrupt, and it can reap SOMEONE ELSE'S.**
-  `scripts/ci-reap.sh` (MEASURED, `:24-36`): *"a concurrent `just ci` on THIS codebase whose own
-  postmaster starts AFTER this run's baseline snapshot … WILL be reaped if this run then fails …
-  that window is live, not hypothetical."* Both lanes share `$TMPDIR`. If a gate goes red with the
-  engine dying mid-run, ask whether the other lane was running `just ci` before debugging the code.
-  Bare `cargo test` has no reap at all.
+- ⛔ **`just ci` reaps leaked postmasters on failure or interrupt, and it can reap a postmaster from
+  a concurrent run in the SAME worktree.** `scripts/ci-reap.sh` kills every `bin/postgres` started
+  after its baseline whose `-D` is under `$TMPDIR`. Since `#4361` the recipe first sets a
+  per-worktree `$TMPDIR` (`<base>/mnemra-ci-<cksum of the worktree path>`, `ci_reap_isolate_tmpdir`),
+  so a run in another worktree (the other lane) no longer matches. `tests/ci_reap_baseline.rs`
+  seeds it (MEASURED 2026-10-28: survival test red with the isolation reverted, green with it).
+  **INTERIM:** delete the isolation with `ci-reap.sh` when `#4161` lands, and note it protects
+  only when every concurrent checkout has it (see "Two lanes"). Still open: two concurrent runs
+  from one worktree. ⚠ The reap runs only on failure, and a green `just ci` leaked exactly one
+  postmaster per run on both runs measured 2026-10-28 (`#4370`); which step leaks is not yet
+  identified. `scripts/flake-runner.sh` uses the same functions. Bare `cargo test` has no reap at all.
 - **`/health` binds 127.0.0.1:8877 by default.** Two local runs collide; set `MNEMRA_HEALTH_PORT`.
 - **The binary is not relocatable.** Its root is the compile-time `CARGO_MANIFEST_DIR`, and it loads
   `plugins/` and `artifacts/` from there. A binary built in a worktree reads that worktree's files

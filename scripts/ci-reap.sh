@@ -26,16 +26,17 @@
 #   left alone even if it started after this run's baseline capture. The
 #   residual window this does NOT close: a concurrent `just ci` on THIS
 #   codebase whose own postmaster starts AFTER this run's baseline
-#   snapshot — its data_dir IS under the temp root too, so it is
-#   indistinguishable from an own-spawned leak and WILL be reaped if this
-#   run then fails. R-11 explicitly permits parallel agent-ci with no
-#   serialization, so that window is live, not hypothetical. Closing it
-#   needs a true start-time-scoped ownership marker (e.g. tag each spawned
-#   postmaster with the spawning ci's dispatch/run id) — a design change,
-#   tracked separately as #2170, out of scope for this mechanism. This
-#   mirrors scripts/flake-runner.sh's existing BASELINE_PM_PIDS /
-#   reap_own_postmasters mechanism (condition (i)); the temp-root check
-#   (condition (ii)) is new to this ci-scoped variant.
+#   snapshot, from the SAME worktree — it shares this run's temp root, so it
+#   is indistinguishable from an own-spawned leak and WILL be reaped if this
+#   run then fails. Since #4361 a concurrent run from ANOTHER worktree is
+#   excluded: `ci_reap_isolate_tmpdir` (below) gives each worktree its own
+#   temp root, so that postmaster fails condition (ii). That isolation is
+#   INTERIM and is deleted with this file when #4161 retires ci-reap.sh.
+#   R-11 permits parallel agent-ci, so the same-worktree window is live.
+#   Closing it needs a true start-time-scoped ownership marker (e.g. tag each
+#   spawned postmaster with the spawning ci's dispatch/run id) — a design
+#   change, tracked separately as #2170, out of scope for this mechanism.
+#   Condition (i) is the baseline-PID-diff scripts/flake-runner.sh shares.
 #
 # WHY THE TEMP-ROOT CHECK
 #   `postgresql_embedded`'s `.temporary(true)` engine creates its data
@@ -64,14 +65,15 @@
 #   capture time, where PPID protected nothing), but is not a complete
 #   ownership proof either — see ACTUAL GUARANTEE above.
 #
-#   Mirrors scripts/flake-runner.sh's BASELINE_PM_PIDS / reap_own_postmasters
-#   pattern (same PID-set-diff idea; flake-runner.sh is left as-is — this is
-#   a second, `ci`-scoped user of the same mechanic, not a refactor of the
-#   first).
+#   scripts/flake-runner.sh originally carried its own copy of this
+#   PID-set-diff idea (BASELINE_PM_PIDS / reap_own_postmasters). Since #4361
+#   it sources this file instead, so there is one mechanism with two users.
 #
 # USAGE
-#   Sourced (not executed) by the `ci` justfile recipe:
+#   Sourced (not executed) by the `ci` justfile recipe and by
+#   scripts/flake-runner.sh:
 #     source scripts/ci-reap.sh
+#     ci_reap_isolate_tmpdir            # call first: per-worktree TMPDIR (#4361)
 #     ci_reap_capture_baseline          # call once, before the verify chain
 #     ...run the verify chain...
 #     ci_reap_own_postmasters           # call ONLY on failure/interrupt
@@ -91,12 +93,46 @@
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "ci-reap.sh is a function library — source it, don't execute it directly." >&2
-    echo "Used by: the 'ci' justfile recipe; tests/ci_reap_baseline.rs (via" >&2
+    echo "Used by: the 'ci' justfile recipe; scripts/flake-runner.sh; tests/ci_reap_baseline.rs (via" >&2
     echo "'bash -c \"source scripts/ci-reap.sh && <function>\"')." >&2
     exit 1
 fi
 
 : "${CI_REAP_PG_PATTERN:=bin/postgres}"
+
+# Give this worktree its own temp root (#4361, INTERIM until #4161). Exports
+# TMPDIR=<base>/mnemra-ci-<cksum of the physical working directory>, creating
+# it, so everything the verify chain starts (cargo, the embedded engine's
+# `.temporary(true)` data dirs via env::temp_dir()) lands there and condition
+# (ii) of ci_reap_own_postmasters matches only THIS worktree's postmasters.
+# The root is a pure function of the worktree path, so reruns reuse it. Call
+# before ci_reap_capture_baseline; the reap reads the same exported TMPDIR.
+# Idempotent: a TMPDIR already ending in this worktree's root is left alone.
+# Kept short on purpose: the data dir sits under it. The exported root is
+# canonicalised with LOGICAL `pwd`: the engine and the reap both read the
+# exported string, so the only requirement is a root with no doubled or
+# trailing slash and no `.` or `..` component (macOS TMPDIR ends in `/`, and
+# pg_ctl prints `-D` canonicalised, `/x//y/` -> `/x/y`); logical `pwd` gives
+# that. Fails closed: the root is created mode 700 and must be a real directory (not a symlink) owned by the
+# caller — on Linux CI with TMPDIR unset it is a predictable /tmp path — else
+# TMPDIR is unchanged and the call returns non-zero (the `ci` recipe runs
+# under `set -e`, so the run stops).
+ci_reap_isolate_tmpdir() {
+    local base="${TMPDIR:-/tmp}" key root
+    base="${base%/}"
+    key="$(pwd -P | cksum | cut -d' ' -f1)"
+    root="$base/mnemra-ci-$key"
+    case "$base" in
+        */mnemra-ci-"$key") return 0 ;;
+    esac
+    mkdir -p -m 700 "$root" || return 1
+    if [ ! -d "$root" ] || [ -L "$root" ] || [ ! -O "$root" ]; then
+        echo "[ci-reap] refusing temp root $root: not a directory owned by the caller" >&2
+        return 1
+    fi
+    root="$(cd "$root" && pwd)" || return 1
+    export TMPDIR="$root"
+}
 
 # Capture the current set of matching PIDs as the baseline, and set the M3
 # capture sentinel (distinct from an empty-but-captured baseline — see
