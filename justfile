@@ -1073,12 +1073,16 @@ _ci-verify-chain-nocoverage: verify-type verify-lint verify-coverage-membership 
 # a persistent, non-temp data directory. Baseline-absence is still a proxy
 # for "this run's own leaked spawn," not a direct ownership check: a
 # concurrent ci ON THIS CODEBASE whose postmaster starts AFTER this
-# baseline is captured has its data dir under the temp root too, and is
-# reaped if this run fails (see scripts/ci-reap.sh's ACTUAL GUARANTEE).
+# baseline is captured, from the SAME worktree, shares the temp root and is
+# reaped if this run fails. One from ANOTHER worktree is not: the recipe
+# calls ci_reap_isolate_tmpdir first, giving each worktree its own TMPDIR
+# (#4361, interim until #4161), so condition (ii) excludes it (see
+# scripts/ci-reap.sh's ACTUAL GUARANTEE).
 ci chain='_ci-verify-chain':
     #!/usr/bin/env bash
     set -euo pipefail
     source scripts/ci-reap.sh
+    ci_reap_isolate_tmpdir
     ci_reap_capture_baseline
     trap 'ci_reap_own_postmasters; exit 130' INT TERM
     if just {{chain}}; then

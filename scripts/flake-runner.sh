@@ -40,10 +40,12 @@
 #   Summary table + peak postmaster line printed to stdout at the end.
 #
 # OWN-SPAWNED REAPING (R-0024)
-#   The harness captures the PID set of all bin/postgres processes alive at startup
-#   (BASELINE_PM_PIDS).  After each invocation that exits non-zero the reap_own_postmasters
-#   function kills only PIDs NOT in that baseline set — so pre-existing dev postmasters are
-#   never touched, and leaked test postmasters are cleaned up before the next invocation.
+#   The harness sources scripts/ci-reap.sh, captures the PID set of all bin/postgres
+#   processes alive at startup, and gives the run its own per-worktree TMPDIR (#4361).
+#   After each invocation that exits non-zero the reap kills only PIDs NOT in that baseline
+#   set AND whose -D data dir is under that temp root — so pre-existing dev postmasters and
+#   another worktree's engines are never touched, and leaked test postmasters are cleaned
+#   up before the next invocation.
 #   Kill is SIGKILL (fast, unconditional) since these are already orphaned engines.
 
 set -uo pipefail
@@ -99,30 +101,26 @@ fi
 # "postgres: checkpointer" etc. and do NOT match "bin/postgres").
 count_postmasters() { pgrep -f "bin/postgres" 2>/dev/null | wc -l | tr -d ' '; }
 
-# Capture baseline PID set at startup (own-spawned reap anchor).
-BASELINE_PM_PIDS="$(pgrep -f "bin/postgres" 2>/dev/null || true)"
+# Own-spawned reap (#4361, INTERIM until #4161 retires scripts/ci-reap.sh): reuse
+# ci-reap.sh's mechanism instead of a private copy. The old copy reaped ANY
+# bin/postgres absent from the baseline, anywhere on the machine — no temp-root
+# condition, so another worktree's engine started mid-run was killed. Now the
+# run gets its own temp root (ci_reap_isolate_tmpdir, keyed on the physical
+# working directory, hence the cd) and reaps only baseline-absent postmasters
+# whose -D is under it. Kill is SIGKILL: these are already orphaned engines.
+cd "$REPO" || exit 2
+source "$SCRIPT_DIR/ci-reap.sh"
+ci_reap_isolate_tmpdir || { echo "FATAL: cannot create the per-worktree temp root" >&2; exit 2; }
+ci_reap_capture_baseline
 
-# Reap only postmasters this harness spawned (PIDs absent from the baseline set).
-# Called after each non-zero invocation before the next binary.
-reap_own_postmasters() {
-    local current_pids pid_line
-    current_pids="$(pgrep -f "bin/postgres" 2>/dev/null || true)"
-    local reaped=0
-    while IFS= read -r pid_line; do
-        [ -z "$pid_line" ] && continue
-        if ! echo "$BASELINE_PM_PIDS" | grep -qw "$pid_line"; then
-            kill -KILL "$pid_line" 2>/dev/null && reaped=$(( reaped + 1 )) || true
-        fi
-    done <<< "$current_pids"
-    [ "$reaped" -gt 0 ] && echo "  [reap] killed $reaped own-spawned postmaster(s)"
-    # Always succeed: this script runs without errexit, but a defensive return 0
-    # keeps the function safe if a caller ever enables `set -e`.
-    return 0
-}
+# Reap only postmasters this harness spawned. Called after each non-zero
+# invocation before the next binary.
+reap_own_postmasters() { ci_reap_own_postmasters; }
 
 echo "=== flake-runner: N=$N THREADS=$THREADS BINS=${BINS[*]} ==="
 echo "host: $(uname -srm) | cores: $(getconf _NPROCESSORS_ONLN 2>/dev/null || echo '?') | $(date)"
-echo "baseline postmaster PID count: $(echo "$BASELINE_PM_PIDS" | grep -c . 2>/dev/null || echo 0)"
+echo "temp root: $TMPDIR"
+echo "baseline postmaster PID count: $(echo "$CI_REAP_BASELINE_PIDS" | grep -c . 2>/dev/null || echo 0)"
 
 # Build once: plugin wasm guest + host test binaries.
 # NOTE: the plugin build below is a DIFFERENT package (mnemra-echo, the wasm
