@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-32840512.js";
+            window.path_to_searchindex_js = "../searchindex-94854b17.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-5d081ac2.js"></script>
@@ -654,7 +654,7 @@ activity 7787; <code>ready</code> ⇒ <code>alive</code>, never the reverse). No
 7771). The shared-service HTTPS transport the maintainer ruled the same day (one host for
 every session) is the next amendment, #4127, and amends R-0010-a/-e and the daemon model.
 Probe mapping: liveness → <code>/health</code>, readiness → <code>/ready</code>, startup → <code>/health</code> or none,
-pre-flight → <code>check-db</code>. Exec probes are used at V0 while the listener is loopback-only.
+pre-flight → <code>check-db</code>. Exec probes are used at V0 while the listener is loopback-only. <em>(Amended 2026-10-29, #4412, ruling 9279: the listener is now an owner-only unix socket; spec R-0004-g as amended.)</em>
 Anchors: V-Reliability (graceful degradation over crash-restart), P-ReliabilityTarget
 (readiness read from the consumer’s side), P-CheckCoversTheClaim (liveness checks liveness).</li>
 <li><strong>The detailed layout of a single logical artifact across the four shapes</strong> (whether a
@@ -686,7 +686,7 @@ re-altituded out of the project-ADR layer; P-0004 <code>deprecated</code>, no su
 <li><strong>Health endpoint shape.</strong> Structured-detail body identifying which dependency failed
 (Postgres reachable / <code>pgvector</code> loaded / workspace=default exists). The listener binds
 loopback-only at V0, so loopback IS the gate on the detail body (named tripwire: if the
-listener ever binds non-loopback, admin-token gating becomes required).</li>
+listener ever binds non-loopback, admin-token gating becomes required). <em>(Amended 2026-10-29, #4412, ruling 9279: the listener is now an owner-only unix socket; spec R-0004-g as amended.)</em></li>
 </ul>
 <h3 id="migration-discipline"><a class="header" href="#migration-discipline">Migration discipline</a></h3>
 <ul>
@@ -864,7 +864,7 @@ plus chassis wiring). Reframed the Frame’s two Observability sections, the sto
 slot table (the <code>{{P-ObservabilityShape}}</code> slot is marked re-altituded out of the ADR layer to
 the overview baseline; P-0010’s E1 tail re-targeted). The <code>/health</code> detail body is gated by the
 loopback-only listener bind (loopback IS the gate at V0; named tripwire if it ever binds
-non-loopback). The host capability-manifest is a settled invariant (generated from WIT, never
+non-loopback). <em>(Amended 2026-10-29, #4412, ruling 9279: the listener is now an owner-only unix socket; spec R-0004-g as amended.)</em> The host capability-manifest is a settled invariant (generated from WIT, never
 hand-maintained; generation mechanism routes to the chassis). Non-observability Frame content
 unchanged.</li>
 <li><strong>2026-06-08</strong>: Storage-substrate fold. A storage-engine evaluation (ratified
