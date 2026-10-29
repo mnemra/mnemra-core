@@ -295,9 +295,10 @@ is the whole tenant boundary.
   seeds it (MEASURED 2026-10-28: survival test red with the isolation reverted, green with it).
   **INTERIM:** delete the isolation with `ci-reap.sh` when `#4161` lands, and note it protects
   only when every concurrent checkout has it (see "Two lanes"). Still open: two concurrent runs
-  from one worktree. ⚠ The reap runs only on failure, and a green `just ci` leaked exactly one
-  postmaster per run on both runs measured 2026-10-28 (`#4370`); which step leaks is not yet
-  identified. `scripts/flake-runner.sh` uses the same functions. Bare `cargo test` has no reap at all.
+  from one worktree. ⚠ The reap runs only on failure. A green `just ci` used to leak one
+  postmaster per run (`#4370`): `smoke_e2e`'s pre-initialize test SIGKILLed the host, which left
+  its daemonized postmaster behind. Closing stdin and waiting for the exit fixed it, and a full
+  green `just ci-full` with the fix left 0 (MEASURED 2026-10-29). `scripts/flake-runner.sh` uses the same functions. Bare `cargo test` has no reap at all.
 - **`/health` binds 127.0.0.1:8877 by default.** Two local runs collide; set `MNEMRA_HEALTH_PORT`.
 - **The binary is not relocatable.** Its root is the compile-time `CARGO_MANIFEST_DIR`, and it loads
   `plugins/` and `artifacts/` from there. A binary built in a worktree reads that worktree's files
