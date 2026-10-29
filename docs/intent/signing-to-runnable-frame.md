@@ -236,6 +236,9 @@ non-loopback-bind tripwire). M2 stands it up and binds it **first**.
   ships before the first real run).
 - **Intentional gap (do NOT fill):** `/health` internals beyond the ordering the assembly imposes
   (it binds first) are the Task 25 surface, not designed here.
+  *(Amended 2026-10-29, #4412, maintainer ruling 2026-10-29, #4412 activity 9279, "Owner-only socket": the listener D7 stands up is now an owner-only
+  unix-domain socket, not `127.0.0.1` with `MNEMRA_HEALTH_PORT` (V0 R-0004-g as amended); it still
+  binds first.)*
 
 #### D8 — Production stdio serve-loop (rmcp v1.7.0, stdio, no HTTP)
 
