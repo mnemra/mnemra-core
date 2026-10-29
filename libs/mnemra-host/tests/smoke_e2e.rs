@@ -105,6 +105,13 @@ const HANDSHAKE_CEILING: Duration = Duration::from_secs(150);
 /// (a live serve loop's expected latency here is sub-second).
 const LIST_TOOLS_CEILING: Duration = Duration::from_secs(30);
 
+/// Bounded wait for the host to exit after its stdin closes. MEASURED
+/// 2026-10-29: about 155 ms in both tests that use it (3 runs each, spread
+/// under 2 ms), so 10 s is roughly 60x headroom for a loaded machine. The
+/// bound exists because a SIGKILL instead of a clean exit orphans the
+/// daemonized embedded postmaster (#4370).
+const EOF_EXIT_CEILING: Duration = Duration::from_secs(10);
+
 // ---------------------------------------------------------------------------
 // Checkpoint 4 — hash-equality (pure; expected GREEN today, see module doc)
 // ---------------------------------------------------------------------------
@@ -300,8 +307,13 @@ async fn production_binary_serves_mcp_over_stdio_with_health_only_listener() {
     // stdio-only). Force-kill as a backstop regardless of GREEN's exact
     // shutdown semantics, so this test never leaks a process. --
     let _ = client.cancel().await;
-    let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+    let exit = tokio::time::timeout(EOF_EXIT_CEILING, child.wait()).await;
     let _ = child.start_kill();
+    assert!(
+        exit.is_ok(),
+        "the host must exit within {EOF_EXIT_CEILING:?} of its stdin closing; the kill above \
+         is the backstop and orphans the embedded Postgres postmaster (#4370)"
+    );
 }
 
 /// Pins the production wiring of the incoming-line cap (#4295): an over-cap line
@@ -445,6 +457,12 @@ async fn production_binary_refuses_a_request_before_initialize() {
 
     let mut lines = BufReader::new(stdout).lines();
     let reply = tokio::time::timeout(HANDSHAKE_CEILING, lines.next_line()).await;
+    // End the session by closing stdin and let the host shut its embedded
+    // Postgres down. A bare SIGKILL here orphans the daemonized postmaster
+    // (pg_ctl detaches it to PID 1), one per green run (#4370). The kill
+    // below is only the backstop for a host that does not exit.
+    drop(stdin);
+    let exit = tokio::time::timeout(EOF_EXIT_CEILING, child.wait()).await;
     let _ = child.start_kill();
     let reply = match reply {
         Ok(Ok(Some(reply))) => reply,
@@ -463,6 +481,13 @@ async fn production_binary_refuses_a_request_before_initialize() {
         reply["error"]["message"],
         serde_json::json!("initialize required"),
         "got {reply}"
+    );
+    // No exit status is asserted: before initialize, EOF ends the session
+    // through serve_stdio's `?`, and 0 and 1 are both clean exits.
+    assert!(
+        exit.is_ok(),
+        "the host must exit within {EOF_EXIT_CEILING:?} of its stdin closing; the kill above \
+         is the backstop and orphans the embedded Postgres postmaster (#4370)"
     );
 }
 
