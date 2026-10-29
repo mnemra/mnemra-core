@@ -49,7 +49,12 @@ ref = "2026-07-02-ci-flake-tier2-shared-engine.md"
 # Spec-exit approval: the maintainer's conditional approval (8420, tightened by 8438 and 8452),
 # recorded as met at 8494.
 # Prior version: b0cbae0fcf852cc33318ffb3e1d8a91979ca3641.
-version = "faac54b1af303104c190272b7012d3f37b4d58d1"
+# RE-LOCKED 2026-10-29 (#4412), at the maintainer's conditional approval (#4412 activity 9363);
+# the pin moves to the blob at this branch's final tree, rebased onto main 24eeb90.
+# The pinned TEXT CHANGED only by #4412's three dated notes recording that the #4363 text is
+# approved (#4363 activity 9124; Charon's round-2 P3). No review covered the notes.
+# Prior pin: version = "faac54b1af303104c190272b7012d3f37b4d58d1" (the #4363 blob, above).
+version = "0918682bf00a78cfcaa4dde511bbad8a77ffdee0"
 internal_conformance = "pass"
 locked_at = 2026-10-29
 

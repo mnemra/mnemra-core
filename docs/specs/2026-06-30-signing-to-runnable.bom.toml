@@ -10,7 +10,17 @@ ref = "../intent/signing-to-runnable.md"
 # that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
 # was run.
 # Prior pin: version = "1c6820e726720e76f60aa5c76735af0223de5207"
-version = "27dae9868db9060cff822739aa8639b6675dad10"
+# RE-LOCKED 2026-10-29 (#4120, with #4412's listener markers), at the maintainer's conditional
+# approval of both amendments (#4412 activity 9363), whose fixes are written in. The pin moves to
+# the blob at this branch's final tree, rebased onto main 24eeb90, where #4249 phase 1 (PR #11) and
+# #4291 (PR #13) had landed; #4249 activity 9344 records that whichever of #4249 phase 1 and #4120
+# landed second re-pins this sidecar to the landed blobs.
+# The pinned TEXT CHANGED after #4249's pin below: #4120 added dated notes for the operator-run
+# instance, the builtin-init rulings (#4120 activity 9255; #4412 activities 9343 and 9363) and the
+# review fixes, and #4412 added dated markers for the owner-only health socket (#4412 activity
+# 9279). The original text is kept.
+# Prior pin: version = "27dae9868db9060cff822739aa8639b6675dad10" (#4249's, below).
+version = "8d8a6310579abf28a44e389537788583c3929d1d"
 # locked_at unchanged: no stage-exit gate was re-run for #4249, so the original lock time stands.
 locked_at = 2026-06-30T16:45:19Z
 
@@ -24,7 +34,25 @@ ref = "../intent/signing-to-runnable-frame.md"
 # that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
 # was run.
 # Prior pin: version = "83bba6a5ba76e6dab97b74799212107332e0198d"
-version = "399bb199d5d8aec537f79165f4196a9648be5518"
+# RE-LOCKED 2026-10-29 (#4120, with #4412's listener markers), at the maintainer's conditional
+# approval of both amendments (#4412 activity 9363), whose fixes are written in. The pin moves to
+# the blob at this branch's final tree, rebased onto main 24eeb90, where #4249 phase 1 (PR #11) and
+# #4291 (PR #13) had landed; #4249 activity 9344 records that whichever of #4249 phase 1 and #4120
+# landed second re-pins this sidecar to the landed blobs.
+# The pinned TEXT CHANGED after #4249's pin below: #4120 added dated notes for the operator-run
+# instance, the builtin-init rulings (#4120 activity 9255; #4412 activities 9343 and 9363) and the
+# review fixes, and #4412 added dated markers for the owner-only health socket (#4412 activity
+# 9279). The original text is kept.
+# Reviews: the #4120 draft had Warden's and Charon's round 1 (#4120 activities 9264, 9271); round 2
+# by Warden, Charon and Bolt (#4412 activities 9326, 9322) ranged over the text up to the
+# health-socket commit. The round-2 fixes and the conditional-approval fixes were not re-reviewed;
+# the maintainer's conditional approval names them (9363).
+# internal_conformance: "pass" predates this re-pin, as #4249's comment below says of its own; the
+# last Charon pass over the #4120 text (round 2, #4412 activity 9326) found it did not conform, its
+# findings were fixed without a Charon re-check, and the BOM has no value for that state. This
+# re-pin records the range rather than inventing one.
+# Prior pin: version = "399bb199d5d8aec537f79165f4196a9648be5518" (#4249's, below).
+version = "15d9fcb51ecf4962861baa5ae6a135e034223b81"
 # internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
 # prior pin above; it does not cover the new blob. Whether to change the value is a schema
 # question #4249 phase 1 does not decide.
@@ -46,7 +74,25 @@ ref = "2026-06-30-signing-to-runnable.md"
 # that post-fix text was not re-reviewed. No fresh internal conformance pass of the whole record
 # was run.
 # Prior pin: version = "479852a28124727ca3eafdb6cd29f0ad95d76f76"
-version = "4c86968b01207af0ab636d3c5f68e419814786f0"
+# RE-LOCKED 2026-10-29 (#4120, with #4412's listener markers), at the maintainer's conditional
+# approval of both amendments (#4412 activity 9363), whose fixes are written in. The pin moves to
+# the blob at this branch's final tree, rebased onto main 24eeb90, where #4249 phase 1 (PR #11) and
+# #4291 (PR #13) had landed; #4249 activity 9344 records that whichever of #4249 phase 1 and #4120
+# landed second re-pins this sidecar to the landed blobs.
+# The pinned TEXT CHANGED after #4249's pin below: #4120 added dated notes for the operator-run
+# instance, the builtin-init rulings (#4120 activity 9255; #4412 activities 9343 and 9363) and the
+# review fixes, and #4412 added dated markers for the owner-only health socket (#4412 activity
+# 9279). The original text is kept.
+# Reviews: the #4120 draft had Warden's and Charon's round 1 (#4120 activities 9264, 9271); round 2
+# by Warden, Charon and Bolt (#4412 activities 9326, 9322) ranged over the text up to the
+# health-socket commit. The round-2 fixes and the conditional-approval fixes were not re-reviewed;
+# the maintainer's conditional approval names them (9363).
+# internal_conformance: "pass" predates this re-pin, as #4249's comment below says of its own; the
+# last Charon pass over the #4120 text (round 2, #4412 activity 9326) found it did not conform, its
+# findings were fixed without a Charon re-check, and the BOM has no value for that state. This
+# re-pin records the range rather than inventing one.
+# Prior pin: version = "4c86968b01207af0ab636d3c5f68e419814786f0" (#4249's, below).
+version = "97d8e116e86e1b9b92df03c346d96bb8ae1be2db"
 # internal_conformance: this "pass" predates the #4249 amendment and was recorded against the
 # prior pin above; it does not cover the new blob. Whether to change the value is a schema
 # question #4249 phase 1 does not decide.
