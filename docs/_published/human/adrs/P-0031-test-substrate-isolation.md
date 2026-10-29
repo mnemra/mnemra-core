@@ -114,7 +114,7 @@ The chosen option, its drivers and the other options are unchanged. *Rejected, k
 
 ## Amendment 2026-10-29 — one CI image per supported PostgreSQL major (#4291)
 
-**Status: the direction is the maintainer's; the wording is the #4291 draft's until his exit approval of the #4291 amendment to spec R-0117 and R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`).** This is an in-place amendment, as the [ADR README](README.md) prescribes, and nothing above is rewritten.
+**Status: the direction is the maintainer's; the wording is the #4291 draft's until his exit approval of the #4291 amendment to spec R-0117 and R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`).** *(Approved 2026-10-29: the maintainer approved the #4291 amendment (#4412 activity 9363; recorded on #4291 as activity 9365), so the wording below is no longer a draft.)* This is an in-place amendment, as the [ADR README](README.md) prescribes, and nothing above is rewritten.
 
 The maintainer's rulings behind it:
 

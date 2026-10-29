@@ -111,7 +111,7 @@ Then there are the twelve obligations the host can't verify. They're held as one
 
 ## Amendment 2026-10-29 — the floors: a policy in the design, values in host code (#4291)
 
-**Status: the direction is the maintainer's; the wording is the #4291 draft's until his exit approval of the #4291 amendment to spec R-0117 and R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`).** This is an in-place amendment, as the [ADR README](README.md) prescribes. Nothing above is rewritten. Each superseded phrase is quoted here, with what replaces it.
+**Status: the direction is the maintainer's; the wording is the #4291 draft's until his exit approval of the #4291 amendment to spec R-0117 and R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`).** *(Approved 2026-10-29: the maintainer approved the #4291 amendment (#4412 activity 9363; recorded on #4291 as activity 9365), so the wording below is no longer a draft.)* This is an in-place amendment, as the [ADR README](README.md) prescribes. Nothing above is rewritten. Each superseded phrase is quoted here, with what replaces it.
 
 The maintainer's rulings behind it:
 
