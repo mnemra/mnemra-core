@@ -56,7 +56,16 @@ ref = "docs/src/intent/mnemra-core-frame.md"
 # approved, were not re-reviewed; the scoped re-check ordered at 9183 had not run when this pin
 # moved. No fresh internal conformance pass of the whole record was run.
 # Prior pin: version = "fa9e4974fdfbeda81a22d22b316a6884b51b01ed"
-version = "3cfdbcc274140c80467d71a427659af14b69251a"
+# RE-LOCKED 2026-10-29 (#4412), with the spec pin below, at the maintainer's conditional
+# approval (#4412 activity 9363); the pin moves to the blob at this branch's final tree, rebased
+# onto main 24eeb90, where #4249 phase 1 (PR #11) and #4291 (PR #13) had landed; #4249 activity
+# 9344 records that whichever of #4249 phase 1 and #4120 landed second re-pins the shared
+# signing-to-runnable sidecar to the landed blobs.
+# The pinned TEXT CHANGED after #4249's pin above: #4412 added dated markers on three stale
+# copies of the loopback listener (owner-only socket, #4412 activity 9279; Charon's round-2 P1).
+# No review re-checked the markers.
+# Prior pin: version = "3cfdbcc274140c80467d71a427659af14b69251a" (#4249's, above).
+version = "09e68669d9c6d4ee84a49dbc7a42827a8d3a4615"
 # PROVENANCE (thin — read before trusting): the fold reviews 958/959/961 reviewed
 # the Frame's FOLD EDITS (P-0011 dissolution record, observability re-home,
 # frame:232/550 emission reconciliation) for coherence/correctness. A discrete
@@ -87,7 +96,44 @@ ref = "docs/specs/2026-05-24-mnemra-core-v0-substrate.md"
 # sentences Bolt asked for (56ec385), the approval notes and this re-pin were not reviewed beyond
 # Puck's read. No fresh internal conformance pass of the whole record was run.
 # Prior pin: version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
-version = "8d2fff13ade4489f88157c14a2cb8432a05cac8c"
+version = "c64a58682aeb1322cb4464bfcd249d75a0379ea7"
+# RE-LOCKED 2026-10-29 (#4412), at the maintainer's approval of the #4412 amendment, conditional at
+# #4412 activity 9363 and met at 9373 (Warden's confirm of the conditional fixes, APPROVE); the pin
+# moves to the blob at this branch's final tree, rebased onto main 24eeb90, where #4249 phase 1 (PR
+# #11) and #4291 (PR #13) had landed; #4249 activity 9344 records that whichever of #4249 phase 1
+# and #4120 landed second re-pins the shared signing-to-runnable sidecar to the landed blobs.
+# Prior pin: version = "8d2fff13ade4489f88157c14a2cb8432a05cac8c" (#4291's re-pin; its comment is
+# above the version line).
+# The pinned TEXT CHANGED: #4412 added dated notes for SG-2 to SG-6, the /metrics route, the
+# owner-only health socket and the round-2 and conditional-approval fixes, with the original text
+# kept. Reviews: Warden on the /metrics draft (#4412 activity 9265); round 2 by Warden, Charon and
+# Bolt (#4412 activities 9326, 9322) over the text up to the health-socket commit; Warden's confirm
+# of the conditional-approval fixes (9373). The round-2 fixes had no re-review beyond that confirm.
+# internal_conformance: "pass" predates this re-pin. The last Charon pass over the #4412 text
+# (round 2, 9326) found it did not conform; its findings were fixed without a Charon re-check, and
+# the BOM has no value for that state. The range is recorded here instead.
+# 
+# HISTORY, quoted so that #4291's pointer to #4412's #4363 re-pin resolves: #4412 first re-pinned
+# this
+# spec to the blob #4363 landed at 0076b25 (d2b12265f183fa74c32a5939f32e07e36033b4cd); that re-pin
+# was superseded by #4291's above when both landed, and its comment recorded the #4363 review range:
+#   - 03eec32, the squash of the reviewed draft and the post-round-4 cleanup: review rounds 1 to 4
+# by
+#     Bolt, Warden and Charon covered the draft up to the round-4 text (#4363 activities 8965, 8988,
+#     9039, 9040). No saved review report covers the post-round-4 cleanup; #4363 activity 9043 says
+#     the push review covered it, and no report of that review was saved.
+#   - c16b7d3, the exit-gate rulings (#4363 activity 9046): a scoped Bolt check and a Warden check
+#     (rounds 5 and 6). No Charon pass.
+#   - ae2fdd0, a dead run's owner role kept until its directory is gone: a Warden confirmation
+#     (round 7). No Charon pass.
+#   - 0076b25, the run-directory record and the executor order: not reviewed before landing (#4363
+#     activity 9070); reviewed after landing by Charon (#4412 activity 9272, conforms with concerns)
+#     and Warden (#4412 activity 9265, part C, approve).
+#   The maintainer's approval of PR #17 as a whole (#4363 activity 9124) covers all four. A Charon
+#   pass covers the draft through review round 4 and the 0076b25 delta; the three changes in between
+#   are covered by the maintainer's approval only (Charon, #4412 activity 9272).
+# 
+# PRIOR (kept as written):
 # RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119). Prior version:
 # 3118fbb3f5f81c45f3ea1e7c42bd6448114f123f. The three prior pins (spec 3118fbb3, brief f1fd2581,
 # Frame d80ccf0b) resolve to no object in this repository; the landings below are therefore those
