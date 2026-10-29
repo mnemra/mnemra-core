@@ -258,6 +258,22 @@ embedding config pathway (R-0014 governs that and does not apply here).
   intake Hard constraint (Storage source). Workspace anchor: `P-LockContract` (the `Storage` seam is
   the locked contract `run()` consumes).
 
+*(Amended 2026-10-29, #4120. Drafted on the design lane; the text awaits the maintainer's approval,
+#4120 activity 9180.)* The embedded engine D9 names is retired by the V0 substrate spec's amendment
+of 2026-10-19 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`, #4018, approved at #4018
+activity 7800) and [P-0010](../src/adrs/P-0010-storage-substrate-engine.md) §Amendment 2026-10-19,
+whose "Records this amendment falsifies" list names this line. D9 now reads: the production pool is
+the V0 R-0119 serving pool, reached through `MNEMRA_DATABASE_URL` as the serving role; `run()`
+initializes no schema, because `mnemra init` as the owner role is the only path that does (V0
+R-0013-a as amended, R-0117-h); and an instance the host cannot use leaves the host up and not
+ready, never exited (V0 R-0118-b). Superseded: "sourced from `PostgresStorage::start_embedded()`"
+and "schema initialization runs (R-0013-a, `mnemra init`: bootstrap on the embedded engine, enable
+bundled `pgvector`, create substrate tables + the `default` workspace)". The R-0014 exclusion is
+unchanged. D6's (5c) and QA-4's items 4 and 5 are read through this note and through spec R-0022-a
+(5c) and (accept-last) as amended (`docs/specs/2026-06-30-signing-to-runnable.md`): the server is
+constructed while the host is not ready, answers `initialize` and `tools/list`, and serves no
+verb-dispatching request until readiness is true (V0 R-0118-h).
+
 ## 4. Quality-attribute scenarios (ATAM)
 
 Each scenario is `[stimulus · environment · response · measure]`, the unit of architectural decision.
