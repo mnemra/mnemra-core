@@ -109,6 +109,37 @@ Then there are the twelve obligations the host can't verify. They're held as one
 - Pro: easy to state (`0.5.0` for HNSW; the embedded pin for PG).
 - Con: a floor set by whatever happened to be installed or needed is a measurement, not a target (`P-ReliabilityTarget`). Rejected by ruling 7793.
 
+## Amendment 2026-10-29 — the floors: a policy in the design, values in host code (#4291)
+
+**Status: the direction is the maintainer's; the wording is the #4291 draft's until his exit approval of the #4291 amendment to spec R-0117 and R-0120 (`docs/specs/2026-05-24-mnemra-core-v0-substrate.md`).** This is an in-place amendment, as the [ADR README](README.md) prescribes. Nothing above is rewritten. Each superseded phrase is quoted here, with what replaces it.
+
+The maintainer's rulings behind it:
+
+- 2026-10-25 (#4291, by AskUserQuestion): "Floor in spec, set in code".
+- 2026-10-29 (#4291 activity 9171): "Drift job, with lead time" for the end of life of a supported major, "Same shape as Postgres" for pgvector, and "At most two, test-enforced" for the number of supported majors. Puck (the orchestrating agent) recorded his selections and wrote the option wording.
+- 2026-10-29 (#4291 activity 9325): "Split: approve policy now, drift later". It defers the floor-drift workflow to task #4444.
+
+The spec states each interface minimum: PostgreSQL 16 or later, and pgvector with HNSW indexes. It also states the floor policy. The values live elsewhere. The supported majors, their floors and the pgvector floor are one constant in the host's code, so adding a major or raising a floor is a code change gated by tests, never a spec edit. And the host still refuses a major nobody has tested. The requirement text is spec R-0117-a, R-0117-b and R-0120-c as amended 2026-10-29. [P-0031](P-0031-test-substrate-isolation.md) carries the matching amendment for the CI images.
+
+⚠ [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19, AE6, still reads `16.15` and `0.8.7` as the floors ruled, and the P-0030 entry of its follow-ups table reads "floors 16.15 / 0.8.7 from AE6". It's a lagging copy. Whichever of #4291 and #4412 lands second reconciles it; that obligation is recorded as an acceptance criterion on #4412 (activity 9313) and in the exit list of the #4291 amendment to the V0 spec.
+
+**Superseded in this record, with what replaces it:**
+
+| Superseded text | Replaced by | Anchor |
+|---|---|---|
+| Decision Outcome: "the PostgreSQL major (`16`) and a minor floor" | A major in the host's supported-major table (PostgreSQL 16 or later, at most two majors) and that major's minor floor. A major enters the table only in a change whose required check runs the whole verify chain and the fresh-machine job on it, and it stays only while they keep running on it (spec R-0117-a (1), (4) and (5) as amended) | rulings 2026-10-25 and 2026-10-29 (#4291); [P-LockContract](../glossary.md#p-lockcontract): the contract locks, and the values vary behind it; `P-CheckCoversTheClaim` (a conclusion is no wider than what the check ranged over): "supported" is checked on the major it names |
+| Decision Outcome: "Both floors are the latest release that closes the published advisories, labelled with what each closes, MEASURED by Sage 2026-10-19: **PostgreSQL 16.15** (…) and **pgvector 0.8.7** (…)", read as the floors this record decides | The policy stands, and the policy is what this record decides. Each supported major's floor is the latest minor of that major that the PostgreSQL security page lists as fixing a published advisory, or that major's `.0` when it lists none. The pgvector floor is the latest pgvector release that fixes a published advisory, and it's one value for every major. The values are the host code constant's, set by the policy on the day they land. `16.15` and `0.8.7`, with their advisory citations, stay as MEASURED 2026-10-19 provenance, not as the constant's values (spec R-0117-a (3), R-0117-b (2) and (3) as amended) | ruling 7793 (floors from security history), carried; rulings 2026-10-25 and 2026-10-29 (#4291); #4249 activity 8380 (provenance keeps its version) |
+| Decision Outcome: "the weekly R-0120-c workflow fails when a newer 16.x minor (next scheduled 2026-11-12) or pgvector release exists above the recorded floor, or when the CI image falls below either floor" | Deferred to task #4444 (maintainer ruling 2026-10-29, #4291 activity 9325, "Split: approve policy now, drift later"). The weekly workflow is redesigned there, per key and against the policies above. Two rulings bind that redesign: the end-of-life ruling (#4291 activity 9171, item 1: warn about 180 days and fail about 90 days before the upstream end-of-life date) and the waiver ruling (activity 9257). It gates only #4161's plan task T16, and no drift workflow is built before it lands. The response to a lagging floor is still a change to the constant, never a spec edit. Until #4444 lands, a floor is checked only by review of the change that sets it (spec R-0117-a (3), R-0117-b (3) and R-0120-c as amended) | ruling 9325; [P-Defer](../glossary.md#p-defer) DF1 (a deferral names what mechanically fires it): #4444 is a prerequisite of T16, recorded on #4444 |
+| Status: "The two version floors were filled the same day from Sage's measurement (ruling 7793, AE6): **PostgreSQL 16.15** and **pgvector 0.8.7**" | Kept unchanged as the record of 2026-10-19. Read it with the row above: those values are MEASURED provenance, not values this record locks | #4249 activity 8380 |
+
+*Rejected, kept with reasons:*
+
+- The values written into the spec (the 2026-10-19 text). Every security minor and every added major would reopen a locked spec, and the 2026-10-25 ruling refuses that.
+- The pgvector floor kept as a minimum value in the spec (#4249 activity 8541, a lead decision). The 2026-10-29 ruling superseded it, because the same problem takes the same shape (V-Consistency).
+- "PostgreSQL 16 or later" with no closed set of majors. The host would admit a major nobody has tested, which the 2026-10-25 ruling refuses.
+- Running only the smoke and fresh-machine jobs on majors beyond the first. A major whose Postgres test cells never ran isn't tested (V-Quality).
+- For end of life, the host refusing a past-end-of-life major outright, and parking the question with a human cadence. Neither was selected on 2026-10-29. The first strands operators with no lead time. The second parks a failure that is silent.
+
 ## More Information
 
 - [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19 (DE2, DE9 "what exits", AE6 floors). [P-0027](P-0027-db-authorization-role-separation.md) owns the role-model clauses (R-0117-c/-e). Those are delegated policies too, but they're decided there.

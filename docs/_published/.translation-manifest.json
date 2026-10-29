@@ -214,15 +214,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "f19a3ca97d9ce6ded2057097d5fad10affd9ef85ff36c842ebf23602890fa0c4",
-      "translated_at": "2026-10-19T17:42:10Z"
+      "source_sha256": "659a3c7416b111d618915a3de95aa7ea3722fd8855fa6f43ced556773d69d9bb",
+      "translated_at": "2026-10-29T17:27:53Z"
     },
     "adrs/P-0031-test-substrate-isolation.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "5b0c8714e9957adc59871d54485c42c9b1f524227cca5ce30bc756d7bd921d89",
-      "translated_at": "2026-10-28T12:49:49Z"
+      "source_sha256": "8f3d2fa469688d3a150a84cfed4c7265dcd07053d93d345dcd38358d72ddc59b",
+      "translated_at": "2026-10-29T17:27:53Z"
     },
     "adrs/README.md": {
       "primary_audience": "human",
@@ -249,8 +249,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "c7b3e63b3e9cf22dbfa94ef09bee52136b8e681aaf8179603aa545b5be90df69",
-      "translated_at": "2026-10-29T17:05:17Z"
+      "source_sha256": "55db66d2dbc34fec2670aacbb46d9c138fff88f37105fec8214f0785714544df",
+      "translated_at": "2026-10-29T17:27:53Z"
     },
     "intent/mnemra-core-frame.md": {
       "primary_audience": "agent",
