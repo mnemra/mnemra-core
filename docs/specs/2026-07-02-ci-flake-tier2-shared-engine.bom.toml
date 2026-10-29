@@ -24,6 +24,18 @@ intent_version = "c382678c516f0a50d4fce8726a6a8e39a0e64d7a"
 
 [audit_chain.spec]
 ref = "2026-07-02-ci-flake-tier2-shared-engine.md"
+# RE-LOCKED 2026-10-29 (#4412): the pin moves to the blob #4363 landed on main at 0076b25 (PR #17,
+# rebase-merged 2026-10-29, #4363 activity 9156). One #4363 commit changed this file since the
+# #4119 pin: 03eec32, the squash of the reviewed draft and the post-round-4 cleanup. Review
+# rounds 2 to 4 by Bolt, Warden and Charon (#4363 activities 8988, 9039, 9040) covered this
+# file's changes up to the round-4 text; round 1's subject did not touch it. The post-round-4
+# cleanup changed three lines of this file, and no saved review report covers it (#4363 activity 9043 says the push
+# review covered it; no report of that review was saved). The
+# maintainer's approval of PR #17 as a whole (#4363 activity 9124) covers all of it.
+# internal_conformance stays "pass" with that range stated, not widened.
+# Prior version: 712aeb525d2af2d36255dda1309f1e7f2d5742b9, locked_at 2026-10-25.
+#
+# PRIOR (kept as written):
 # RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119): spec amended in place for the
 # operator-run Postgres engine (Amended 2026-10-20 and later markers in the body).
 # Reviews (#4119 activities): round 1 (7846); round 2 (7868); round 3 (7972); the threat model
@@ -37,9 +49,9 @@ ref = "2026-07-02-ci-flake-tier2-shared-engine.md"
 # Spec-exit approval: the maintainer's conditional approval (8420, tightened by 8438 and 8452),
 # recorded as met at 8494.
 # Prior version: b0cbae0fcf852cc33318ffb3e1d8a91979ca3641.
-version = "712aeb525d2af2d36255dda1309f1e7f2d5742b9"
+version = "faac54b1af303104c190272b7012d3f37b4d58d1"
 internal_conformance = "pass"
-locked_at = 2026-10-25
+locked_at = 2026-10-29
 
 [audit_chain.spec.generated_against]
 # Unchanged on purpose: the #4119 amendment takes its requirements from V0 spec R-0120 and the
