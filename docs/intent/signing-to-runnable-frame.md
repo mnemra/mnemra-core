@@ -210,6 +210,12 @@ production startup, composing the **already-locked** ordering requirements:
   plugin pool is populated **before** MCP accept (R-0016-a);
 - **(5c)** a storage pool is sourced and schema initialization runs (D9), the server is constructed
   (`MnemraMcpServer`, `libs/mnemra-host/mcp/server.rs:89`), and it serves over stdio (D8).
+  *(Amended 2026-10-29, #4120 (Charon, #4120 activity 9271): read (5b) and (5c) through D9's note
+  below and spec R-0022-a as amended (`docs/specs/2026-06-30-signing-to-runnable.md`). In (5b),
+  "before MCP accept" reads "before readiness is granted". In (5c), the start builds the serving
+  pool's options and runs the boot check, initializes no schema, and constructs and serves the
+  server while not ready, refusing verb dispatch with `host_not_ready` (V0 R-0118-h). A retryable
+  builtin-init failure leaves the host up and not ready (spec R-0022-a (5b-i) as ruled).)*
 
 The ordering R-IDs already exist; the **assembly** is the delta — `run()` is a stub today, so the
 composition behavior has no existing home.
@@ -337,10 +343,16 @@ Each **measure is a conjunction of binary checks**, not a single assertion.
      (R-0004-g) — observable: `/health` answers on `127.0.0.1:8877` before the server accepts MCP.
   2. **(5b-i)** all **seven** builtins initialize **before** any plugin is loaded (R-0002-c).
   3. **(5b-ii)** the verified plugin pool is populated (R-0016-a, 3–5 instances) **before** MCP
-     accept.
+     accept. *(Amended 2026-10-29, #4120: "before MCP accept" reads "before readiness
+     is granted"; spec R-0022-a (5b-ii) as amended.)*
   4. **(5c)** a storage pool is sourced via `start_embedded()` and schema init runs **before** the
-     server is constructed and begins serving.
-  5. No MCP request is accepted before steps 1–4 complete (accept is the last step).
+     server is constructed and begins serving. *(Amended 2026-10-29, #4120: superseded by spec R-0022-a (5c) as
+     amended and D9's note: the serving pool's options are built from `MNEMRA_DATABASE_URL`, the
+     boot check runs, no schema is initialized, and the server is constructed and serving while not
+     ready.)*
+  5. No MCP request is accepted before steps 1–4 complete (accept is the last step). *(Amended 2026-10-29, #4120: reads "no
+     verb-dispatching MCP request is served before readiness is true"; `initialize` and `tools/list`
+     are answered before then (spec R-0022-a (accept-last) as amended, V0 R-0118-h).)*
 
 ### QA-5 — Live serve end-to-end
 
@@ -423,7 +435,7 @@ mints a standalone new ADR; this one extends the existing schema authority in pl
 |---|---|---|
 | `{{R-ContentHashBinding}}` (R-0021 confirmed next) | The supply-chain binding **behavior**: the manifest carries a content-hash of the component bytes in the **signed canonical body** (D2); the verified-load gate recomputes the loaded component's hash and **rejects on mismatch**, fail-closed with a structured error before any pool/instance (D3); the swapped-component-rejected invariant (QA-1). Anchors R-0005-a/-b (fail-closed structured error) + R-0005-h (signed-body location). Governed by the `{{P-ManifestContentHash}}` P-0003 amendment. | **Open — Stage 3 assigns the R-ID + locks** |
 | `{{P-ManifestContentHash}}` (P-0003 amendment) | The **schema** change: a content-hash field added to the V0 manifest schema, in the signed canonical body. Authored as a canon-amendment *shape* for the PA (steward-not-owner, above). **Stage-3 residual — `schema_version` disposition:** P-0003 states "`schema_version: 1` locks the V0 manifest format" and "V0.1+ changes that alter the manifest structure increment this field." Adding a signed-body field *alters the structure*, so there is a real pull either way. **Lean: stays `schema_version: 1`** — V0 is still being *defined* (no external plugin has shipped against a frozen schema; the single `core: true` plugin, `mnemra-echo`, is re-signed with the field as part of M1), so the field is part of the V0 schema definition rather than a post-freeze evolution. Counter-pull: P-0003's literal format-lock text. Stage 3 pins this inside the amendment. | **Open — PA reviews the amendment shape; Stage 3 pins schema_version** |
-| `{{R-RunAssembly}}` | The `run()` production-startup **behavior**: `run()` composes the existing ordering R-IDs in the locked order — `/health` binds first (R-0004-g) → seven builtins (R-0002-c) → verified pool before MCP accept (R-0016-a) → storage pool + schema init (P-0010, R-0013-a) → construct server → stdio serve (R-0010-a, R-0010-e) (D6/D8/D9); intake SC5 + SC6 (acceptance: `verify-smoke` passes, QA-5). `run()` is a stub today, so the assembly behavior has no existing home; it **composes** the ordering R-IDs, it does not amend them. | **Open — Stage 3 assigns + locks** |
+| `{{R-RunAssembly}}` | The `run()` production-startup **behavior**: `run()` composes the existing ordering R-IDs in the locked order — `/health` binds first (R-0004-g) → seven builtins (R-0002-c) → verified pool before MCP accept (R-0016-a) → storage pool + schema init (P-0010, R-0013-a) → construct server → stdio serve (R-0010-a, R-0010-e) (D6/D8/D9); intake SC5 + SC6 (acceptance: `verify-smoke` passes, QA-5). `run()` is a stub today, so the assembly behavior has no existing home; it **composes** the ordering R-IDs, it does not amend them. *(Amended 2026-10-29, #4120: the order is superseded by spec R-0022-a and its API Contract "Host entry point" as amended: listener → serving-pool options → server constructed and serving, verb dispatch gated on readiness → boot check → seven builtins → verified pool → readiness. "storage pool + schema init (P-0010, R-0013-a)" reads "the V0 R-0119 serving pool and the boot check; no schema init" (D9's note).)* | **Open — Stage 3 assigns + locks** |
 
 ### Amended-in-place / instantiated requirements (existing R-IDs gain a clause or are stood up)
 
