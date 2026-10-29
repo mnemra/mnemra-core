@@ -155,7 +155,7 @@ the plugin runtime, and the builtin components. Per the brief's Hard constraints
 
 - The agent-facing surface is **MCP-native** (MCP specification 2025-06-18). Transport is
   **stdio at V0**; streamable-HTTP is a later-version activation. *(Amended 2026-10-25,
-  #4249, pending the maintainer's approval: the target revision is MCP specification
+  #4249, approved 2026-10-29 (#4249 activity 9183): the target revision is MCP specification
   2025-11-25, and the host serves exactly the released 2025-06-18 and 2025-11-25; see
   "MCP transport" below.)*
 - The substrate is a **single-process Postgres** instance with `pgvector` (bundled with
@@ -506,7 +506,7 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 - **Stdio at V0.** Streamable-HTTP is a V0.1+ activation, conditional on the
   microVM-appliance trip-wire (a named-capability condition, not release-gated).
 - **MCP specification version 2025-06-18** (brief Hard constraints). *(Amended 2026-10-25,
-  #4249, pending the maintainer's approval: the target is **MCP specification 2025-11-25**.
+  #4249, approved 2026-10-29 (#4249 activity 9183): the target is **MCP specification 2025-11-25**.
   The host serves exactly the released revisions 2025-06-18 and 2025-11-25 and answers any
   other revision requested at `initialize` with 2025-11-25. The host enforces that set itself;
   tests pin it at `initialize` and before the handshake, and the pin after the handshake is

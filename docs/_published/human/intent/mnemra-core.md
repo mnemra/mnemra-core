@@ -140,7 +140,7 @@ used where the requirement is observable):
 
 - The agent-facing surface SHALL be **MCP-native** (MCP specification 2025-06-18).
   Transport is stdio at V0; streamable-HTTP is a later-version activation. *(Amended
-  2026-10-25, #4249, pending the maintainer's approval: the target revision is MCP
+  2026-10-25, #4249, approved 2026-10-29 (#4249 activity 9183): the target revision is MCP
   specification 2025-11-25. The host serves exactly the released revisions 2025-06-18 and
   2025-11-25, and it answers any other revision requested at `initialize` (the request that
   opens the MCP handshake) with 2025-11-25. The host enforces that set itself. Tests pin it at
