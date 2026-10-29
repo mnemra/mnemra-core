@@ -20,7 +20,7 @@ superseded_by: null
 
 `accepted`
 
-This ADR's layout choice (C1) is unchanged. Its Postgres-specifics are now the **Postgres implementation under the swappable `Storage` trait** locked in [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md), a project-scoped ADR (D1 substrate + D5 swap trait + V0 embedded engine). That means the substrate is no longer a hard-locked carry-forward. It's a decided artifact, and storage now sits behind an engine-agnostic seam rather than a deliberately Postgres-shaped one. C1 is the content-substrate layout *within* that Postgres implementation. The TimescaleDB references this ADR originally carried are stripped or demoted per P-0010's D8 (TimescaleDB demoted off the V0 stack). They're corrected inline below.
+This ADR's layout choice (C1) is unchanged. Its Postgres-specifics are now the **Postgres implementation under the swappable `Storage` trait** locked in [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md), a project-scoped ADR (D1 substrate + D5 swap trait + V0 embedded engine). That means the substrate is no longer a hard-locked carry-forward. It's a decided artifact, and storage now sits behind an engine-agnostic seam rather than a deliberately Postgres-shaped one. C1 is the content-substrate layout *within* that Postgres implementation. The TimescaleDB references this ADR originally carried are stripped or demoted per P-0010's D8 (TimescaleDB demoted off the V0 stack). They're corrected inline below. *(Amended 2026-10-29, #4412: "V0 embedded engine" in this paragraph now reads "V0 engine a separate, operator-run PostgreSQL instance". See §Amendment 2026-10-29 below.)*
 
 ## Context and Problem Statement
 
@@ -155,12 +155,16 @@ The projection layer is the seam. At V0.1+, if aspect-specific access control, p
 
 **Scope of this amendment:** type normalization only. The C1 vs C2 vs C3 layout decision isn't re-opened. The amendment doesn't change which tables exist, their structure, or the RLS posture. It changes only that `workspace_id` uses `UUID` everywhere, validated at the Postgres layer.
 
+## Amendment 2026-10-29 — the V0 engine cross-references (#4412)
+
+**Status: DRAFT, awaiting the maintainer's approval at the exit of the #4412 amendment to the V0 substrate spec.** It follows the in-place dated-amendment rule of the [ADR README](README.md), so the original text is kept. Two cross-references in this record name the V0 engine as embedded: the Status paragraph ("V0 embedded engine") and the More Information entry for P-0010 ("V0 embedded engine"). [P-0010](P-0010-storage-substrate-engine.md) §Amendment 2026-10-19, which the maintainer approved at #4018 activity 7800, replaced that engine with a separate PostgreSQL instance that the operator installs and runs. That amendment's "Records this amendment falsifies" list names this record's More Information line and says it's corrected in the amendment's landing commit. It wasn't (MEASURED 2026-10-29: both lines still read "V0 embedded engine"). Each line now carries a dated marker, and both read "V0 engine a separate, operator-run PostgreSQL instance". The C1 layout decision is unchanged. It's the content-substrate layout within the Postgres implementation, whoever runs the instance. (Anchors: P-LockContract, because a record that names a superseded engine is corrected rather than left stale; P-PreserveDecisionSpace, because the superseded wording stays beside the marker.)
+
 ---
 
 ## More Information
 
 - Storage-layout candidate analysis (2026-05-03), three-candidate scoring against the V0 quality-attribute utility tree; recommended C1 for V0.
-- Substrate/engine decision: [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) — C1 is the content-substrate layout under P-0010's Postgres implementation (D1 substrate, D5 swap trait, V0 embedded engine, D8 time-series demote). Layout sits *under* the substrate decision; this ADR doesn't re-decide the substrate.
+- Substrate/engine decision: [P-0010-storage-substrate-engine](P-0010-storage-substrate-engine.md) — C1 is the content-substrate layout under P-0010's Postgres implementation (D1 substrate, D5 swap trait, V0 embedded engine, D8 time-series demote). *(Amended 2026-10-29, #4412: "V0 embedded engine" now reads "V0 engine a separate, operator-run PostgreSQL instance". See §Amendment 2026-10-29.)* Layout sits *under* the substrate decision; this ADR doesn't re-decide the substrate.
 - Frame open ADR slot: `{{P-StorageLayout}}` ([Frame](../intent/mnemra-core-frame.md), Tier A table). Frame is Stage 2 of the work-shaping pipeline, where operating constraints are proposed and routine architecture decisions are batched. This ADR resolves that slot.
 - Architecture overview ([Overview](../architecture/overview.md)): threat table entries `DS-pg-content`/T,I,R,D; trust boundary `TB-mnemra-host` to `TB-postgres`; accepted risk `R-0001` (RLS policy enforcement deferred to V0.1+).
 - Downstream ADRs unlocked by this decision:
