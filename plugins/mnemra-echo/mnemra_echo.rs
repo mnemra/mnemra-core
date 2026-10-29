@@ -28,24 +28,29 @@
 //! only because the import WIT signature (locked by P-0003, not re-opened here)
 //! still declares `ctx: workspace-ctx`.
 
-// Crate-root allow, wider than the `export!` glue strictly needs: wit_bindgen's
-// generated guest ABI export glue (unsafe cabi fn, `export_name`) is unsafe by
-// construction, and an `#[allow]` on the `export!` invocation does not apply
-// through the expansion (measured, #2550). This crate has no hand-written
-// unsafe. A narrower layout is parked; reviewed at each signing ceremony (#4327).
-#![allow(unsafe_code)]
+// Generated guest ABI glue only (#4327). wit_bindgen's `export!` expansion emits
+// an unsafe cabi fn, an unsafe block and an unsafe `export_name`; an `#[allow]`
+// on the `export!` invocation does not reach the expansion (measured, #2550), so
+// both macros expand inside this one allowed module. Hand-written plugin code
+// stays outside it, under the workspace `unsafe_code = "deny"`. Nothing
+// hand-written belongs in this module.
+#[allow(unsafe_code)]
+mod bindings {
+    // Generates the guest-side bindings for `world plugin` defined in
+    // `wit/echo.wit`.
+    wit_bindgen::generate!({
+        path: "../../wit",
+        world: "plugin",
+    });
 
-// Generates the guest-side bindings for `world plugin` defined in
-// `wit/echo.wit`. `export!` below registers our struct as the world's typed
-// `content` exporter.
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "plugin",
-});
+    // Registers our struct as the world's typed `content` exporter.
+    use super::EchoPlugin;
+    export!(EchoPlugin with_types_in self);
+}
 
-use exports::mnemra::host::content::Guest as ContentGuest;
-use mnemra::host::artifact;
-use mnemra::host::types::{ArtifactPage, WorkspaceCtx};
+use bindings::exports::mnemra::host::content::Guest as ContentGuest;
+use bindings::mnemra::host::artifact;
+use bindings::mnemra::host::types::{ArtifactPage, WorkspaceCtx};
 
 struct EchoPlugin;
 
@@ -122,5 +127,3 @@ impl ContentGuest for EchoPlugin {
         artifact::artifact_delete(&host_supplied_ctx(), &id)
     }
 }
-
-export!(EchoPlugin);
