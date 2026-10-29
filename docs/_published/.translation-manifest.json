@@ -214,15 +214,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "659a3c7416b111d618915a3de95aa7ea3722fd8855fa6f43ced556773d69d9bb",
-      "translated_at": "2026-10-29T17:27:53Z"
+      "source_sha256": "7befbe3fda37d0500d7807f8f03486ae6cf106ef69377c291ec5823691d44b00",
+      "translated_at": "2026-10-29T17:31:44Z"
     },
     "adrs/P-0031-test-substrate-isolation.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "8f3d2fa469688d3a150a84cfed4c7265dcd07053d93d345dcd38358d72ddc59b",
-      "translated_at": "2026-10-29T17:27:53Z"
+      "source_sha256": "bb5c17e6f78523ab4a57f148072e7e12ef87d09910a05cb280fcd3b2666082a2",
+      "translated_at": "2026-10-29T17:31:44Z"
     },
     "adrs/README.md": {
       "primary_audience": "human",
