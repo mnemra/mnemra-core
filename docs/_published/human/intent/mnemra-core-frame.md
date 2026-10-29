@@ -491,7 +491,7 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
   7771). The shared-service HTTPS transport the maintainer ruled the same day (one host for
   every session) is the next amendment, #4127, and amends R-0010-a/-e and the daemon model.
   Probe mapping: liveness → `/health`, readiness → `/ready`, startup → `/health` or none,
-  pre-flight → `check-db`. Exec probes are used at V0 while the listener is loopback-only.
+  pre-flight → `check-db`. Exec probes are used at V0 while the listener is loopback-only. *(Amended 2026-10-29, #4412, ruling 9279: the listener is now an owner-only unix socket; spec R-0004-g as amended.)*
   Anchors: V-Reliability (graceful degradation over crash-restart), P-ReliabilityTarget
   (readiness read from the consumer's side), P-CheckCoversTheClaim (liveness checks liveness).
 - **The detailed layout of a single logical artifact across the four shapes** (whether a
@@ -523,7 +523,7 @@ already-locked agreements. Each is a constraint the Spec stage operates within.
 - **Health endpoint shape.** Structured-detail body identifying which dependency failed
   (Postgres reachable / `pgvector` loaded / workspace=default exists). The listener binds
   loopback-only at V0, so loopback IS the gate on the detail body (named tripwire: if the
-  listener ever binds non-loopback, admin-token gating becomes required).
+  listener ever binds non-loopback, admin-token gating becomes required). *(Amended 2026-10-29, #4412, ruling 9279: the listener is now an owner-only unix socket; spec R-0004-g as amended.)*
 
 ### Migration discipline
 
@@ -683,7 +683,7 @@ boundary is unambiguous:
   slot table (the `{{P-ObservabilityShape}}` slot is marked re-altituded out of the ADR layer to
   the overview baseline; P-0010's E1 tail re-targeted). The `/health` detail body is gated by the
   loopback-only listener bind (loopback IS the gate at V0; named tripwire if it ever binds
-  non-loopback). The host capability-manifest is a settled invariant (generated from WIT, never
+  non-loopback). *(Amended 2026-10-29, #4412, ruling 9279: the listener is now an owner-only unix socket; spec R-0004-g as amended.)* The host capability-manifest is a settled invariant (generated from WIT, never
   hand-maintained; generation mechanism routes to the chassis). Non-observability Frame content
   unchanged.
 - **2026-06-08**: Storage-substrate fold. A storage-engine evaluation (ratified

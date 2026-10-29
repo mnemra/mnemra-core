@@ -11,8 +11,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "723969196386e53d62cc9931bca7735f37be395088b1ba9b761b1622d59f8e0a",
-      "translated_at": "2026-06-23T22:38:45Z"
+      "source_sha256": "eebfc7a897e94cc6a665444541dd9e3f07c9113c9919ef6c82a194ab3b735068",
+      "translated_at": "2026-10-29T17:55:24Z"
     },
     "adrs/P-0002-core-plugin-partition.md": {
       "primary_audience": "agent",
@@ -74,8 +74,8 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "ac7c65db8d922f020dc8145f78d08b14b0646e406abc6c814450967978b6c9b0",
-      "translated_at": "2026-10-25T21:30:25Z"
+      "source_sha256": "71a9cd18289dd503d2a0b27bff675e7b1a3da520b98906b70f793f4ec8809d1b",
+      "translated_at": "2026-10-29T17:55:24Z"
     },
     "adrs/P-0011-logging-facade.md": {
       "primary_audience": "agent",
@@ -249,15 +249,15 @@
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "55db66d2dbc34fec2670aacbb46d9c138fff88f37105fec8214f0785714544df",
-      "translated_at": "2026-10-29T17:27:53Z"
+      "source_sha256": "e12e2d0ae5df8b8f00e3b5595fbfd1e0921dd20e24fbebf1d944586f3235d25d",
+      "translated_at": "2026-10-29T17:55:24Z"
     },
     "intent/mnemra-core-frame.md": {
       "primary_audience": "agent",
       "prompt_path": "explain-pass.md",
       "prompt_sha256": "b3712f684c0abfb5033eabaedfe39022385c751f3a99e3402504126972cdf8b4",
-      "source_sha256": "b0fb5f3ced3afbad138bd6ba01d7f196cc6e7a9eca14538e05844d0acd289a0c",
-      "translated_at": "2026-10-29T17:05:17Z"
+      "source_sha256": "77e0ae226f7be6aab7b8a4b6f9e53d18c4cebafd39c7d2c86144bcaee382c6b3",
+      "translated_at": "2026-10-29T17:55:24Z"
     },
     "intent/mnemra-core.md": {
       "primary_audience": "agent",
