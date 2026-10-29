@@ -257,7 +257,7 @@ Maintainer rulings, verbatim, on #4018: 2026-10-16 (activity 7091) "Operator; mn
 | Follow-up | Mechanism or label | Task to file (Puck) |
 |---|---|---|
 | Tier-2 CI spec amendment (R-0026/R-0027/R-0032 words; group membership for tier-1 and coverage-shard; intake banners) | **Fires:** wired as a blocking dependency of the fixture re-point implementation task | **#4119** (filed) — design lane |
-| Signing-to-runnable R-0022-d and its Frame :248 | **Fires:** blocking dependency of the pool-source implementation task | **#4120** (filed) — design lane |
+| Signing-to-runnable R-0022-d and its Frame :248 | **Fires:** blocking dependency of the pool-source implementation task | **#4120** (filed) — design lane *(Amended 2026-10-29, #4120: the scope widened, at #4120 activity 9180, to R-0022-a (5b-i), (5c) and (accept-last), and to the copies of them in the spec, the Frame and the intake; the banner of `docs/specs/2026-06-30-signing-to-runnable.md` is current, and this row is a lagging copy of it)* |
 | Ingestion spec/Frame re-read against R-0117-d and R-0121 | **Fires:** at that spec's next amendment; no blocker (not falsified) — the task is the carrier, so the cadence outlives this gate | **#4121** (filed) — design lane, low |
 | plan-SG-1 (structured records on stdout versus the stderr sink) | **Fires:** blocking dependency of the `instance_check` emission implementation task (it cannot pick a sink without the ruling) | **#4122** (filed) |
 | plan-SG-12 (listener bind before config load, R-0004-g vs R-0116-b precedent) | **PARKED**, cadence that outlives this gate: **every amendment to the V0 substrate spec** re-reads it, and each revision of this amendment; the ordering is harmless today (the 5-pre precedent) | **#4123** (filed, PARKED) — low |
