@@ -343,7 +343,7 @@ Each **measure is a conjunction of binary checks**, not a single assertion.
 - **Response:** the locked order holds, independently assertable at each ordering boundary.
 - **Measure (all must hold):**
   1. **(5a)** the `/health` loopback listener binds **before** config load **and** before MCP accept
-     (R-0004-g) — observable: `/health` answers on `127.0.0.1:8877` before the server accepts MCP.
+     (R-0004-g) — observable: `/health` answers on `127.0.0.1:8877` before the server accepts MCP. *(Amended 2026-10-29, #4412, ruling 9279: the listener is an owner-only unix socket, not `127.0.0.1:8877`; V0 R-0004-g as amended.)*
   2. **(5b-i)** all **seven** builtins initialize **before** any plugin is loaded (R-0002-c).
   3. **(5b-ii)** the verified plugin pool is populated (R-0016-a, 3–5 instances) **before** MCP
      accept. *(Amended 2026-10-29, #4120: "before MCP accept" reads "before readiness
@@ -450,7 +450,7 @@ mints a standalone new ADR; this one extends the existing schema authority in pl
 | **R-0005-a / R-0005-b** | **Co-anchors** — the new content-hash-mismatch rejection (D3) reuses the same synchronous fail-closed + structured-error discipline; requirement text unchanged, the new `{{R-ContentHashBinding}}` anchors to them. |
 | **R-0005-f** | **Instantiated** — the startup file-mode invariant check is instantiated over the **admin-token file** (R-0008) — the runtime secret that exists on disk; the verification material is the embedded `ROOT` constant, not a file (D4). Text unchanged. (QA-6.) |
 | **R-0005-h** | **Co-anchor** — core-by-provenance forces the content-hash into the signed body (D2). Text unchanged; cited as the constraint on the new field's location. |
-| **R-0004-g** | **Instantiated** — the `/health` loopback listener is built (the Task 25 surface) and bound **first** by `run()` (D6/D7). Requirement text fully specifies the listener already; this is build + wire, not a text change. (QA-4.) |
+| **R-0004-g** | **Instantiated** — the `/health` loopback listener is built (the Task 25 surface) and bound **first** by `run()` (D6/D7). Requirement text fully specifies the listener already; this is build + wire, not a text change. (QA-4.) *(Amended 2026-10-29, #4412, ruling 9279: the listener is an owner-only unix socket, not `127.0.0.1:8877`; V0 R-0004-g as amended.)* |
 | **R-0002-c / R-0016-a / R-0013-a / R-0010-a / R-0010-e** | **Preserved, composed** — `run()` composes these in the locked order (D6/D8/D9). Requirement text unchanged; listed for completeness so the Spec records them as composed-by-assembly. |
 
 **No open binary-observability gaps remain at the Frame altitude.** Every direction has a
@@ -486,7 +486,7 @@ G-0003 2026-06-25 amendment.
    multi-deployment trip-wire — **not designed here** (`P-Defer`). Measure: QA-6.
 5. **Live-serve attack surface (M2).** The host goes from never-run to a live stdio MCP server. **No
    new transport surface** beyond what is already specified — stdio only, no HTTP (R-0010-a/-e); the
-   `/health` listener is loopback-only (R-0004-g). The MCP auth / role / verb / health gates are
+   `/health` listener is loopback-only (R-0004-g). *(Amended 2026-10-29, #4412, ruling 9279: the listener is an owner-only unix socket, not `127.0.0.1:8877`; V0 R-0004-g as amended.)* The MCP auth / role / verb / health gates are
    already built (`mcp/server.rs:180` `call_tool`); M2 brings them online, it does not design new
    ones. The startup order guarantees no plugin is reachable before the verified pool is populated
    (R-0016-a) and no MCP request is accepted before `/health` binds (R-0004-g). Measure: QA-4, QA-5.
