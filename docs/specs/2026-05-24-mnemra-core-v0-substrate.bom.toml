@@ -78,7 +78,16 @@ intent_version = "1d6e29778c7a87434bbff0c829d2d582159bedee"
 
 [audit_chain.spec]
 ref = "docs/specs/2026-05-24-mnemra-core-v0-substrate.md"
-version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
+# Re-pinned 2026-10-29, task #4291 (the PostgreSQL and pgvector floor policy, approved by the
+# maintainer on #4412 activity 9363, recorded on #4291 as activity 9365). This is the exit-gate re-pin
+# the #4291 banner promises. The pinned TEXT CHANGED twice since the prior pin: #4363's amendment,
+# landed at 0076b25 (#4412's description lists that amendment's own re-pin), and #4291's amendment.
+# Review range for #4291: Charon's confirm-only pass (#4412 activity 9362, part B) covered the split
+# amendment at 26af922, whose #4291 text is unchanged in 784258b after the rebase onto f1dbd0a. The two
+# sentences Bolt asked for (56ec385), the approval notes and this re-pin were not reviewed beyond
+# Puck's read. No fresh internal conformance pass of the whole record was run.
+# Prior pin: version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
+version = "8d2fff13ade4489f88157c14a2cb8432a05cac8c"
 # RE-LOCKED 2026-10-25 (#4119, landed by the pull request for #4119). Prior version:
 # 3118fbb3f5f81c45f3ea1e7c42bd6448114f123f. The three prior pins (spec 3118fbb3, brief f1fd2581,
 # Frame d80ccf0b) resolve to no object in this repository; the landings below are therefore those
@@ -113,6 +122,11 @@ version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
 # PRIOR PROVENANCE: Warden fold-review chain 959 (request-changes) -> 961 (APPROVE) against content
 # committed as 5df42c7; round-2 re-review (task 1582) confirmed the P-0010 re-target, E1 Option-A
 # narrative, and storage D1-D8 intact, with a clean filesystem sound gate. Strong backing.
+# internal_conformance: this "pass" was recorded against the 2026-10-25 pin. For the 2026-10-29
+# #4291 re-pin above it is backed only by Charon's confirm-only pass of the #4291 split at 26af922
+# (#4412 activity 9362, part B), which ranged over #4291's amendment and not the whole record. The
+# later #4291 sentences and notes, and #4363's amendment, are not covered by it. Whether to change
+# the value is a schema question #4291 does not decide.
 internal_conformance = "pass"
 
 [audit_chain.spec.generated_against]
