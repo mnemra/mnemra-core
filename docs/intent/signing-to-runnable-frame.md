@@ -42,7 +42,7 @@ The work is two milestones under one spec, sequenced by the committed-tier plan:
   M1 is the security foundation and merges first.
 - **M2 — actually runs.** Assemble `run()` to perform production startup in the locked order, stand
   up the `/health` loopback listener the order requires, source the storage pool, and serve over
-  stdio. M2 depends on M1.
+  stdio. *(Amended 2026-10-29, #4412, ruling 9279: the listener is an owner-only unix socket, not a loopback port; V0 R-0004-g as amended.)* M2 depends on M1.
 
 - **What this designs.** The trust-boundary instantiation (placeholder → real signing;
   manifest-only → manifest + component-byte binding) and the `run()` assembly + serve path. It does
@@ -205,7 +205,7 @@ security foundation) merges before M2.
 production startup, composing the **already-locked** ordering requirements:
 
 - **(5a)** the `/health` loopback listener binds **before config load** and before MCP accept
-  (R-0004-g);
+  (R-0004-g); *(Amended 2026-10-29, #4412, ruling 9279: the listener is an owner-only unix socket, not a loopback port; V0 R-0004-g as amended.)*
 - **(5b)** all seven builtins initialize **before any plugin is loaded** (R-0002-c), and the verified
   plugin pool is populated **before** MCP accept (R-0016-a);
 - **(5c)** a storage pool is sourced and schema initialization runs (D9), the server is constructed
@@ -366,7 +366,7 @@ Each **measure is a conjunction of binary checks**, not a single assertion.
   1. The `verify-smoke` recipe (Task 27, named in R-0018-f) **passes** — the binary starts a live
      stdio MCP server that answers an MCP request end-to-end (intake SC6).
   2. The transport is **stdio**; no HTTP MCP transport is opened (R-0010-a/-e) — the only non-stdio
-     listener is the loopback `/health` (which is not an MCP transport, R-0004-g).
+     listener is the loopback `/health` (which is not an MCP transport, R-0004-g). *(Amended 2026-10-29, #4412, ruling 9279: the listener is an owner-only unix socket, not a loopback port; V0 R-0004-g as amended.)*
 
 ### QA-6 — Key-custody invariant (degenerate same-machine case)
 
