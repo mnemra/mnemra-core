@@ -96,7 +96,27 @@ ref = "docs/specs/2026-05-24-mnemra-core-v0-substrate.md"
 # sentences Bolt asked for (56ec385), the approval notes and this re-pin were not reviewed beyond
 # Puck's read. No fresh internal conformance pass of the whole record was run.
 # Prior pin: version = "1accb6f45625022b6f1ce365ec7a8d1037a6a787"
-version = "c64a58682aeb1322cb4464bfcd249d75a0379ea7"
+version = "6aa8074c3adbe721d265bcaf081bcafd31f38af9"
+# RE-LOCKED 2026-10-31 (#4446), at the maintainer's approval of the #4446 amendment ("Approve all",
+# #4446 activity 9561), which covers revision r4 at 116be9c and every exit-gate item, (1) to (11).
+# The pin moves to the spec's blob at the commit that records that approval (4b98984), on base
+# cecc35b; if a rebase changes the blob, the pin moves again in the same branch.
+# Prior pin: version = "c64a58682aeb1322cb4464bfcd249d75a0379ea7" (#4412's re-pin, below; it equals
+# the spec's blob at cecc35b).
+# The pinned TEXT CHANGED: #4446 added a dated banner and seven dated notes (R-0004-g twice,
+# R-0118-a, R-0118-b, R-0118-j, R-0118-l and the deployment-document constraint), with the original
+# text kept (17 lines added, 0 removed against cecc35b). Reviews, each over the text named:
+#   - r1, ef5de84: Warden (security) and Cerberus (code quality), round 1 (#4446 activity 9532).
+#   - r2, 0a27f8c: Warden and Cerberus, round 2 (#4446 activity 9542), which also checked the r1 fixes.
+#   - r3, 1cc3f58: Charon's canon review, over the whole amendment cecc35b..1cc3f58. No tracker
+#     activity records it; its report was saved to a session scratchpad only. The r3 fixes for the
+#     round-2 findings had no Warden or Cerberus re-check.
+#   - r4, 116be9c, the fix pass for Charon's review: not re-reviewed before the approval.
+#   - 4b98984, the approval markers, and this re-pin: not reviewed.
+# internal_conformance: "pass" predates this re-pin. Charon's review of r3 found the amendment
+# "conforms with concerns"; its concerns were fixed in r4 without a Charon re-check, and the BOM has
+# no value for that state. The range is recorded here instead.
+#
 # RE-LOCKED 2026-10-29 (#4412), at the maintainer's approval of the #4412 amendment, conditional at
 # #4412 activity 9363 and met at 9373 (Warden's confirm of the conditional fixes, APPROVE); the pin
 # moves to the blob at this branch's final tree, rebased onto main 24eeb90, where #4249 phase 1 (PR
